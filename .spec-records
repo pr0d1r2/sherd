@@ -1,0 +1,24 @@
+# Closed decisions that must SURVIVE an edit: REJECTED, or DEFERRED under a
+# stated trigger. Baseline for `cavespec check --records .spec-records SPEC.md`.
+#
+# These live here and not in §R because §R is RESEARCH (external findings with
+# sources, FORMAT 4.1.0). A closed OPTION is a claim about a decision over
+# time, which no single text can answer -- so the checker owns the rule and
+# this repo owns the list.
+#
+# WHY THESE ARE THE FRAGILE ONES: none describes anything bbx builds. To a
+# compaction pass counting bytes they read as the most deletable text in the
+# file. Delete them and every gate stays green -- and then someone re-proposes
+# a crate-per-verb workspace and nothing says it was already answered, with a
+# measurement.
+
+C1  crate-per-verb workspace REJECTED
+C2  own tokenizer / own bytes-4 REJECTED
+C3  own §-parser, fmt, id checker REJECTED
+C4  name-encoded grouping REJECTED
+C5  dir federation as the ONLY axis DEFERRED
+C6  single-glob workspace DEFERRED
+C7  ceiling counting whole `.rs` file REJECTED
+C8  `default.rs` REJECTED
+C9  grep-enforced dep facade REJECTED
+C10 `default.nix` laziness as a model DEFERRED
