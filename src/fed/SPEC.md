@@ -13,6 +13,7 @@ V4: literal `|` in a cell escaped `\|`. row splitting honors it
 V5: `tokens` = `-` means UNRECORDED, ⊥ zero
 V6: header row (`dir|owns|…`) ⊥ an edge
 V7: `§F` parse stops @ next `## §` header
+V9: a `§T` row states REMAINING work, ⊥ history. "`X` landed, `Y` still open" reads to a machine as "test `X`" & `X` already passes ∴ ⊥ a red test (`.:plan` B2). what landed lives in the commit trail
 V8: ignore globs — `target/`, `.git/`, `node_modules/`, `.direnv/` ⊥ walked
 
 ## §T TASKS
@@ -21,8 +22,8 @@ id|status|task|cites
 T1|x|`edges` parse w/ escape handling|V1,V4,V6,V7
 T2|x|`chain` root→node|V2
 T3|x|`discover` walk w/ ignores, via `is_ignored_dir` (LLM-authored)|V8
-T4|~|`depth_violations` landed (LLM-authored, composed form). cycle detect + DAG build still open|V2
-T5|~|`missing_not_owns` landed (LLM-authored, composed form). exhaustive+disjoint still open|V3
+T4|~|cycle detection over the federation DAG|V2
+T5|~|sibling lens exhaustive + disjoint check|V3
 T6|.|`§N` derive from parent `§F`|V3
 
 ## §B BUGS
