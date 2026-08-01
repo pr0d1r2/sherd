@@ -1,0 +1,22 @@
+[package]
+name = "bbx-cli"
+version = "0.1.0"
+edition = "2021"
+# MSRV tracks the deps: itok and cavespec both pin 1.82.
+rust-version = "1.82"
+license = "MIT"
+description = "two-axis federation of SPEC.md and source over a dir DAG, for small-context local models"
+
+[lib]
+name = "bbx"
+path = "src/lib.rs"
+
+[dependencies]
+# V72: these are named ONLY inside their facade module -- src/tokens/ and
+# src/spec/. Everything else goes through the facade, and module privacy
+# makes the compiler enforce it (error[E0603]).
+itok = { path = "../itok", default-features = false, features = ["bpe"] }
+cavespec = { path = "../nanokit" }
+
+[lints.rust]
+unsafe_code = "forbid"
