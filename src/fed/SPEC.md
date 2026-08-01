@@ -13,9 +13,11 @@ V4: literal `|` in a cell escaped `\|`. row splitting honors it
 V5: `tokens` = `-` means UNRECORDED, ⊥ zero
 V6: header row (`dir|owns|…`) ⊥ an edge
 V7: `§F` parse stops @ next `## §` header
-V10: a detector's test ! include a POSITIVE case. asserting only that nothing was found is satisfied by a fn that always finds nothing (B6)
-V9: a `§T` row states REMAINING work, ⊥ history. "`X` landed, `Y` still open" reads to a machine as "test `X`" & `X` already passes ∴ ⊥ a red test (`.:plan` B2). what landed lives in the commit trail
 V8: ignore globs — `target/`, `.git/`, `node_modules/`, `.direnv/` ⊥ walked
+V9: a `§T` row states REMAINING work, ⊥ history. "`X` landed, `Y` still open" reads to a machine as "test `X`" & `X` already passes ∴ ⊥ a red test (`.:plan` B2). what landed lives in the commit trail
+V10: a detector's test ! include a POSITIVE case. asserting only that nothing was found is satisfied by a fn that always finds nothing (B6)
+V11: sibling `§F` lenses ! EXHAUSTIVE — every child dir on disk appears as a row. a child absent from `§F` is unreachable by descent & invisible to a reader who trusts the table
+V12: sibling `§F` lenses ! DISJOINT — 2 rows ⊥ name the same `dir`. a duplicate makes descent ambiguous & `route` would have to open both
 
 ## §T TASKS
 
@@ -24,7 +26,7 @@ T1|x|`edges` parse w/ escape handling|V1,V4,V6,V7
 T2|x|`chain` root→node|V2
 T3|x|`discover` walk w/ ignores, via `is_ignored_dir` (LLM-authored)|V8
 T4|~|cycle detection over the federation DAG|V2
-T5|~|sibling lens exhaustive + disjoint check|V3
+T5|~|report `§F` rows naming a dir twice, and child dirs on disk with no row|V11
 T6|.|`§N` derive from parent `§F`|V3
 
 ## §B BUGS
