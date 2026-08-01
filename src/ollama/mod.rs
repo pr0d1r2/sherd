@@ -3,7 +3,7 @@
 //! Plain HTTP to a LAN box -- no TLS, no cloud, no key. Feature-gated so
 //! `--no-default-features` leaves the deterministic core §C requires.
 
-use std::io::{BufRead, BufReader};
+use std::io::BufRead;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Duration;
 use std::time::Instant;
@@ -251,6 +251,37 @@ pub fn observe(r: &Reply, prefill_ms: u128, decode_ms: u128) {
     ewma(&EXPECT_GEN, r.eval_tokens as f64);
 }
 
+/// The seam. `generate` posts through this rather than calling `ureq`
+/// directly, so a caller can substitute a transport that fails on demand.
+///
+/// Without it there is nothing to wrap: asked to add retry around real IO
+/// with no seam, the model faked the transport instead (B7, V16).
+pub trait Transport {
+    /// POST `body` and return the response stream.
+    ///
+    /// # Errors
+    /// Any transport-level failure, as a message naming the endpoint.
+    fn post(&self, url: &str, body: &str, timeout: Duration)
+        -> Result<Box<dyn BufRead + Send>, String>;
+}
+
+/// The real one: plain HTTP over `ureq`, no TLS.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct Http;
+
+impl Transport for Http {
+    fn post(&self, url: &str, body: &str, timeout: Duration)
+        -> Result<Box<dyn BufRead + Send>, String>
+    {
+        let agent = ureq::AgentBuilder::new().timeout_read(timeout).build();
+        let resp = agent.post(url)
+            .set("Content-Type", "application/json")
+            .send_string(body)
+            .map_err(|e| format!("{url}: {e}"))?;
+        Ok(Box::new(std::io::BufReader::new(resp.into_reader())))
+    }
+}
+
 /// One round-trip, with what it cost. A call without its cost is not evidence.
 #[derive(Debug, Clone)]
 pub struct Reply {
@@ -320,6 +351,20 @@ pub fn generate_labelled(
     eta: Eta,
     on_chunk: &mut dyn FnMut(&str),
 ) -> Result<Reply, String> {
+    generate_via(&Http, prompt, label, eta, on_chunk)
+}
+
+/// As [`generate_labelled`], but posting through `transport`.
+///
+/// # Errors
+/// See [`generate_labelled`].
+pub fn generate_via(
+    transport: &dyn Transport,
+    prompt: &str,
+    label: &str,
+    eta: Eta,
+    on_chunk: &mut dyn FnMut(&str),
+) -> Result<Reply, String> {
     let budget = eta.total();
     // Hard ceiling: 4x the prediction. Also the socket read timeout, so a
     // server that accepts and then says nothing fails here rather than hanging
@@ -333,19 +378,15 @@ pub fn generate_labelled(
         "options": { "num_ctx": num_ctx(), "temperature": 0 },
     });
     let started = Instant::now();
-    let agent = ureq::AgentBuilder::new().timeout_read(hard).build();
-    let resp = agent
-        .post(&format!("{}/api/generate", endpoint()))
-        .set("Content-Type", "application/json")
-        .send_string(&body.to_string())
-        .map_err(|e| format!("{}: {e}", endpoint()))?;
+    let stream = transport.post(&format!("{}/api/generate", endpoint()),
+                                &body.to_string(), hard)?;
 
     let mut text = String::new();
     let mut thinking = String::new();
     let mut warned = 0u8;
     let mut first_chunk: Option<Instant> = None;
     let (mut prompt_tokens, mut eval_tokens) = (0, 0);
-    for line in BufReader::new(resp.into_reader()).lines() {
+    for line in stream.lines() {
         let line = line.map_err(|e| e.to_string())?;
         if line.trim().is_empty() {
             continue;
@@ -444,6 +485,42 @@ pub fn rust_block(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Fails `fail_times`, then answers. The thing B7 had no way to build.
+    struct Flaky {
+        fail_times: std::cell::Cell<u32>,
+        body: String,
+    }
+
+    impl Transport for Flaky {
+        fn post(&self, url: &str, _b: &str, _t: Duration)
+            -> Result<Box<dyn BufRead + Send>, String>
+        {
+            let left = self.fail_times.get();
+            if left > 0 {
+                self.fail_times.set(left - 1);
+                return Err(format!("{url}: simulated transport failure"));
+            }
+            Ok(Box::new(std::io::Cursor::new(self.body.clone().into_bytes())))
+        }
+    }
+
+    #[test]
+    fn a_transport_can_be_substituted_and_made_to_fail() {
+        let t = Flaky { fail_times: std::cell::Cell::new(1), body: String::new() };
+        assert!(t.post("u", "b", Duration::from_secs(1)).is_err(), "first call fails");
+        assert!(t.post("u", "b", Duration::from_secs(1)).is_ok(), "then succeeds");
+    }
+
+    #[test]
+    fn generate_via_reads_a_substituted_stream() {
+        let body = "{\"response\":\"hi\",\"done\":false}\n\
+                    {\"response\":\"\",\"done\":true,\"prompt_eval_count\":7,\"eval_count\":2}\n";
+        let t = Flaky { fail_times: std::cell::Cell::new(0), body: body.into() };
+        let r = generate_via(&t, "p", "test", predict(10), &mut |_| {}).unwrap();
+        assert_eq!(r.text, "hi");
+        assert_eq!((r.prompt_tokens, r.eval_tokens), (7, 2));
+    }
 
     #[test]
     fn takes_the_longest_fenced_block() {
