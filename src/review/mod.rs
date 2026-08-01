@@ -21,11 +21,24 @@ pub struct Finding {
 /// in, so the duplication the task existed to remove was merely relocated
 /// (`.:fed` B4-class).
 #[must_use]
-pub fn unwired(impl_src: &str, tests_src: &str, new_fns: &[String]) -> Vec<Finding> {
+pub fn unwired(crate_src: &str, tests_src: &str, new_fns: &[String]) -> Vec<Finding> {
     new_fns.iter().filter_map(|f| {
-        let called_in_impl = impl_src.matches(&format!("{f}(")).count() > 1; // decl + call
+        // Search the WHOLE crate, not the declaring module: a pub fn called
+        // from a sibling node is wired (B1).
+        //
+        // A CALL is any occurrence outside a declaration line. Counting
+        // occurrences and assuming "declaration plus one" fails on generics:
+        // `pub fn f<'a>(` does not contain `f(`, so a called function counted
+        // once and read as uncalled (B2).
+        // Skip only THIS function's declaration -- not every line starting
+        // with `fn`, since a one-line body declares and calls on one line.
+        let declares_f = |l: &str| {
+            l.contains(&format!("fn {f}(")) || l.contains(&format!("fn {f}<"))
+        };
+        let called = crate_src.lines()
+            .any(|l| l.contains(&format!("{f}(")) && !declares_f(l));
         let called_in_tests = tests_src.contains(&format!("{f}("));
-        (!called_in_impl && called_in_tests).then(|| Finding {
+        (!called && called_in_tests).then(|| Finding {
             rule: "unwired",
             detail: format!("`{f}` is called only from tests -- landed but never wired in"),
         })
@@ -69,9 +82,69 @@ pub fn public_fns(src: &str) -> Vec<String> {
 /// Propagates the read failure -- unreadable is not clean.
 pub fn node(path: &Path, added: &[String]) -> std::io::Result<Vec<Finding>> {
     let src = std::fs::read_to_string(path)?;
-    let (impl_r, tests_r) = split_module(&src);
-    let mut out = unwired(impl_r, tests_r, added);
+    let (_, tests_r) = split_module(&src);
+    // Every non-test line of the crate, so a caller in a sibling node counts.
+    let root = path.parent().and_then(Path::parent).unwrap_or(Path::new("src"));
+    let mut crate_src = String::new();
+    let mut stack = vec![root.to_path_buf()];
+    while let Some(d) = stack.pop() {
+        let Ok(rd) = std::fs::read_dir(&d) else { continue };
+        for e in rd.flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                stack.push(p);
+            } else if p.extension().is_some_and(|x| x == "rs") {
+                if let Ok(s) = std::fs::read_to_string(&p) {
+                    crate_src.push_str(split_module(&s).0);
+                }
+            }
+        }
+    }
+    let mut out = unwired(&crate_src, tests_r, added);
     out.extend(negative_only(tests_r, added));
+    Ok(out)
+}
+
+/// Public fns ADDED by a commit, per node module it touched.
+///
+/// Reads the diff rather than the file: a review is about what changed, and
+/// the whole file would flag everything that ever landed.
+#[must_use]
+pub fn added_in_commit(root: &Path, rev: &str) -> Vec<(std::path::PathBuf, Vec<String>)> {
+    let out = std::process::Command::new("git")
+        .args(["show", "--unified=0", rev]).current_dir(root).output();
+    let Ok(out) = out else { return Vec::new() };
+    let diff = String::from_utf8_lossy(&out.stdout);
+    let mut per: std::collections::BTreeMap<std::path::PathBuf, Vec<String>> =
+        std::collections::BTreeMap::new();
+    let mut file = std::path::PathBuf::new();
+    for line in diff.lines() {
+        if let Some(p) = line.strip_prefix("+++ b/") {
+            file = std::path::PathBuf::from(p);
+        } else if let Some(added) = line.strip_prefix('+') {
+            if let Some(rest) = added.trim().strip_prefix("pub fn ") {
+                if file.file_name().is_some_and(|f| f == "mod.rs") {
+                    if let Some(name) = rest.split(['(', '<']).next() {
+                        per.entry(file.clone()).or_default().push(name.trim().to_string());
+                    }
+                }
+            }
+        }
+    }
+    per.into_iter().collect()
+}
+
+/// Review one revision: every node module it touched, every fn it added.
+///
+/// # Errors
+/// Propagates a read failure -- unreadable is not clean.
+pub fn commit(root: &Path, rev: &str) -> std::io::Result<Vec<(std::path::PathBuf, Finding)>> {
+    let mut out = Vec::new();
+    for (file, added) in added_in_commit(root, rev) {
+        for f in node(&root.join(&file), &added)? {
+            out.push((file.clone(), f));
+        }
+    }
     Ok(out)
 }
 
@@ -92,6 +165,30 @@ mod tests {
         let f = unwired("pub fn helper(x: u8) -> bool { true }\nfn go() { helper(2); }\n",
                         "assert!(helper(1));", &["helper".into()]);
         assert!(f.is_empty(), "{f:?}");
+    }
+
+    #[test]
+    fn a_generic_declaration_is_still_a_declaration() {
+        // `pub fn f<'a>(` does not contain `f(`, which made a CALLED function
+        // read as uncalled (B2). My earlier test used a non-generic fn, so it
+        // never touched this branch.
+        let crate_src = "pub fn helper<'a>(x: &'a str) -> bool { true }\nlet v = helper(s);\n";
+        assert!(unwired(crate_src, "assert!(helper(1));", &["helper".into()]).is_empty());
+    }
+
+    #[test]
+    fn flags_a_generic_fn_nothing_calls() {
+        let crate_src = "pub fn helper<'a>(x: &'a str) -> bool { true }\n";
+        assert_eq!(unwired(crate_src, "assert!(helper(1));", &["helper".into()]).len(), 1);
+    }
+
+    #[test]
+    fn accepts_a_fn_called_from_a_sibling_node() {
+        // find_exhaustive_violations lives in fed and is called from cli.
+        // Checking only the declaring module called that unwired (B1).
+        let crate_src = "pub fn helper(x: u8) -> bool { true }\n\
+                         // ... src/cli/mod.rs ...\nlet v = helper(3);\n";
+        assert!(unwired(crate_src, "assert!(helper(1));", &["helper".into()]).is_empty());
     }
 
     #[test]

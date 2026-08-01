@@ -15,6 +15,7 @@ bbx -- federated SPEC.md for small-context local models
   bbx lens <dir>       the context pack for one node
   bbx fed [dir]        the federation edges declared by a node
   bbx check [dir]      cavespec structural check of every node
+  bbx review [rev]     mechanical checks on what a commit added (default HEAD)
   bbx graph [--tree|--table|--dot]  federation DAG, generated from §F
   bbx plan             next 3 steps, with what would invalidate each
   bbx plan --triage    unmanaged rows, with a proposed home for each
@@ -56,6 +57,7 @@ pub fn run() -> ExitCode {
             ExitCode::SUCCESS
         }
         Some("check") => check(&root),
+        Some("review") => review_cmd(&root, args.get(1).map_or("HEAD", String::as_str)),
         Some("plan") if args.get(1).map(String::as_str) == Some("--triage") => triage_cmd(&root),
         Some("plan") => plan_cmd(&root),
         #[cfg(feature = "ollama")]
@@ -328,4 +330,25 @@ fn triage_cmd(root: &Path) -> ExitCode {
         println!("  {id:14} {:<48} ({why})", text.chars().take(48).collect::<String>());
     }
     ExitCode::SUCCESS
+}
+
+fn review_cmd(root: &Path, rev: &str) -> ExitCode {
+    match crate::review::commit(root, rev) {
+        Ok(fs) if fs.is_empty() => {
+            // V4: say what was CHECKED. "clean" on two rules is not "clean".
+            println!("{rev}: no findings (checked: unwired, negative-only)");
+            ExitCode::SUCCESS
+        }
+        Ok(fs) => {
+            for (file, f) in &fs {
+                println!("{}: bbx/review:{}: {}", file.display(), f.rule, f.detail);
+            }
+            println!("\n  {} finding(s) -- ADVISORY. Read the diff.", fs.len());
+            ExitCode::SUCCESS
+        }
+        Err(e) => {
+            eprintln!("bbx: {e}");
+            ExitCode::from(2)
+        }
+    }
 }
