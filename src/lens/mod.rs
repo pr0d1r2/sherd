@@ -64,25 +64,6 @@ pub fn verdict(cost: u64, budget: u64) -> Verdict {
         Verdict::Over { by: cost - budget }
     }
 }
-use std::fs;
-use std::io;
-
-/// Return a list of candidate child directories when the node's cost exceeds
-/// the supplied budget.
-///
-/// The implementation simply enumerates all immediate sub‑directories of
-/// `root`.  This is sufficient for the test that checks that a non‑empty hint
-/// set is produced when the budget is zero.
-pub fn check_split_hint(root: &Path, _budget: u64) -> io::Result<Vec<PathBuf>> {
-    let mut hints = Vec::new();
-    for entry in fs::read_dir(root)? {
-        let e = entry?;
-        if e.file_type()?.is_dir() {
-            hints.push(e.path());
-        }
-    }
-    Ok(hints)
-}
 
 #[cfg(test)]
 mod tests {
@@ -99,19 +80,4 @@ mod tests {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
         assert!(!fed::chain(root, root).is_empty(), "root SPEC.md must exist (V5)");
     }
-
-#[test]
-fn node_over_budget_emits_split_hint() {
-    use std::path::Path;
-    // Pick a node that surely has children – the repository root.
-    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    // Use an impossibly low budget so the pack will exceed it.
-    let hints = check_split_hint(root, 0).expect("check should succeed");
-    // The invariant requires that a split hint be emitted listing candidate
-    // child directories when the node's cost exceeds the ceiling.
-    assert!(
-        !hints.is_empty(),
-        "split hint should list candidate child dirs when pack exceeds budget"
-    );
-}
 }
