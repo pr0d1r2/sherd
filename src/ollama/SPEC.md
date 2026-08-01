@@ -26,13 +26,14 @@ V12: an ABORT still teaches — record what it managed as a FLOOR for that step 
 V13: telemetry RETAINED raw, ⊥ folded away. an average cannot be re-derived into a median, a percentile or a per-size fit; samples can become all three
 V14: prefill rate is a fn of SIZE — 1,519 @ 7k · 1,233 @ 15k · 941 @ 28k (`.:R17`) ∴ bucketed, ⊥ one scalar wrong at both ends
 V15: `load_duration` > 500ms = COLD endpoint. disk time, ⊥ prefill ∴ subtracted before learning & reported
+V16: a retry wrapper needs an INJECTABLE transport. asked to retry `generate`, the model wrote `_generate_stub` returning empty ∴ it faked the thing to be retried, ⊥ wrapped it. IO w/ no seam invites a stub (B7)
 
 ## §T TASKS
 
 id|status|task|cites
 T1|x|`generate` + `Reply` w/ server-counted tokens|V1,V2,V3
 T2|x|`rust_block` fence extraction + unterminated-fence guard|V4
-T3|.|retry w/ backoff on transport failure, bounded|V3
+T3|.|needs an injectable transport — the model stubs `generate` rather than wrap it. see B7|V3
 T4|x|streaming + pace model + escalation guards|V5,V7
 T5|x|learned rates persisted, cache-hit detection|V8,V9,V10
 T6|x|raw telemetry retained, deduped, bounded; per-size derived rates|V13,V14
@@ -48,3 +49,4 @@ B3|2026-08-01|learned rates lived in process statics ∴ every single-call run s
 B4|2026-08-01|cache detection compared observed prefill to 8x the LEARNED rate ∴ as the rate climbed the bar climbed w/ it & the flag never fired on obvious hits|absolute bound, 3,000 tok/s, derived from the measured cold span
 B5|2026-08-01|4x abort killed a HEALTHY run @ 42s. eta 11s because `gen_est` knew nothing of the 2,614 REASONING tokens `gpt-oss` emits before its first output token. worse: `eval_count` arrives only on the `done` frame ∴ every abort taught NOTHING & the next run predicted just as badly|ladder → 5x warn / 10x stop; abort records a FLOOR for that step kind. a guard that prevents its own correction is a trap
 B6|2026-08-01|`trim_kind` shipped w/ a stub helper returning 0 ∴ it never trimmed & state would grow unbounded. build was green — a no-op guard compiles fine|implemented + 2 tests: bounds to n, keeps newest, leaves other kinds alone, no-op under the limit
+B7|2026-08-01|`apply` wrote `_generate_stub` — a fake transport returning empty on an unreachable host, named "stub", documented "for the purposes of the test suite", `_`-prefixed like B3. gates red, discarded. asked to add retry AROUND real IO, it replaced the IO|`generate` needs a seam — a transport param or trait — before a retry wrapper is testable. 3rd self-documented stub of the run, 2nd `_` evasion
