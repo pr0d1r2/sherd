@@ -20,7 +20,7 @@ src|code nodes — tokens, spec, fed, lens facades & logic|inference harness, en
 - separator = **directory**. dir tree ! source of truth. ⊥ manifest, ⊥ name-encoded grouping (`core-parse` ⊥ imply parent).
 - federation edge = parent dir → child dir, depth **+1 exactly**. ⊥ skip.
 - graph ! DAG. cycle ⊥. re-parent (2+ parents) OK.
-- intra-file spec ops = `cavespec` lib dep (`../nanokit`, 0.4.0, zero-dep, pure fn over `&str`). ⊥ reimpl parse/fmt/check/anchors.
+- intra-file spec ops = `cavespec` lib dep (`../cavespec`, 0.4.0, zero-dep, pure fn over `&str`). ⊥ reimpl parse/fmt/check/anchors.
 - token counting = `itok` lib dep (`../itok`, 0.2.0). ⊥ own tokenizer, ⊥ own bytes/4.
 - fs walk + ignore globs = `itok::walk`/`itok::glob`. ⊥ reimpl.
 - SPEC syntax = FORMAT **4.1.0**, sections `G C I R V T B` fixed & ordered + `§F`/`§N`. `§F`/`§N` ! land in FORMAT/cavespec upstream, ⊥ invented locally (V47).
@@ -74,7 +74,7 @@ R14|prompt cache|identical prefix → prefill 4.60s → 0.04s (~115x). cache is 
 R15|edit locality|an edit invalidates all prefill AFTER it. same 7k pack: cached 0.04s · edit TAIL 0.49s · edit HEAD 4.61s (full cold)|measured, 3 runs
 R16|prefill dominance|workload is prefill-bound ⊥ decode-bound. 7k: 4.60s prefill vs 1.83s decode. 28k: 30.32s vs 5.74s = 83% prefill|measured @ .181
 R17|prefill superlinear|1,519 tok/s @ 7k → 1,233 @ 15k → 941 @ 28k. 4.09x tokens costs 6.59x time ∴ small packs pay off faster than linearly|measured, 3 points
-R18|facet shares|itok SET 47.4% / SETTING 49.9% / HUMAN 2.7%; nanokit 49.1 / 47.6 / 3.3 ∴ ~half a repo never loads for impl work|measured, 2 repos
+R18|facet shares|itok SET 47.4% / SETTING 49.9% / HUMAN 2.7%; nanokit 49.1 / 47.6 / 3.3 ∴ ~half a repo never loads for impl work|measured, 2 repos (`nanokit` = `cavespec`, renamed 2026-08-01)
 R19|tests dominate|tests 34.0% itok · 24.9% nanokit = largest single facet. 42% of it INLINE in `#[cfg(test)]` ∴ ⊥ reachable by the dir axis|measured per file
 R20|fleet duplication|guard-infra near-identical absolute size across unrelated repos: 16,058 vs 15,218 tok ∴ same scaffolding copied. × 54 repos ≈ 840k tok duplicated|measured, 2 of 54
 R21|human docs grow|`set-and-setting` human 24,965 vs itok 5,236 = 4.8x. CHANGELOG alone 13,762 — append-only, never needed to implement|measured

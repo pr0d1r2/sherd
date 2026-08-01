@@ -30,7 +30,7 @@ ollama = ["dep:ureq", "dep:serde_json"]
 # src/spec/, src/ollama/. Everything else goes through the facade, and module
 # privacy makes the compiler enforce it (error[E0603]).
 itok = { path = "../itok", default-features = false, features = ["bpe"] }
-cavespec = { path = "../nanokit" }
+cavespec = { path = "../cavespec" }
 # ureq with default-features off = no TLS stack. ollama is plain http on the
 # LAN: no cloud, no cert chain, no ring/openssl. Same choice itok made.
 ureq = { version = "2.12", default-features = false, optional = true }
