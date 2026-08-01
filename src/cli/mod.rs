@@ -336,7 +336,7 @@ fn review_cmd(root: &Path, rev: &str) -> ExitCode {
     match crate::review::commit(root, rev) {
         Ok(fs) if fs.is_empty() => {
             // V4: say what was CHECKED. "clean" on two rules is not "clean".
-            println!("{rev}: no findings (checked: unwired, negative-only)");
+            println!("{rev}: no findings (checked: unwired, negative-only, ignored-input)");
             ExitCode::SUCCESS
         }
         Ok(fs) => {
