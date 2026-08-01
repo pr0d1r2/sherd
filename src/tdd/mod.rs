@@ -15,6 +15,13 @@
 //! and everything passes. The judge never sees the implementation.
 
 use crate::{fed, ollama, spec};
+
+/// The notation contract: what the symbols in an invariant MEAN.
+///
+/// Every prompt that must READ a caveman invariant gets this. A slice of
+/// `FORMAT.md`, not the whole file -- V82's contract-not-implementation rule
+/// applied to our own prompts (B6).
+pub const NOTATION: &str = include_str!("notation.txt");
 use std::path::Path;
 use std::process::Command;
 
@@ -48,17 +55,29 @@ pub fn split_module(src: &str) -> (&str, &str) {
 pub fn signatures(impl_src: &str) -> String {
     let mut out = String::new();
     let mut depth = 0usize;
+    let mut pending: Vec<&str> = Vec::new();
     for line in impl_src.lines() {
         let s = line.trim();
+        // Doc comments ARE the semantics. Bare field names cannot tell a judge
+        // whether `not_owns` holds a path or prose, and that is precisely the
+        // question it has to answer (B4).
+        if s.starts_with("///") {
+            // Inside a type body a doc belongs to the FIELD below it, so emit
+            // it in place; at top level it belongs to the item still to come.
+            if depth > 0 { out.push_str(line); out.push('\n'); } else { pending.push(line); }
+            continue;
+        }
         let is_sig = s.starts_with("pub fn") || s.starts_with("pub struct")
             || s.starts_with("pub enum") || s.starts_with("pub const");
         if depth > 0 {
             // inside a type body: keep field lines, they are part of the shape
             if s == "}" { depth = 0; out.push_str("}\n"); }
-            else if !s.starts_with("//") && !s.is_empty() { out.push_str(line); out.push('\n'); }
+            else if !s.is_empty() { out.push_str(line); out.push('\n'); }
             continue;
         }
+        if !is_sig { pending.clear(); }
         if is_sig {
+            for d in pending.drain(..) { out.push_str(d); out.push('\n'); }
             if s.starts_with("pub fn") {
                 let sig = s.split('{').next().unwrap_or(s).trim_end();
                 out.push_str(sig); out.push_str(" { /* ... */ }\n");
@@ -153,7 +172,7 @@ pub fn drive(root: &Path, node: &Path, invariant: &str, task: &str, max_repair: 
 
     // 1 -- RED test. Sees spec and existing tests, not the implementation.
     let test_fn = ollama::rust_block(&run(&format!(
-        "{spec_txt}\n\n--- public surface (signatures only) ---\n{surface}\n\n\
+        "{NOTATION}\n--- spec ---\n{spec_txt}\n\n--- public surface (signatures only) ---\n{surface}\n\n\
          --- existing tests in this module ---\n{tests_r}\n\n\
          Write ONE new Rust `#[test]` function proving this invariant:\n  {inv}\n\n\
          Task: {task}\n\n\
@@ -164,7 +183,7 @@ pub fn drive(root: &Path, node: &Path, invariant: &str, task: &str, max_repair: 
 
     // 1b -- independent judge. Sees the invariant and the test, never the impl.
     let verdict = run(&format!(
-        "--- data model ---\n{surface}\n\nInvariant:\n  {inv}\n\n\
+        "{NOTATION}\n--- data model ---\n{surface}\n\nInvariant:\n  {inv}\n\n\
          Proposed test:\n```rust\n{test_fn}\n```\n\n\
          Answer YES only if BOTH hold: (a) the test exercises the quantity the \
          invariant is actually about -- check the field names against the data model \
@@ -194,6 +213,9 @@ pub fn drive(root: &Path, node: &Path, invariant: &str, task: &str, max_repair: 
          fenced block.", tail(&red_out, 1500)), "2 green", &mut log)?);
     let cur = std::fs::read_to_string(&mod_path).map_err(|e| e.to_string())?;
     std::fs::write(&mod_path, insert_impl(&cur, &code)).map_err(|e| e.to_string())?;
+    // Track exactly what we added, so repair REPLACES it rather than guessing
+    // at a name prefix or rewriting the whole region (B5).
+    let mut last_added = code.clone();
 
     let (mut ok, mut out) = gate(root);
     // 4 -- repair, capped. On exhaustion, report what was tried.
@@ -206,10 +228,21 @@ pub fn drive(root: &Path, node: &Path, invariant: &str, task: &str, max_repair: 
         let fixed = ollama::rust_block(&run(&format!(
             "--- implementation ---\n{cur_impl}\n\n--- test ---\n```rust\n{test_fn}\n```\n\n\
              --- failure ---\n{}\n\n\
-             Reply with the corrected FULL implementation region (everything above \
-             #[cfg(test)]) in one ```rust block. Do not modify the test.",
+             Reply with ONLY the corrected version of the function(s) you previously \
+             added, in one ```rust block. Do not restate unrelated code, do not remove \
+             module documentation, and do not change the behaviour of functions that \
+             already existed. Do not modify the test.",
             tail(&out, 2000)), label, &mut log)?);
-        std::fs::write(&mod_path, format!("{}\n\n{}", fixed.trim(), cur_tests)).map_err(|e| e.to_string())?;
+        let replaced = if cur_impl.contains(last_added.trim()) {
+            cur_impl.replace(last_added.trim(), fixed.trim())
+        } else {
+            // Could not find what we added -- refuse to guess. Appending would
+            // duplicate the definition, rewriting would destroy unrelated code.
+            return Err("repair lost track of the previous insertion -- refusing to                         guess where it went".into());
+        };
+        last_added = fixed.clone();
+        std::fs::write(&mod_path, format!("{}\n\n{}", replaced.trim_end(), cur_tests))
+            .map_err(|e| e.to_string())?;
         let g = gate(root);
         ok = g.0;
         out = g.1;
@@ -235,8 +268,10 @@ mod tests {
 
     #[test]
     fn signatures_keep_shape_and_drop_bodies() {
-        let src = "pub struct E {\n    pub dir: String,\n}\n\npub fn go(a: u8) -> bool {\n    secret();\n    true\n}\n";
+        let src = "/// what it owns\npub struct E {\n    /// a path\n    pub dir: String,\n}\n\n/// does the thing\npub fn go(a: u8) -> bool {\n    secret();\n    true\n}\n";
         let s = signatures(src);
+        assert!(s.contains("/// a path"), "doc comments ARE the semantics: {s}");
+        assert!(s.contains("/// does the thing"), "fn docs must survive: {s}");
         assert!(s.contains("pub dir: String"), "field shape must survive: {s}");
         assert!(s.contains("pub fn go(a: u8) -> bool"), "signature must survive: {s}");
         assert!(!s.contains("secret()"), "body must NOT survive: {s}");

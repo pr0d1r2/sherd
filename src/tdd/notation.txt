@@ -1,0 +1,19 @@
+The spec is caveman-encoded. Symbols are load-bearing:
+
+→   leads to / becomes / triggers
+∴   therefore / fix
+∀   for all / every
+∃   exists / some
+!   must
+?   may / optional
+⊥   never / impossible / forbidden
+≠   not equal / differs from
+∈   in / member of
+∉   not in
+≤   at most
+≥   at least
+&   and
+|   or
+
+Sections: §G goal · §C constraints · §I interfaces · §R research · §V invariants (numbered, testable, each MUST hold) · §T tasks · §B bugs.
+`§F` is a federation table: `dir|owns|⊥owns|tokens`, where `dir` is a CHILD DIRECTORY exactly one level below the node declaring it.
