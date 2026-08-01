@@ -251,6 +251,45 @@ fn disp(p: &Path) -> String {
 pub fn is_ignored_dir(name: &str) -> bool {
     matches!(name, "target" | ".git" | "node_modules" | ".direnv")
 }
+pub fn find_exhaustive_violations<'a>(
+    edges: &'a [Edge],
+    root: &Path,
+) -> (Vec<&'a Edge>, Vec<PathBuf>) {
+    // Count how many times each dir appears in the edge list.
+    let mut counts = std::collections::HashMap::<&str, usize>::new();
+    for e in edges {
+        *counts.entry(e.dir.as_str()).or_insert(0) += 1;
+    }
+
+    // Collect all edges that have a duplicate entry.
+    let duplicates: Vec<&Edge> = edges
+        .iter()
+        .filter(|e| counts.get(e.dir.as_str()).copied().unwrap_or(0) > 1)
+        .collect();
+
+    // Build a set of dir names present in the edge list for quick lookup.
+    let edge_dirs: std::collections::HashMap<&str, ()> =
+        edges.iter().map(|e| (e.dir.as_str(), ())).collect();
+
+    // Scan the filesystem under `root` and report any directories that are
+    // missing from the edge table.
+    let mut missing = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(root) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                if let Some(name) = path.file_name().and_then(|s| s.to_str()) {
+                    if !edge_dirs.contains_key(name) && !is_ignored_dir(name) {
+                        missing.push(path);
+                    }
+                }
+            }
+        }
+    }
+
+    (duplicates, missing)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -423,4 +462,72 @@ fn discover_ignores_globs() {
     );
 }
 
+
+#[test]
+fn exhaustive_invariant_detects_duplicates_and_missing() {
+    use std::fs;
+    use std::path::{Path, PathBuf};
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    // Create a unique temporary directory inside the OS temp dir.
+    let mut tmp = std::env::temp_dir();
+    let suffix = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_millis();
+    tmp.push(format!("exhaustive_test_{}", suffix));
+    fs::create_dir_all(&tmp).expect("failed to create temp dir");
+
+    // Ensure the directory is cleaned up even if an assertion panics.
+    // (The generated code reached for `scopeguard`, which is not a dependency
+    // here; four lines of Drop is cheaper than a crate.)
+    struct Cleanup(PathBuf);
+    impl Drop for Cleanup {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+    let _guard = Cleanup(tmp.clone());
+
+    // Create two child directories: one that will be duplicated in the table,
+    // and another that will be missing from the table.
+    let child1 = tmp.join("child1");
+    let child2 = tmp.join("child2");
+    fs::create_dir_all(&child1).expect("failed to create child1");
+    fs::create_dir_all(&child2).expect("failed to create child2");
+
+    // Federation table with two identical rows for `child1` and no row for `child2`.
+    let f_text = "## \u{a7}F FEDERATION\ndir|owns|\u{22a5}owns|tokens\n\
+                  child1|code||-\n\
+                  child1|code||-\n";
+
+    // Parse the edges from the table.
+    let edges_vec = edges(f_text);
+
+    // Call the new public function that checks V11.
+    // It is expected to return a tuple of (duplicate_edges, missing_dirs).
+    let (duplicates, missing) = find_exhaustive_violations(&edges_vec, &tmp);
+
+    // Verify that at least one duplicate was reported for `child1`.
+    assert!(
+        !duplicates.is_empty(),
+        "Expected duplicate rows for 'child1', but none were reported"
+    );
+    assert!(
+        duplicates.iter().any(|e| e.dir == "child1"),
+        "Duplicate row for 'child1' not found in the report: {:?}",
+        duplicates
+    );
+
+    // Verify that `child2` was reported as missing from the table.
+    assert!(
+        !missing.is_empty(),
+        "Expected a missing entry for 'child2', but none were reported"
+    );
+    assert!(
+        missing.iter().any(|p| p.file_name().and_then(|s| s.to_str()) == Some("child2")),
+        "Missing child directory 'child2' not found in the report: {:?}",
+        missing
+    );
+}
 }
