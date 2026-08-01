@@ -11,7 +11,7 @@ bbx -- federated SPEC.md for small-context local models
   bbx lens <dir>       the context pack for one node
   bbx fed [dir]        the federation edges declared by a node
   bbx check [dir]      cavespec structural check of every node
-  bbx graph [--dot|--table]  federation DAG, generated from §F
+  bbx graph [--tree|--table|--dot]  federation DAG, generated from §F
   bbx ask <dir> <q>    ask the endpoint from a node's lens pack
   bbx tdd <dir> <Vn> <task>   red -> judge -> green -> gate -> repair
 
@@ -31,6 +31,7 @@ fn main() -> ExitCode {
             match args.get(1).map(String::as_str) {
                 Some("--dot") => print!("{}", fed::dot(&root)),
                 Some("--table") => print!("{}", fed::table(&root)),
+                Some("--tree") => print!("{}", fed::tree(&root)),
                 _ => print!("{}", fed::mermaid(&root)),
             }
             ExitCode::SUCCESS

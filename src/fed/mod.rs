@@ -199,6 +199,27 @@ fn ident(s: &str) -> String {
     if t.is_empty() { "root".into() } else { t }
 }
 
+/// The federation as a plain ASCII tree.
+///
+/// Renders in any markdown, any viewer, forever -- no renderer to fail (B15).
+/// Same `§F` rows as [`mermaid`] and [`table`], so it cannot drift.
+#[must_use]
+pub fn tree(root: &Path) -> String {
+    let mut out = String::from(".\n");
+    fn walk_tree(root: &Path, rel: &Path, prefix: &str, out: &mut String) {
+        let Ok(text) = std::fs::read_to_string(root.join(rel).join("SPEC.md")) else { return };
+        let es = edges(&text);
+        for (i, e) in es.iter().enumerate() {
+            let last = i + 1 == es.len();
+            out.push_str(&format!("{prefix}{}{}\n", if last { "`-- " } else { "|-- " }, e.dir));
+            let deeper = format!("{prefix}{}", if last { "    " } else { "|   " });
+            walk_tree(root, &rel.join(&e.dir), &deeper, out);
+        }
+    }
+    walk_tree(root, Path::new(""), "", &mut out);
+    out
+}
+
 /// The same graph in graphviz `dot`.
 #[must_use]
 pub fn dot(root: &Path) -> String {
@@ -282,6 +303,16 @@ mod tests {
                         || c == ' ' || c == '-' || c == '_'),
                     "label has syntax-significant chars: {l}");
         }
+    }
+
+    #[test]
+    fn tree_nests_and_needs_no_renderer() {
+        let tr = tree(Path::new(env!("CARGO_MANIFEST_DIR")));
+        assert!(tr.starts_with(".\n"), "{tr}");
+        assert!(tr.contains("-- src\n"), "root child: {tr}");
+        assert!(tr.contains("    |-- tokens") || tr.contains("|   |-- tokens"),
+                "grandchild must be indented: {tr}");
+        assert!(tr.is_ascii(), "must be ascii: {tr}");
     }
 
     #[test]
