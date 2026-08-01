@@ -17,6 +17,7 @@ V3: unmanaged rows LISTED, ⊥ hidden. 58 of 72 open rows are ⊥ machine-action
 V4: ordering signal is node DEPTH only. `§T`.cites points at `§V`, ⊥ at another `§T` ∴ stated as weak, ⊥ dressed up
 V5: root row ⊥ actionable — no `mod.rs` to add to
 V6: plan ⊥ mutate source. it reads & reports; `apply` is the only writer
+V7: output names commands that EXIST. `plan` IS replan — it is stateless & re-derives every run ∴ saying "REPLAN" invents a second name for one operation, which is the two-readings defect (B3)
 
 ## §T TASKS
 
@@ -33,3 +34,4 @@ T6|.|`bbx plan \| head` panics on broken pipe. handle SIGPIPE|V6
 id|date|cause|fix
 B1|2026-08-01|`classify` matched `derive \`§n\`` while the row read `` `§N` derive from parent `§F` `` ∴ a multi-file task planned as an actionable single-node fn. caught by READING the first plan, ⊥ by a test|word-order independent match. but widening a substring list is a PATCH — T4's declared marker is the fix, & prose classification stays wrong-by-default until then
 B2|2026-08-01|first real `apply` refused: "test passes already". the `§T` row read "`depth_violations` landed ... cycle detect still open" ∴ the model tested `depth_violations`, which EXISTS, & it passed. a row describing what is DONE misleads a machine reading it as work|`§T` states REMAINING work only (`src/fed:V9`). history → commit trail. the loop was right & the input was wrong — & the refusal is `.:tdd` V4 working
+B3|2026-08-01|`apply` said "REPLAN before the next step" & `plan` printed "REPLAN after each apply" — a verb that reads as a command name & is ⊥ one. user tried `bbx replan`, got usage. `plan` IS replan: stateless, re-derives every run|say "run `bbx plan` again". ⊥ an alias — a 2nd name for one operation is the defect, ⊥ the fix

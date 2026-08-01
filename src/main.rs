@@ -268,7 +268,7 @@ fn plan_cmd(root: &Path) -> ExitCode {
     for (why, n) in by {
         println!("  {n:3}  {why}");
     }
-    println!("\nREPLAN after each apply -- applying a task edits the spec that plans the next.");
+    println!("\nRun `bbx plan` again after each apply -- applying a task edits\nthe spec that plans the next one, so this list goes stale.");
     st.save();
     ExitCode::SUCCESS
 }
