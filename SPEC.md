@@ -49,7 +49,7 @@ src|code nodes — tokens, spec, fed, lens facades & logic|inference harness, en
 - file: `SPEC.why.md` ∀ dir w/ rationale — `<id>|<rationale>`, addressed by `§V`/`§B` id
 - file: `.context-limits` — per-path ceilings, `itok` format, reused ⊥ reinvented
 - file: `.spec-records` — closed-option baseline, `cavespec --records`
-- file: `.claude/commands/bbx/introspect.md` — `/bbx:introspect`, the oversight loop for a higher-level agent
+- file: `.claude/commands/introspect.md` — `/introspect`, ONE oversight cycle. loop-safe, halts w/ a recorded reason
 - env: `BBX_MODEL` (`gpt-oss:20b`), `BBX_ENDPOINT` (`http://localhost:11434`)
 - lib: `cavespec::check_spec(&text,&records)`, `cavespec::fmt`, `::anchors`
 - lib: `itok::estimate`, `itok::walk`, `itok::glob`
@@ -175,6 +175,7 @@ V87: axes COMPOSE multiplicatively. facet alone fails TDD — MEASURED 81.4% of 
 V89: pack layout = canonical facet ORDER, volatile last. widening mid-run re-prefills everything AFTER the insertion point ∴ declare the profile up front (V88) & build the pack once
 V90: MEASURED widening cost — append 4.12s (only new tok, prefix cached) vs prepend 8.60s (everything) on the same 11.6k pack = 2.1x, & the gap grows w/ prefix size
 V92: TWO brains, split by what each can do. local 20B writes code from a narrow context; the higher agent JUDGES. MEASURED: gates passed wrong code 3x (stub w/ a doc comment saying so · data-laundering `sanitize_first_cell` · wrong-field test) & a human-level reader caught all 3
+V95: a halt is COMMITTED (`--allow-empty`), ⊥ only printed. autonomous means nobody reads stdout ∴ the reason must survive in git where a human finds it later
 V93: the loop STOPS on: nothing actionable · same row failed 2x · `check` unclean · 2 aborts @ 10x · 2 reverts in a row. an "infinite loop" w/o stop conditions optimizes for whatever the gate rewards
 V94: nothing actionable → MAINTENANCE, ⊥ done. §B w/o §V · claims w/o runners · duplication · unmanaged rows · budgets · stale §R
 V91: ONE primitive at every axis — a cheap summary that supports a decision + a pointer to the expensive thing. horizontal `§F` owns/⊥owns → child. vertical rule → `SPEC.why.md`. facet contract line → implementation
