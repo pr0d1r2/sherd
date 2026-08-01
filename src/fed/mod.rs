@@ -146,6 +146,46 @@ pub fn check_edge_depth(text: &str) -> Vec<String> {
 
     violations
 }
+/// Detect rows in a §F table where the ⊥owns cell is missing (empty).
+///
+/// The function scans the supplied `text` for a section starting with
+/// `## §F`.  For each row that has exactly four cells and is not the
+/// header, it checks whether the third cell (`⊥owns`) contains any
+/// non‑whitespace characters.  If the cell is empty, the original line
+/// (trimmed of surrounding whitespace) is added to the returned vector.
+///
+/// The returned `Vec<String>` contains one entry per offending row,
+/// suitable for reporting or further inspection.
+#[must_use]
+pub fn missing_not_owns(text: &str) -> Vec<String> {
+    let mut violations = Vec::new();
+    let mut in_f = false;
+
+    for line in text.lines() {
+        // Detect the start of a §F table.
+        if line.starts_with("## \u{a7}") {
+            in_f = line.starts_with("## \u{a7}F");
+            continue;
+        }
+
+        if !in_f {
+            continue;
+        }
+
+        let cells = split_row(line);
+        // Skip the header row and any malformed rows.
+        if cells.len() != 4 || cells[0] == "dir" {
+            continue;
+        }
+
+        // The ⊥owns cell is the third column (index 2).
+        if cells[2].trim().is_empty() {
+            violations.push(line.trim().to_string());
+        }
+    }
+
+    violations
+}
 
 #[cfg(test)]
 mod tests {
@@ -189,6 +229,27 @@ fn edge_depth_invariant_violated() {
     assert!(
         violations.iter().any(|row| row.contains("src/subdir")),
         "The reported violation does not mention `src/subdir`"
+    );
+}
+
+#[test]
+fn missing_not_owns_detected() {
+    // Federation table with a row where the ⊥owns cell is empty.
+    let text = "## \u{a7}F FEDERATION\ndir|owns|\u{22a5}owns|tokens\nsrc|code||-\n";
+    
+    // The new public function that reports rows missing a ⊥owns value.
+    let violations = missing_not_owns(text);
+    
+    // We expect at least one violation because the row for `src` has an empty ⊥owns cell.
+    assert!(
+        !violations.is_empty(),
+        "Expected a violation for a missing ⊥owns, but found none"
+    );
+    
+    // The offending row should mention the problematic directory name.
+    assert!(
+        violations.iter().any(|row| row.contains("src")),
+        "The reported violation does not mention `src`"
     );
 }
 }
