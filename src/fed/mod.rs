@@ -249,7 +249,13 @@ fn disp(p: &Path) -> String {
 /// source tree and should never be traversed: `target`, `.git`,
 /// `node_modules`, and `.direnv`.  All other names are considered valid.
 pub fn is_ignored_dir(name: &str) -> bool {
-    matches!(name, "target" | ".git" | "node_modules" | ".direnv")
+    matches!(name,
+        "target" | ".git" | "node_modules" | ".direnv"
+        // SUPERVISOR assets: instructions for the higher agent. They must
+        // never become federation nodes, because a node's SPEC.md reaches the
+        // local model's prompt and supervisor instructions are not for it
+        // (V13). Excluded by discovery, not by convention.
+        | ".claude" | ".github" | ".codex")
 }
 pub fn find_exhaustive_violations<'a>(
     edges: &'a [Edge],
@@ -310,6 +316,18 @@ mod tests {
     fn escaped_pipe_stays_in_the_cell() {
         let t = "## \u{a7}F FEDERATION\ndir|owns|\u{22a5}owns|tokens\na|rule\\|why|-|10\n";
         assert_eq!(edges(t)[0].owns, "rule|why");
+    }
+
+    #[test]
+    fn supervisor_dirs_never_become_nodes() {
+        // A SPEC.md under .claude/ would otherwise be discovered, chained, and
+        // shipped into a worker prompt (V13).
+        for d in [".claude", ".github", ".codex"] {
+            assert!(is_ignored_dir(d), "{d} must never be walked");
+        }
+        let found = discover(Path::new(env!("CARGO_MANIFEST_DIR")));
+        assert!(!found.iter().any(|p| p.to_string_lossy().contains("/.claude")),
+                "supervisor assets leaked into discovery: {found:?}");
     }
 
     #[test]

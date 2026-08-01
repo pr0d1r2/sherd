@@ -483,6 +483,21 @@ mod tests {
     }
 
     #[test]
+    fn a_worker_prompt_carries_no_supervisor_text() {
+        // The supervisor command tells an agent to revert, halt, plant
+        // anchors. A 20B asked to write one function must never see it (V13).
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let spec = std::fs::read_to_string(root.join("src/fed/SPEC.md")).unwrap();
+        let src = std::fs::read_to_string(root.join("src/fed/mod.rs")).unwrap();
+        let (impl_r, tests_r) = split_module(&src);
+        let prompt = format!("{NOTATION}{}{}{}", rule_depth(&spec), signatures(impl_r), tests_r);
+        for marker in ["/introspect", "git revert", "halt(introspect)", "maintenance mode"] {
+            assert!(!prompt.contains(marker),
+                    "supervisor instruction `{marker}` reached a worker prompt");
+        }
+    }
+
+    #[test]
     fn rule_depth_drops_the_archive_sections() {
         let s = "## \u{a7}G GOAL\ngoal\n\n## \u{a7}V INVARIANTS\nV1: a\n\n## \u{a7}B BUGS\nB1|x|cause|fix\n";
         let r = rule_depth(s);
