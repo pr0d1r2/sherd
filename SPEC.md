@@ -50,6 +50,7 @@ src|code nodes — tokens, spec, fed, lens facades & logic|inference harness, en
 - file: `.context-limits` — per-path ceilings, `itok` format, reused ⊥ reinvented
 - file: `.spec-records` — closed-option baseline, `cavespec --records`
 - file: `.claude/commands/introspect.md` — `/introspect`, ONE oversight cycle. loop-safe, halts w/ a recorded reason
+- file: `AGENTS.md` — supervisor class. auto-loaded by Codex & Claude, ⊥ reachable by a worker prompt (V97)
 - env: `BBX_MODEL` (`gpt-oss:20b`), `BBX_ENDPOINT` (`http://localhost:11434`)
 - lib: `cavespec::check_spec(&text,&records)`, `cavespec::fmt`, `::anchors`
 - lib: `itok::estimate`, `itok::walk`, `itok::glob`
