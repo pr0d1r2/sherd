@@ -35,7 +35,7 @@ T10|.|promote an invariant from a leaf to the common ancestor|`.:V13`
 T11|.|report `§N` that differs from what `§F` derives|`.:V36`
 T12|.|BLOCKED — needs Rust source, ⊥ `§F` data. see B9|`.:V73`
 T13|~|replace the hand-rolled walk with `itok::walk`/`itok::glob`|`.:V23`
-T14|.|report `§F`.tokens differing from a recomputed count|`.:V21`
+T14|.|blocked — recomputing needs `crate::tokens`, ⊥ in this node's surface. see B10|`.:V21`
 T15|.|fixture: 4 levels deep, one module with two parents — self-repo is a tree|`.:V4`
 T16|.|parse `§N` rows, line-anchored|`.:V34`
 
@@ -51,3 +51,4 @@ B6|2026-08-01|`bbx apply` committed `detect_cycles(edges) -> Vec::new()` UNATTEN
 B7|2026-08-01|LLM repair reached for `scopeguard::guard` — a crate this repo does ⊥ depend on ∴ `E0433`, & the run was mid-repair when its wall-clock budget ran out|4 lines of local `Drop` replaced it. the model reaches for a crate rather than 4 lines; its surface shows the API but ⊥ the dependency list
 B8|2026-08-01|`unused import: Path` in a test module COMMITTED through a `-D warnings` gate. `cargo build` ⊥ compile `#[cfg(test)]` code ∴ the flag never saw it. also `find_exhaustive_violations` is called ONLY by tests — `review::unwired`'s exact case, surfaced by my own check & skimmed past|`RUSTFLAGS` exported so BOTH `build` & `test` deny. T6 wires the fn into `check`. GENERALLY: a flag on one command is ⊥ a flag on the toolchain
 B9|2026-08-01|`bbx apply` wrote `find_flat_rs_promotions` filtering `§F` rows on `dir == "." && owns.ends_with(".rs")`. NO `§F` row has `dir == "."` — the shape ⊥ exist. gates green, judge YES, test & impl agreed w/ each other & neither related to `.:V73`. REVERTED|the ROW was wrong, ⊥ the model: `.:V73` is a policy about when to create a dir & answering it needs Rust SOURCE, which `fed` ⊥ read. `classify` says actionable because it parses as "add one fn" ∴ shape is necessary & ⊥ sufficient
+B10|2026-08-01|`bbx apply` wrote `find_token_mismatches` summing FILE SIZES in bytes & comparing them to `§F`.tokens. bytes ⊥ tokens; `.:R8` measured bytes/4 48% off on caveman text & §C says counting is `itok`'s job. gate refused the commit for an UNUSED IMPORT, ⊥ for being wrong — luck|discarded. same class as B9: the node cannot compute the invariant, so the model invents a proxy. row now names the blocker

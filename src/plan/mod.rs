@@ -85,7 +85,7 @@ pub fn classify(node: &Path, text: &str) -> Kind {
     // cannot replace anything (B4).
     if word(&["replace", "remove", "port", "migrate", "rewrite", "delete", "supersede"]) {
         Kind::Replaces
-    } else if word(&["blocked", "promote", "wire", "move", "record", "flip", "plant"]) {
+    } else if word(&["blocked", "needs", "promote", "wire", "move", "record", "flip", "plant"]) {
         Kind::NotAFunction
     } else if has(&["cmd", "cli", "verb", "`bbx ", "flag", "--"]) {
         Kind::Cli
