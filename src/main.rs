@@ -1,6 +1,6 @@
 //! `bbx` -- arg dispatch only. V41: the binary holds no logic.
 
-use bbx::{fed, lens, spec, tokens};
+use bbx::{fed, lens, plan, spec, state, tokens};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
@@ -12,6 +12,7 @@ bbx -- federated SPEC.md for small-context local models
   bbx fed [dir]        the federation edges declared by a node
   bbx check [dir]      cavespec structural check of every node
   bbx graph [--tree|--table|--dot]  federation DAG, generated from §F
+  bbx plan             next 3 steps, with what would invalidate each
   bbx ask <dir> <q>    ask the endpoint from a node's lens pack
   bbx tdd <dir> <Vn> <task>   red -> judge -> green -> gate -> repair
 
@@ -47,6 +48,7 @@ fn main() -> ExitCode {
             ExitCode::SUCCESS
         }
         Some("check") => check(&root),
+        Some("plan") => plan_cmd(&root),
         #[cfg(feature = "ollama")]
         Some("ask") => match (args.get(1), args.get(2)) {
             (Some(d), Some(q)) => ask(&root, &PathBuf::from(d), q),
@@ -211,4 +213,37 @@ fn tdd_cmd(root: &Path, dir: &Path, invariant: &str, task: &str) -> ExitCode {
             ExitCode::from(1)
         }
     }
+}
+
+fn plan_cmd(root: &Path) -> ExitCode {
+    let p = plan::plan(root);
+    let mut st = state::State::load();
+    st.clear_kind("plan"); // a superseded step must not outlive its plan
+
+    println!("HORIZON {} of {} open rows · {} unmanaged\n",
+             p.steps.len(), p.total_open, p.unmanaged.len());
+    for (i, t) in p.steps.iter().enumerate() {
+        let c = plan::Confidence::of(i);
+        let est = lens::pack(root, &root.join(&t.node), lens::Depth::Rule)
+            .map_or(0, |k| k.cost.tokens);
+        println!("{}. {} {:<11} {} {}", i + 1, c.label(), t.node.display(), t.id, t.text);
+        println!("      ~{est} tok context · invalidated by: {}\n", c.invalidated_by());
+        st.set("plan", &(i + 1).to_string(),
+               format!("{} {} {}", t.node.display(), t.id, c.label().trim()));
+    }
+    if p.steps.is_empty() {
+        println!("  nothing actionable.\n");
+    }
+    // V3: say what is NOT managed. Silence would read as coverage.
+    println!("UNMANAGED ({}):", p.unmanaged.len());
+    let mut by: std::collections::BTreeMap<&str, usize> = std::collections::BTreeMap::new();
+    for (_, k) in &p.unmanaged {
+        *by.entry(k.why()).or_default() += 1;
+    }
+    for (why, n) in by {
+        println!("  {n:3}  {why}");
+    }
+    println!("\nREPLAN after each apply -- applying a task edits the spec that plans the next.");
+    st.save();
+    ExitCode::SUCCESS
 }

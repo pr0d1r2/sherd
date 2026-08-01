@@ -6,7 +6,9 @@
 
 pub mod fed;
 pub mod lens;
+pub mod plan;
 pub mod spec;
+pub mod state;
 pub mod tokens;
 
 #[cfg(feature = "ollama")]

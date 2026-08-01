@@ -39,29 +39,25 @@ pub fn last_cached() -> bool {
 
 /// Where learned rates persist between processes. Without this, every
 /// single-call invocation starts from the seed and learns nothing that lasts.
-fn pace_file() -> std::path::PathBuf {
-    std::path::PathBuf::from(std::env::var("BBX_PACE").unwrap_or_else(|_| ".bbx-pace".into()))
-}
-
-/// Load rates learned by earlier runs. Silent when absent -- a missing cache
-/// is a cold start, not an error.
+/// Load rates learned by earlier runs from the unified state. Silent when
+/// absent -- a missing cache is a cold start, not an error.
 pub fn load_pace() {
-    let Ok(s) = std::fs::read_to_string(pace_file()) else { return };
-    let mut it = s.split_whitespace().filter_map(|n| n.parse::<u64>().ok());
-    if let (Some(p), Some(d), Some(g)) = (it.next(), it.next(), it.next()) {
-        PREFILL_TOK_S.store(p.max(1), Ordering::Relaxed);
-        DECODE_TOK_S.store(d.max(1), Ordering::Relaxed);
-        EXPECT_GEN.store(g.max(1), Ordering::Relaxed);
+    let st = crate::state::State::load();
+    for (key, cell) in [("prefill", &PREFILL_TOK_S), ("decode", &DECODE_TOK_S), ("gen", &EXPECT_GEN)] {
+        if let Some(v) = st.get_u64("pace", key) {
+            cell.store(v.max(1), Ordering::Relaxed);
+        }
     }
 }
 
-/// Persist what this process learned. Best-effort: a read-only tree must not
-/// fail a run over a cache file.
+/// Persist what this process learned, into the one state file every command
+/// shares. Best-effort: a read-only tree must not fail a run over a cache.
 pub fn save_pace() {
-    let _ = std::fs::write(pace_file(), format!("{} {} {}\n",
-        PREFILL_TOK_S.load(Ordering::Relaxed),
-        DECODE_TOK_S.load(Ordering::Relaxed),
-        EXPECT_GEN.load(Ordering::Relaxed)));
+    let mut st = crate::state::State::load();
+    st.set("pace", "prefill", PREFILL_TOK_S.load(Ordering::Relaxed).to_string());
+    st.set("pace", "decode", DECODE_TOK_S.load(Ordering::Relaxed).to_string());
+    st.set("pace", "gen", EXPECT_GEN.load(Ordering::Relaxed).to_string());
+    st.save();
 }
 
 /// Observed prefill rate, and whether it implies the prefix was CACHED.
