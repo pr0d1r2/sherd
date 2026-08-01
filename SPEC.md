@@ -202,7 +202,6 @@ T6|.|build federation DAG, depth+1, cycle detect|V1,V2,V4
 T8|.|bind `itok::estimate`, tier floor `bpe`, method label|V17,V24
 T9|.|`.context-limits` reuse for node + file ceilings|I,V52
 T10|.|`bbx budget` + over-budget exit 1|V6,V7,V8
-T11|.|split hint when node over budget|V9
 T12|.|id namespacing + resolver `path:Vn`|V10,V11
 T14|x|`bbx lens` render pack, `--depth rule` default|I,V15,V45
 T16|.|`bbx init` scaffold from child dirs|I
@@ -237,19 +236,16 @@ T53|.|PREMISE GATE: `gpt-oss:20b` completes from `lens` pack a task it fails fro
 T54|x|self-federate: root `§F` + per-node `SPEC.md`|V27,V30
 T55|.|CI: `bbx validate` self exit 0; globs by data dependency|V27,V57
 T56|x|`§F` gains `⊥owns` column — parse & emit|I,V66
-T57|.|sibling lens exhaustive + disjoint check, overlap → exit 1|V64,V65
-T58|.|`cap.row` gate + `SPEC.why.md` reference resolution|V69,V70
+T57|x|superseded — `src/fed:T5`/`T7`: duplicate rows fail, missing rows advisory|V64,V65
+T58|.|`cap.row` gate — inline `§V`/`§R`/`§B` text over 200B|V69,V70
 T59|.|PAY THE DEBT: record rationale for V1-V63 into `SPEC.why.md` before it accretes inline. rationale currently lives only in the design conversation|V69,V70,V44
 T60|.|`src/tokens/mod.rs` sole `itok::` call site; `src/spec/mod.rs` sole `cavespec::`. siblings private|V71,V72
 T61|.|facade-leak test: planted `itok::` outside `src/tokens/` ! fail to compile|V72,V61
-T63|.|`lens --facet`, default `set`|V78,V81
 T64|.|setting-as-contract extraction — guard files → one line each|V82
 T65|x|`graph --mermaid` generated diagram|V83
-T66|.|facet partition check — exhaustive + disjoint|V81
 T67|.|materializability audit: which guard files are fleet standard vs repo facts|V84,R20
 T68|.|report caveman 22%-⊥-75% upstream to cavekit FORMAT.md|R23
 T69|.|profile declaration — flag > §T row > `bbx.toml` default. ⊥ inference|V88
-T70|.|canonical facet order in `pack()`, volatile last|V89,V76
 
 ## §B BUGS
 

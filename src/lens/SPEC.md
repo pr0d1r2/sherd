@@ -19,3 +19,8 @@ T1|x|`pack` assembly, chain + children + cost|V1,V3
 T2|x|`Depth` rule\|why, `verdict`|V2,V4
 T3|.|`SPEC.why.md` resolution for `Depth::Why`|V2
 T4|.|budget derived from declared target tier, ⊥ constant|V4
+T5|.|name the child dirs a node over `budget.node` could split into|`.:V9`
+T6|.|select facets when building a pack, default `set`|`.:V78`
+T7|.|report facets that overlap or leave content in no facet|`.:V81`
+T8|.|order a pack canonically, volatile content last|`.:V89`
+T9|.|resolve `SPEC.why.md` references when `Depth::Why`|V2
