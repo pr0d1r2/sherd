@@ -199,15 +199,15 @@ T3|.|capability-parity audit `cavespec` vs what `bbx` needs. write the compariso
 T4|x|parse `§F` table → (dir, owns, ⊥owns, tokens), escape-aware|I,V1
 T5|~|fs walk — own impl landed, VIOLATES §C (`itok::walk` ⊥ reimpl). see B1|V23,B1
 T6|.|build federation DAG, depth+1, cycle detect|V1,V2,V4
-T8|.|bind `itok::estimate`, tier floor `bpe`, method label|V17,V24
+T8|x|bind `itok::estimate`, tier floor `bpe`, method label|V17,V24
 T9|.|`.context-limits` reuse for node + file ceilings|I,V52
 T10|.|`bbx budget` + over-budget exit 1|V6,V7,V8
 T12|.|id namespacing + resolver `path:Vn`|V10,V11
 T14|x|`bbx lens` render pack, `--depth rule` default|I,V15,V45
 T16|.|`bbx init` scaffold from child dirs|I
-T17|.|ollama client `BBX_MODEL`/`BBX_ENDPOINT`|I,V25
+T17|x|ollama client `BBX_MODEL`/`BBX_ENDPOINT`|I,V25
 T19|.|route ambiguous exit 3 / miss exit 2|V20
-T20|.|`--offline` model-free path|V18
+T20|x|model-free path — `--no-default-features` drops `ollama` & its deps|V18
 T21|.|`bbx check` drift spec↔code|I
 T22|.|`§F`.tokens staleness, tier-tagged|V21,V26
 T23|.|coverage gap warn for un-specced source dirs|V16
