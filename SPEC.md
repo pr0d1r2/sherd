@@ -81,7 +81,9 @@ R21|human docs grow|`set-and-setting` human 24,965 vs itok 5,236 = 4.8x. CHANGEL
 R22|mermaid density|mermaid 71 tok vs 40 tok prose for the same info = 1.8x. bytes/tok: prose 4.15 · README 3.51 · mermaid 3.20 · caveman SPEC 2.95|measured
 R23|caveman saving|MEASURED 22%, ⊥ the 75% FORMAT.md claims (10 / 13 / 35% on 3 invariants vs faithful prose). symbols cost 1-3 tok for 2-3 bytes ∴ the saving is STRUCTURAL (omit rationale), ⊥ encodative. n=3, own comparators|measured
 R24|profile shares|itok by profile: implement 47.4% · tdd 81.4% · refactor 80.9% · harden 31.2% · document 17.5%. tdd @ ONE node = 6.1% ∴ 13x from composing facet × horizontal|derived from R18
+R25|notation cost|NOTATION slice 182 tok vs whole `FORMAT.md` 892 ∴ slicing saves 80%. doc comments in the surface cost 78 tok & were what let the judge tell prose from path|measured
 R25|widening cost|same 11.6k pack: APPEND a facet 4.12s (prefix cached, only new tok prefill) · PREPEND 8.60s (full cold) = 2.1x ∴ optional facets belong at the END|measured @ .181
+R26|tdd loop cost|3 round-trips · 3,707 tok · max single call 1,651 vs 157,071 monolithic = 95x. step 3 (gates) = 0 tok. +15% max-call for notation+docs turned 3 failed runs into a correct one|measured, `bbx tdd` on src/fed V2
 
 ## §V INVARIANTS
 
