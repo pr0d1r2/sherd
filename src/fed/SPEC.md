@@ -33,7 +33,7 @@ T8|.|orphan check — a `SPEC.md` no parent `§F` row points at|`.:V3`
 T9|.|descend one edge per step, reloading only that child|`.:V19`
 T10|.|promote an invariant from a leaf to the common ancestor|`.:V13`
 T11|.|report `§N` that differs from what `§F` derives|`.:V36`
-T12|.|report a flat `.rs` owning node-local invariants — wants its own dir|`.:V73`
+T12|.|BLOCKED — needs Rust source, ⊥ `§F` data. see B9|`.:V73`
 T13|~|replace the hand-rolled walk with `itok::walk`/`itok::glob`|`.:V23`
 T14|.|report `§F`.tokens differing from a recomputed count|`.:V21`
 T15|.|fixture: 4 levels deep, one module with two parents — self-repo is a tree|`.:V4`
@@ -50,3 +50,4 @@ B5|2026-08-01|`c56869e` DELETED `missing_not_owns` (committed 2 commits earlier)
 B6|2026-08-01|`bbx apply` committed `detect_cycles(edges) -> Vec::new()` UNATTENDED, w/ a doc comment saying "stub ... satisfies the current test suite". the test asserted only "no cycle in this simple graph" ∴ a fn that always finds nothing passes perfectly. judge approved (the test DID check depth), gates green, committed|(a) gate now compiles `-D warnings` — `unused variable: edges` is how a stub announces itself & would have blocked this exact commit; (b) judge ! require a POSITIVE case for a detector; (c) stub removed. GENERALLY: a detector tested only on the NEGATIVE case is satisfied by returning the negative
 B7|2026-08-01|LLM repair reached for `scopeguard::guard` — a crate this repo does ⊥ depend on ∴ `E0433`, & the run was mid-repair when its wall-clock budget ran out|4 lines of local `Drop` replaced it. the model reaches for a crate rather than 4 lines; its surface shows the API but ⊥ the dependency list
 B8|2026-08-01|`unused import: Path` in a test module COMMITTED through a `-D warnings` gate. `cargo build` ⊥ compile `#[cfg(test)]` code ∴ the flag never saw it. also `find_exhaustive_violations` is called ONLY by tests — `review::unwired`'s exact case, surfaced by my own check & skimmed past|`RUSTFLAGS` exported so BOTH `build` & `test` deny. T6 wires the fn into `check`. GENERALLY: a flag on one command is ⊥ a flag on the toolchain
+B9|2026-08-01|`bbx apply` wrote `find_flat_rs_promotions` filtering `§F` rows on `dir == "." && owns.ends_with(".rs")`. NO `§F` row has `dir == "."` — the shape ⊥ exist. gates green, judge YES, test & impl agreed w/ each other & neither related to `.:V73`. REVERTED|the ROW was wrong, ⊥ the model: `.:V73` is a policy about when to create a dir & answering it needs Rust SOURCE, which `fed` ⊥ read. `classify` says actionable because it parses as "add one fn" ∴ shape is necessary & ⊥ sufficient
