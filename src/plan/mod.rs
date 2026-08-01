@@ -36,6 +36,12 @@ pub enum Kind {
     MultiFile,
     /// Research, reporting, CI -- not code at all.
     NotCode,
+    /// Replaces or removes existing code. `insert_impl` only APPENDS, so the
+    /// loop would write a second copy beside the first -- exactly the
+    /// duplication such a row exists to remove.
+    Replaces,
+    /// Adds nothing callable: edits specs, moves rows, wires things together.
+    NotAFunction,
     /// A root-level row: no `mod.rs` to add anything to.
     NoModule,
 }
@@ -52,6 +58,8 @@ impl Kind {
             Kind::Cli => "needs main.rs -- tdd edits one node's mod.rs only",
             Kind::MultiFile => "writes files beyond its own module",
             Kind::NotCode => "research or reporting, not code",
+            Kind::Replaces => "replaces existing code -- the loop only appends",
+            Kind::NotAFunction => "no new function to add -- edits specs or wiring",
             Kind::NoModule => "root row -- no mod.rs to add to",
         }
     }
@@ -66,11 +74,24 @@ pub fn classify(node: &Path, text: &str) -> Kind {
     }
     let t = text.to_lowercase();
     let has = |ks: &[&str]| ks.iter().any(|k| t.contains(k));
-    if has(&["cmd", "cli", "verb", "`bbx ", "flag", "--"]) {
+    // WORD match, because "report" contains "port" and a substring list
+    // classified every `report ...` row as a replacement (B5).
+    let words: Vec<&str> = t.split(|c: char| !c.is_ascii_alphanumeric())
+        .filter(|w| !w.is_empty()).collect();
+    let word = |ks: &[&str]| ks.iter().any(|k| words.contains(k));
+    // WHITELIST, not blacklist. A row is actionable when it says "add one
+    // function", not merely when it fails to match known-bad shapes. The
+    // blacklist marked "replace the hand-rolled walk" actionable, and the loop
+    // cannot replace anything (B4).
+    if word(&["replace", "remove", "port", "migrate", "rewrite", "delete", "supersede"]) {
+        Kind::Replaces
+    } else if word(&["promote", "wire", "move", "record", "flip", "plant"]) {
+        Kind::NotAFunction
+    } else if has(&["cmd", "cli", "verb", "`bbx ", "flag", "--"]) {
         Kind::Cli
-    } else if has(&["ci", "gate:", "upstream", "audit", "corpus", "fixture", "record "]) {
+    } else if word(&["upstream", "audit", "corpus", "fixture"]) || has(&["ci ", "gate:"]) {
         Kind::NotCode
-    } else if has(&["\u{a7}n", "sync", "baseline", ".md`", "write own", "promotion"]) {
+    } else if has(&["\u{a7}n", "sync", "baseline", ".md`", "write own"]) {
         // Word-order independent, because the first version looked for
         // "derive `§n`" and the row said "`§N` derive from parent `§F`" (B1).
         // Widening a substring list is a patch, not a fix -- T4's declared
@@ -244,6 +265,36 @@ mod tests {
         assert_eq!(Confidence::of(1), Confidence::Likely);
         assert_eq!(Confidence::of(2), Confidence::Tentative);
         assert_eq!(Confidence::of(99), Confidence::Tentative);
+    }
+
+    #[test]
+    fn report_is_not_a_replacement() {
+        // "report" contains "port"; a substring list classified every report
+        // row as a replacement (B5).
+        let n = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/fed");
+        assert_eq!(classify(&n, "report duplicate rows"), Kind::NodeFn);
+    }
+
+    #[test]
+    fn a_replacement_row_is_not_actionable() {
+        // "replace the hand-rolled walk with itok::walk" -- insert_impl only
+        // appends, so the loop would add a SECOND walk (B4).
+        let n = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/fed");
+        assert_eq!(classify(&n, "replace the hand-rolled walk with `itok::walk`"), Kind::Replaces);
+        assert!(!Kind::Replaces.actionable());
+    }
+
+    #[test]
+    fn a_spec_editing_row_is_not_actionable() {
+        let n = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/fed");
+        assert_eq!(classify(&n, "promote an invariant from a leaf to the common ancestor"),
+                   Kind::NotAFunction);
+    }
+
+    #[test]
+    fn adding_a_function_stays_actionable() {
+        let n = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/fed");
+        assert_eq!(classify(&n, "report `§F` rows naming a dir twice"), Kind::NodeFn);
     }
 
     #[test]
