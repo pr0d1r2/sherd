@@ -37,6 +37,7 @@ T4|x|streaming + pace model + escalation guards|V5,V7
 T5|x|learned rates persisted, cache-hit detection|V8,V9,V10
 T6|x|raw telemetry retained, deduped, bounded; per-size derived rates|V13,V14
 T7|x|cold-endpoint detection, excluded from rate learning|V15
+T8|.|probe the endpoint's tier and warn when falling back|V3
 
 ## §B BUGS
 

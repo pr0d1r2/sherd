@@ -26,3 +26,4 @@ T3|.|count a `.rs` file's code and its tests separately|`.:V50`
 T4|.|apply a tighter ceiling to `mod.rs`/`lib.rs`|`.:V51`
 T5|.|read per-path ceilings in `.context-limits` format|`.:V52`
 T6|.|tier select from `bbx.toml`, `ollama` exact tier + fallback warn|V2
+T7|.|planted `itok::` outside this node ! fail to compile|`.:V72`

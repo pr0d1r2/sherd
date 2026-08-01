@@ -207,17 +207,12 @@ T17|x|ollama client `BBX_MODEL`/`BBX_ENDPOINT`|I,V25
 T19|.|route ambiguous exit 3 / miss exit 2|V20
 T20|x|model-free path — `--no-default-features` drops `ollama` & its deps|V18
 T21|.|`bbx check` drift spec↔code|I
-T22|.|`§F`.tokens staleness, tier-tagged|V21,V26
 T23|.|coverage gap warn for un-specced source dirs|V16
 T24|~|`bbx graph --json` — `--dot`, `--tree`, `--table`, mermaid all land|I
 T25|.|`bbx validate` incl examined-vs-discovered counts|I,V48
 T28|.|backprop: bug → leaf `§B`, decide promote|V14
-T29|.|synthetic fixture: 4 deep, shared module 2 parents (self-repo is a tree ∴ ⊥ cover DAG)|V4
-T31|.|ollama tier probe + fallback warn|V25
-T35|.|parse `§N`, line-anchored emit|V34
 T36|x|superseded — `§N` derivation is `src/fed:T6`, at the node that owns it|V36,V38,V39
 T37|.|`bbx sync` + exit 1 when wrote|I,V36
-T40|.|vertical axis: `SPEC.why.md` format + id keying|V42,V43
 T41|.|`lens --depth rule\|why\|all`|V45
 T42|.|cross-file losslessness proof, asserted pre-write|V49,V44
 T46|.|coupling report after proposed split|V53
@@ -234,7 +229,6 @@ T57|x|superseded — `src/fed:T5`/`T7`: duplicate rows fail, missing rows adviso
 T58|.|`cap.row` gate — inline `§V`/`§R`/`§B` text over 200B|V69,V70
 T59|.|PAY THE DEBT: record rationale for V1-V63 into `SPEC.why.md` before it accretes inline. rationale currently lives only in the design conversation|V69,V70,V44
 T60|x|facades land — `itok::` only in `src/tokens`, `cavespec::` only in `src/spec`|V71,V72
-T61|.|facade-leak test: planted `itok::` outside `src/tokens/` ! fail to compile|V72,V61
 T64|.|setting-as-contract extraction — guard files → one line each|V82
 T65|x|`graph --mermaid` generated diagram|V83
 T67|.|materializability audit: which guard files are fleet standard vs repo facts|V84,R20

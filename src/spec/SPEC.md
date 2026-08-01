@@ -22,3 +22,4 @@ T1|x|`check`, `fmt`, `sections` binding|V1
 T2|.|capability-parity audit vs `cavespec`, written down|V3
 T3|.|`--records` baseline wiring for closed-option survival|V1
 T4|.|check closed-option records survive an edit, via `--records`|`.:V44`
+T5|.|`SPEC.why.md` format — one rationale per `§V`/`§B` id|`.:V43`

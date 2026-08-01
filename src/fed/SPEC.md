@@ -35,6 +35,9 @@ T10|.|promote an invariant from a leaf to the common ancestor|`.:V13`
 T11|.|report `§N` that differs from what `§F` derives|`.:V36`
 T12|.|report a flat `.rs` owning node-local invariants — wants its own dir|`.:V73`
 T13|~|replace the hand-rolled walk with `itok::walk`/`itok::glob`|`.:V23`
+T14|.|report `§F`.tokens differing from a recomputed count|`.:V21`
+T15|.|fixture: 4 levels deep, one module with two parents — self-repo is a tree|`.:V4`
+T16|.|parse `§N` rows, line-anchored|`.:V34`
 
 ## §B BUGS
 
