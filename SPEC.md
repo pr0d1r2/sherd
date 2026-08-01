@@ -214,14 +214,14 @@ T20|.|`--offline` model-free path|V18
 T21|.|`bbx check` drift spec↔code|I
 T22|.|`§F`.tokens staleness, tier-tagged|V21,V26
 T23|.|coverage gap warn for un-specced source dirs|V16
-T24|.|`bbx graph --dot/--json`|I
+T24|~|`bbx graph --json` — `--dot`, `--tree`, `--table`, mermaid all land|I
 T25|.|`bbx validate` incl examined-vs-discovered counts|I,V48
 T27|.|invariant promotion helper leaf→ancestor|V13,V14
 T28|.|backprop: bug → leaf `§B`, decide promote|V14
 T29|.|synthetic fixture: 4 deep, shared module 2 parents (self-repo is a tree ∴ ⊥ cover DAG)|V4
 T31|.|ollama tier probe + fallback warn|V25
 T35|.|parse `§N`, line-anchored emit|V34
-T36|.|derive `§N` from parent `§F`, multi-parent union|V36,V38,V39
+T36|x|superseded — `§N` derivation is `src/fed:T6`, at the node that owns it|V36,V38,V39
 T37|.|`bbx sync` + exit 1 when wrote|I,V36
 T38|.|`check`: `§N` ≠ derived → drift|V36
 T40|.|vertical axis: `SPEC.why.md` format + id keying|V42,V43
@@ -238,9 +238,9 @@ T50|.|corpus run over 54-spec fleet, FP rate reported|V58
 T51|.|`.spec-records` baseline + survival check across split|V44
 T52|.|planted-violation test ∀ guard + accepts-real-shapes companion|V61
 T53|.|PREMISE GATE: `gpt-oss:20b` completes from `lens` pack a task it fails from monolith. `itok` SPEC.md = pressure fixture|V60,V27
-T54|.|self-federate: root `§F`+`§N` + own nodes, once T1-T8 land|V27,V30
+T54|x|self-federate: root `§F` + per-node `SPEC.md`|V27,V30
 T55|.|CI: `bbx validate` self exit 0; globs by data dependency|V27,V57
-T56|.|`§F` gains `⊥owns` column — parse, emit, `init` scaffold|I,V66
+T56|x|`§F` gains `⊥owns` column — parse & emit|I,V66
 T57|.|sibling lens exhaustive + disjoint check, overlap → exit 1|V64,V65
 T58|.|`cap.row` gate + `SPEC.why.md` reference resolution|V69,V70
 T59|.|PAY THE DEBT: record rationale for V1-V63 into `SPEC.why.md` before it accretes inline. rationale currently lives only in the design conversation|V69,V70,V44
@@ -249,7 +249,7 @@ T61|.|facade-leak test: planted `itok::` outside `src/tokens/` ! fail to compile
 T62|.|dir-promotion check: flat `.rs` owning node-local invariants → promote|V73,V50
 T63|.|`lens --facet`, default `set`|V78,V81
 T64|.|setting-as-contract extraction — guard files → one line each|V82
-T65|.|`graph --mermaid` generated diagram|V83
+T65|x|`graph --mermaid` generated diagram|V83
 T66|.|facet partition check — exhaustive + disjoint|V81
 T67|.|materializability audit: which guard files are fleet standard vs repo facts|V84,R20
 T68|.|report caveman 22%-⊥-75% upstream to cavekit FORMAT.md|R23
