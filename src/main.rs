@@ -33,6 +33,14 @@ fn main() -> ExitCode {
             _ => usage("ask needs <dir> and a question"),
         },
         #[cfg(feature = "ollama")]
+        Some("oneshot") => match (args.get(1), args.get(2), args.get(3)) {
+            (Some(d), Some(v), Some(t)) => match bbx::tdd::oneshot(&root, &PathBuf::from(d), v, t) {
+                Ok(_) => ExitCode::SUCCESS,
+                Err(e) => { eprintln!("bbx: {e}"); ExitCode::from(1) }
+            },
+            _ => usage("oneshot needs <dir> <invariant> <task>"),
+        },
+        #[cfg(feature = "ollama")]
         Some("tdd") => match (args.get(1), args.get(2), args.get(3)) {
             (Some(d), Some(v), Some(task)) => tdd_cmd(&root, &PathBuf::from(d), v, task),
             _ => usage("tdd needs <dir> <invariant> <task>"),

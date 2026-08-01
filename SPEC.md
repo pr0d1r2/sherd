@@ -84,6 +84,8 @@ R24|profile shares|itok by profile: implement 47.4% · tdd 81.4% · refactor 80.
 R25|widening cost|same 11.6k pack: APPEND a facet 4.12s (prefix cached, only new tok prefill) · PREPEND 8.60s (full cold) = 2.1x ∴ optional facets belong at the END|measured @ .181
 R27|notation cost|NOTATION slice 182 tok vs whole `FORMAT.md` 892 ∴ slicing saves 80%. doc comments in the surface cost 78 tok & were what let the judge tell prose from path|measured
 R28|tdd loop cost|3 round-trips · 3,707 tok · max single call 1,651 vs 157,071 monolithic = 95x. step 3 (gates) = 0 tok. +15% max-call for notation+docs turned 3 failed runs into a correct one|measured, `bbx tdd` on src/fed V2
+R29|premise gate|HEAD-TO-HEAD same node/invariants. monolith 1/2 green (V2 `E0425`, V3 green) · decomposed 2/2. TOTAL tok comparable (2,659 vs 2,712) ∴ decomposition ⊥ save total. MAX SINGLE CALL 2,659 vs 1,243 = 2.1x — that is the whole benefit, & it is the binding constraint|measured, `bbx oneshot` vs `bbx tdd`
+R30|quality parity|when the monolith SUCCEEDS its output matches the decomposed form — `missing_not_owns(&e)`, `in_f`=3, composed ⊥ duplicated ∴ decomposition's win is FITTING, ⊥ quality, at this task size|measured
 
 ## §V INVARIANTS
 
@@ -140,7 +142,7 @@ V56: guard & rule ! share a UNIT. ceiling in `itok` tokens, cap in chars, order 
 V57: CI globs by DATA DEPENDENCY ⊥ file extension. a step's glob ! name every input its tests read
 V58: grammar ⊥ ship til run over a corpus. `§F`/`§N` recognition measured over the 54-spec fleet & FP rate reported. a false positive naming the wrong rule costs more than a false negative
 V59: "X absorbs Y" ! name a MEASUREMENT ⊥ a belief. ⊥ delete|skip building Y til capability parity vs Y is written down. the deletion commit is where nobody re-checks
-V60: premise ! be measured before it is built on. federation's claim = a local model completes from a `lens` pack a task it fails from the monolith. unmeasured → `bbx` is its own unmeasured optimization
+V60: premise MEASURED (R29): decomposition halves the MAX CALL (2.1x) & wins 2/2 vs 1/2, but ⊥ save total tokens & ⊥ improve quality when both succeed. the claim is FITTING, ⊥ cheaper, ⊥ better
 V61: ∀ guard proven by a PLANTED violation + a companion proving it accepts real shapes. ⊥ proven by reading it
 V62: sibling divergence report — near-duplicate invariants across sibling nodes = V13 promotion candidates. V13 w/o a detector is a comment, ⊥ a guard
 V63: registry-owned identifier checked by ASKING the registry, before it appears anywhere a user can run
@@ -247,3 +249,4 @@ id|date|cause|fix
 B1|2026-08-01|`fed::walk` hand-rolled while §C says fs walk = `itok::walk`/`itok::glob`, ⊥ reimpl. wrote it w/o reading itok's walk API — the exact belief-⊥-measurement trap V59 names, committed in the first commit that could commit it. ⊥ caught by `check`: no runner reads §C|V74. port to `itok::walk` or amend §C w/ the measured reason itok's walk ⊥ fit
 B2|2026-08-01|`§R` written as RECORDS w/ `id|state|record`. FORMAT 4.1.0 §R = RESEARCH `id|topic|finding|src`. assumed from a stale local `FORMAT.md` (6 sections) while the dep shipped 4.1.0 (7). 16 violations on first `bbx check`, all real|read the CHECKER's own `SECTIONS`/`CANONICAL_WORDS`, ⊥ a vendored copy. §R now RESEARCH; closed options → `.spec-records` (R13)
 B3|2026-08-01|SPEC defect, mine: V78 written as a STATIC partition — SET = impl+spec+agents, SETTING = tests+guardrails — & committed. TDD breaks it: the test IS the work ∴ `tests` ∈ set, & nothing about the file changed. facet (property of the FILE) conflated w/ profile (property of the TASK). MEASURED after: `tdd` loads 81.4% of itok, `refactor` 80.9% ∴ the axis nearly collapses for 2 of 5 profiles|V78 now names the classification only; V86 adds PROFILE as the task-dependent selection; V87 records that facet × horizontal = 6.1% where facet alone = 81.4%. found by a READER asking about TDD, ⊥ by any check — no gate reads a partition's fitness for a workflow
+B4|2026-08-01|SPEC defect, mine, repeated across ~6 commit messages: claimed "95x on the binding constraint" comparing our max call to 157,071 — which is `itok`'s WHOLE-REPO tdd profile, ⊥ what a one-call prompt needs. MEASURED baseline for the same task = 2,659 tok ∴ real ratio 2.1x. compared against a straw man nobody would build|`bbx oneshot` built as the honest monolith arm; R29/R30 carry the measurement; V60 restated. GENERALLY: a ratio ! name what is in the DENOMINATOR & that thing ! be something someone would actually do

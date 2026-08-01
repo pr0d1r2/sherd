@@ -217,6 +217,47 @@ fn run(prompt: &str, label: &'static str, log: &mut Vec<Step>) -> Result<String,
     Ok(r.text)
 }
 
+/// The MONOLITH arm of the premise gate (root V60): everything in one call.
+///
+/// Full spec including §B/§R, full implementation bodies, full tests, asked
+/// for test AND implementation together. This is what blackbox claims to beat.
+/// Same gate, same node, same invariant -- only the context shape differs.
+///
+/// # Errors
+/// Returns the reason it could not proceed, same as [`drive`].
+pub fn oneshot(root: &Path, node: &Path, invariant: &str, task: &str) -> Result<Vec<Step>, String> {
+    let spec_path = node.join("SPEC.md");
+    let mod_path = node.join("mod.rs");
+    let spec_txt = std::fs::read_to_string(&spec_path).map_err(|e| e.to_string())?;
+    let original = std::fs::read_to_string(&mod_path).map_err(|e| e.to_string())?;
+    let (impl_r, tests_r) = split_module(&original);
+    let inv = spec_txt.lines().find(|l| l.starts_with(&format!("{invariant}:")))
+        .ok_or_else(|| format!("{invariant} not declared"))?.to_string();
+    let mut log = Vec::new();
+
+    let reply = run(&format!(
+        "{}\n--- spec (complete) ---\n{spec_txt}\n\n\
+         --- implementation (complete) ---\n{impl_r}\n\n\
+         --- existing tests ---\n{tests_r}\n\n\
+         Prove and implement this invariant:\n  {inv}\n\nTask: {task}\n\n\
+         Reply with TWO ```rust fenced blocks: first the new `#[test]` function, \
+         then the new implementation function(s) to add. The test must fail against \
+         the current implementation and pass against your new one.", NOTATION), "monolith", &mut log)?;
+
+    let blocks: Vec<&str> = reply.split("```").skip(1).step_by(2)
+        .map(|b| b.strip_prefix("rust").unwrap_or(b).trim()).collect();
+    if blocks.len() < 2 {
+        return Err(format!("monolith returned {} code blocks, expected 2", blocks.len()));
+    }
+    std::fs::write(&mod_path, insert_impl(&insert_test(&original, blocks[0]), blocks[1]))
+        .map_err(|e| e.to_string())?;
+    let (ok, out) = gate(root);
+    let sent: u64 = log.iter().map(|s| s.prompt_tokens).sum();
+    eprintln!("\n  1 round-trip · {sent} tok sent · max single call {sent}");
+    if ok { eprintln!("  VERDICT: MERGEABLE -- gates green"); Ok(log) }
+    else { eprintln!("{}", tail(&out, 1200)); Err("NOT mergeable -- gates red".into()) }
+}
+
 /// Drive one invariant from red to green.
 ///
 /// # Errors
