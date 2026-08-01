@@ -28,6 +28,7 @@ V14: surface keeps DOC COMMENTS. bare field names cannot distinguish `not_owns` 
 V15: prompt = RULE depth. §G §C §I §V §T in, §B §R out. §T is the PLAN (the row names the work); §B/§R are archive. MEASURED: one §B row pushed step 1 1,210→1,520 tok & flipped a correct run to rejected (B9)
 V16: judge objection FED BACK, ⊥ discarded. it is actionable signal; hand-tuning the prompt instead burned 6 configurations before I noticed (B10)
 V17: model DETERMINISTIC @ temp 0 — 3/3 identical `gen` counts on one prompt ∴ outcome differences are prompt differences, & isolation works. ⊥ blame variance
+V18: step 2 gets the CONTRACT — the calls the test makes that ⊥ exist yet, extracted deterministically (`.:V18`). the SIGNATURE constrains the design: `check_edge_depth(text)` took no path ∴ no walking ∴ no ignore-glob violation & no temp dir. fixing a NAME mismatch removed 3 unrelated defects (B12)
 
 ## §T TASKS
 
@@ -40,7 +41,7 @@ T5|.|`§T` row status flip on green (`.` → `x`)|V5
 T6|.|judge gets `signatures()` data model|V8,B2
 T7|.|`cargo build` before gate runs that exercise the bin|B3
 T8|.|record per-request template overhead (~67 tok, measured) in entry-cost accounting|V2
-T9|.|step 2 ! define exactly the fn the test calls — pass the expected signature|V16
+T9|x|step 2 ! define exactly the fn the test calls — pass the expected signature|V18
 
 ## §B BUGS
 
@@ -56,3 +57,4 @@ B8|2026-08-01|first PLANTED violation proving the pre-commit gate passed straigh
 B9|2026-08-01|adding ONE §B row to `src/fed/SPEC.md` pushed step 1 from 1,210 to 1,520 tok & turned a run producing CORRECT code into one the judge rejected. bug history in a node spec pollutes the prompt that AUTHORS tests. `.:V43`/`.:V45` said rationale by reference for COST; the cost is also QUALITY|`rule_depth()` — §G §C §I §V §T in, §B §R out. dropping §T too was a 2nd error: §T is the plan, ⊥ the archive
 B10|2026-08-01|judge rejections were treated as a HARD STOP ∴ I hand-tuned the prompt across 6 configurations chasing 1 success, discarding an actionable objection each time. the loop had feedback available & ⊥ used it|feed the objection back, capped at 3. GENERALLY: a reviewer's REASON is signal; throwing it away & guessing is the expensive path
 B11|2026-08-01|attributed run-to-run differences to model variance. MEASURED FALSE: 3/3 trials identical `gen 3487` ∴ deterministic @ temp 0. every difference was a prompt change I made. `.:V59` — measurement ⊥ belief, on my own methodology|isolate ONE variable per run. determinism makes that possible
+B12|2026-08-01|step 2 never told what to DEFINE ∴ test called `check_edge_depths(root,&e)` & step 2 invented another name → `E0425`, 3 repairs could ⊥ recover. also the root cause of `.:fed` B1/B2/B3: an unconstrained signature let it choose a `&Path` design & drag in walking, temp dirs & `*.md` globbing|`expected_calls()` — deterministic parse of calls absent from the surface, passed as a contract. NEXT run: judge YES first try, 3 round-trips, all 3 prior defects ABSENT. own test caught `fn x(` being read as a call

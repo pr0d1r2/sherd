@@ -34,6 +34,49 @@ pub struct Step {
     pub ms: u128,
 }
 
+/// Calls a test makes that do not exist yet -- the contract step 2 must fill.
+///
+/// Deterministic parse, no model (`.:V18`). A run failed when the test called
+/// `check_edge_depths(root, &edges)` and step 2 invented a different name, which
+/// three repairs could not recover (B12): step 2 was never told what to define.
+#[must_use]
+pub fn expected_calls(test_src: &str, existing: &str) -> Vec<String> {
+    const SKIP: [&str; 18] = ["fn", "if", "for", "while", "match", "let", "return",
+        "assert", "assert_eq", "assert_ne", "panic", "println", "format", "vec",
+        "write", "read", "Some", "Ok"];
+    let b = test_src.as_bytes();
+    let mut out: Vec<String> = Vec::new();
+    let mut i = 0;
+    while i < b.len() {
+        if !(b[i].is_ascii_alphabetic() || b[i] == b'_') { i += 1; continue }
+        let start = i;
+        while i < b.len() && (b[i].is_ascii_alphanumeric() || b[i] == b'_') { i += 1 }
+        let name = &test_src[start..i];
+        // a call is `name(`; a macro is `name!(`; a method is `.name(`
+        if i >= b.len() || b[i] != b'(' { continue }
+        if start > 0 && (b[start - 1] == b'.' || b[start - 1] == b'!') { continue }
+        // `fn name(` is a DEFINITION, not a call -- including the test's own
+        let mut k = start;
+        while k > 0 && (b[k - 1] == b' ' || b[k - 1] == b'\t') { k -= 1 }
+        if k >= 2 && &test_src[k - 2..k] == "fn" { continue }
+        if SKIP.contains(&name) || existing.contains(&format!("fn {name}")) { continue }
+        // keep the call verbatim, arguments included -- the signature is the point
+        let mut depth = 0usize;
+        let mut j = i;
+        while j < b.len() {
+            if b[j] == b'(' { depth += 1 } else if b[j] == b')' {
+                depth -= 1;
+                if depth == 0 { break }
+            }
+            j += 1;
+        }
+        let call = test_src[start..(j + 1).min(test_src.len())].replace('\n', " ");
+        let call = call.split_whitespace().collect::<Vec<_>>().join(" ");
+        if !out.contains(&call) { out.push(call) }
+    }
+    out
+}
+
 /// The RULE depth of a spec: §G §C §I §V only.
 ///
 /// §B and §R are rationale and history -- what was tried, what broke, what was
@@ -254,8 +297,15 @@ pub fn drive(root: &Path, node: &Path, invariant: &str, task: &str, max_repair: 
     eprintln!("  gate: RED as required");
 
     // 2 -- GREEN. Sees the one test and the implementation, not the whole spec.
+    let wanted = expected_calls(&test_fn, &surface);
+    let contract = if wanted.is_empty() { String::new() } else {
+        format!("--- the test calls these; define EXACTLY these names and signatures ---\n{}\n\n",
+                wanted.join("\n"))
+    };
+    eprintln!("  contract: {}", if wanted.is_empty() { "(none detected)".into() } else { wanted.join(", ") });
     let code = ollama::rust_block(&run(&format!(
         "--- implementation ---\n{impl_r}\n\n--- failing test ---\n```rust\n{test_fn}\n```\n\n\
+         {contract}\
          --- failure ---\n{}\n\n\
          Write ONLY the new function(s) to ADD to the implementation so this test passes. \
          Do not restate existing code. \
@@ -314,6 +364,20 @@ mod tests {
     use super::*;
 
     const SRC: &str = "pub fn a() {}\n\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn t() {}\n}\n";
+
+    #[test]
+    fn expected_calls_finds_the_undefined_one_only() {
+        let t = "#[test]\nfn x() {\n    let e = edges(\"a\");\n    let v = check_edge_depths(root, &e);\n    assert!(v.is_empty());\n    e.len();\n}";
+        let existing = "pub fn edges(text: &str) -> Vec<Edge> { }";
+        let c = expected_calls(t, existing);
+        assert_eq!(c, vec!["check_edge_depths(root, &e)"], "got {c:?}");
+    }
+
+    #[test]
+    fn expected_calls_skips_macros_and_methods() {
+        let t = "assert_eq!(a, b); x.len(); vec![1];";
+        assert!(expected_calls(t, "").is_empty(), "{:?}", expected_calls(t, ""));
+    }
 
     #[test]
     fn rule_depth_drops_the_archive_sections() {

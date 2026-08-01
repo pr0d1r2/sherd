@@ -116,51 +116,34 @@ fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
         walk(&p, out);
     }
 }
-/// Find all federation edges that violate the depth invariant (V2).
-///
-/// An edge is considered a violation if its `dir` field contains more than one
-/// path component, i.e. it points to a directory that is not exactly one level
-/// deeper than the node declaring it.
-///
-/// The function walks the entire repository tree starting at `root`, looks for
-/// any Markdown files (`*.md`) and parses federation tables from them using
-/// the existing `edges` helper.  All offending edges are returned in a vector.
-#[must_use]
-pub fn find_depth_violations(root: &Path) -> Vec<Edge> {
-    use std::fs::{read_to_string, read_dir};
-    use std::path::Component;
-
+pub fn check_edge_depth(text: &str) -> Vec<String> {
     let mut violations = Vec::new();
+    let mut in_f = false;
 
-    // Recursive helper to walk the directory tree.
-    fn walk(dir: &Path, violations: &mut Vec<Edge>) {
-        // Read all entries in the current directory.
-        if let Ok(entries) = read_dir(dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.is_dir() {
-                    // Recurse into subdirectories.
-                    walk(&path, violations);
-                } else if path.extension().and_then(|s| s.to_str()) == Some("md") {
-                    // Read the markdown file and parse federation edges.
-                    if let Ok(content) = read_to_string(&path) {
-                        for edge in edges(&content) {
-                            // Count components of the relative dir.
-                            let comp_count = Path::new(&edge.dir)
-                                .components()
-                                .filter(|c| matches!(c, Component::Normal(_)))
-                                .count();
-                            if comp_count != 1 {
-                                violations.push(edge);
-                            }
-                        }
-                    }
-                }
-            }
+    for line in text.lines() {
+        // Detect the start of a §F table.
+        if line.starts_with("## \u{a7}") {
+            in_f = line.starts_with("## \u{a7}F");
+            continue;
+        }
+
+        if !in_f {
+            continue;
+        }
+
+        let cells = split_row(line);
+        // Skip the header row and any malformed rows.
+        if cells.len() != 4 || cells[0] == "dir" {
+            continue;
+        }
+
+        // The invariant: a child directory must be exactly one level deeper,
+        // i.e. it should not contain a slash.
+        if cells[0].contains('/') {
+            violations.push(line.trim().to_string());
         }
     }
 
-    walk(root, &mut violations);
     violations
 }
 
@@ -192,41 +175,20 @@ mod tests {
     }
 
 #[test]
-fn detects_depth_invariant_violation() {
-    use std::fs::{create_dir_all, write};
-    use std::path::{Path, PathBuf};
-
-    // Create a temporary directory for the test.
-    let root = Path::new("temp_depth_test");
-    if root.exists() {
-        std::fs::remove_dir_all(root).unwrap();
-    }
-    create_dir_all(root).unwrap();
-
-    // Write a federation file that contains an edge pointing two levels deeper
-    // than its parent (the root directory), which violates V2.
-    let content = "## \u{a7}F FEDERATION\ndir|owns|\u{22a5}owns|tokens\nsubdir/subsubdir|foo|bar|-";
-    write(root.join("README.md"), content).unwrap();
-
-    // Call the new public function that checks depth invariants.
-    let violations = find_depth_violations(root);
-
-    // The test should fail if no violations are reported, i.e. the current
-    // implementation does not enforce V2.
+fn edge_depth_invariant_violated() {
+    // A federation table where the child directory is two levels deeper than its parent.
+    let text = "## \u{a7}F FEDERATION\ndir|owns|\u{22a5}owns|tokens\nsrc/subdir|code|-|-\n";
+    
+    // The new public function that validates edge depth. It should return the offending rows.
+    let violations = check_edge_depth(text);
+    
+    // We expect at least one violation because `src/subdir` is not a single level deeper.
+    assert!(!violations.is_empty(), "Expected a violation but found none");
+    
+    // The offending row should contain the problematic directory name.
     assert!(
-        !violations.is_empty(),
-        "Expected at least one depth violation but found none"
+        violations.iter().any(|row| row.contains("src/subdir")),
+        "The reported violation does not mention `src/subdir`"
     );
-
-    // Verify that the offending edge is the one we inserted.
-    let offending_edge = &violations[0];
-    assert_eq!(
-        offending_edge.dir,
-        "subdir/subsubdir",
-        "The violating edge should point to 'subdir/subsubdir'"
-    );
-
-    // Clean up after ourselves.
-    std::fs::remove_dir_all(root).unwrap();
 }
 }
