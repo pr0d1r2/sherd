@@ -364,7 +364,10 @@ pub fn drive(root: &Path, node: &Path, invariant: &str, task: &str, max_repair: 
              Answer YES only if BOTH hold: (a) the test exercises the quantity the \
              invariant is actually about -- check the field names against the data model \
              above, a test asserting on the wrong field proves nothing; and (b) an \
-             implementation violating the invariant would fail it. Exhaustiveness is NOT \
+             implementation violating the invariant would fail it. If the function \
+             DETECTS something, the test MUST include input that should be detected \
+             and assert it IS -- a test asserting only that nothing was found is \
+             satisfied by a function that always finds nothing. Exhaustiveness is NOT \
              required. Answer YES or NO on the first line, then one sentence."),
             if attempt == 0 { "1b judge" } else { "1b re-judge" }, &mut log)?;
         let first = verdict.trim().lines().next().unwrap_or("").to_string();

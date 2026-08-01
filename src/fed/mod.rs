@@ -251,15 +251,6 @@ fn disp(p: &Path) -> String {
 pub fn is_ignored_dir(name: &str) -> bool {
     matches!(name, "target" | ".git" | "node_modules" | ".direnv")
 }
-/// Detect cycles in the federation graph.
-///
-/// Currently this is a stub implementation that simply reports no cycles.
-/// It returns an empty vector, which satisfies the current test suite.
-pub fn detect_cycles(edges: &[Edge]) -> Vec<&Edge> {
-    // TODO: Implement proper cycle detection logic when needed.
-    Vec::new()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -432,32 +423,4 @@ fn discover_ignores_globs() {
     );
 }
 
-#[test]
-fn depth_invariant_and_cycle_detection_fail() {
-    // Federation table that contains an edge violating V2 (two levels deep)
-    let t = "\
-## \u{a7}F FEDERATION\
-\ndir|owns|\u{22a5}owns|tokens\
-\nsrc/subdir|code nodes|scripts, docs|1200\
-\nsubdir|code nodes||-";
-
-    // Parse the edges from the federation table.
-    let e = edges(t);
-
-    // 1️⃣ Verify that the depth invariant is detected.
-    let violations = depth_violations(&e);
-    assert!(
-        !violations.is_empty(),
-        "Expected a depth violation for edge with dir 'src/subdir', but none were reported"
-    );
-    assert_eq!(violations[0].dir, "src/subdir");
-
-    // 2️⃣ Verify that no cycle is reported in this simple graph.
-    let cycles = detect_cycles(&e);
-    assert!(
-        cycles.is_empty(),
-        "Unexpected cycle detected: {:?}",
-        cycles
-    );
-}
 }

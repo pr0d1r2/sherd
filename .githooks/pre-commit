@@ -1,15 +1,13 @@
 #!/usr/bin/env bash
-# The gate. `bbx check` alone let broken Rust through (B16) -- it reads specs,
-# not compilation. Build and test first, then check.
-#
-# BBX_CARGO is exported by the dev shell; outside it, fall back to PATH. If
-# neither resolves, FAIL -- a gate that cannot verify must not pass (B17).
+# The gate. Compiles with warnings DENIED: an unused parameter is how a stub
+# announces itself, and `detect_cycles(edges)` ignoring `edges` shipped through
+# a green gate because warnings were only warnings (fed B6).
 set -e
 CARGO="${BBX_CARGO:-$(command -v cargo || true)}"
 if [ -z "$CARGO" ] || [ ! -x "$CARGO" ]; then
   echo "pre-commit: no cargo (set BBX_CARGO or enter the dev shell) -- refusing to pass unverified" >&2
   exit 1
 fi
-"$CARGO" build --offline -q
-"$CARGO" test  --offline -q >/dev/null
+RUSTFLAGS="-D warnings" "$CARGO" build --offline -q
+"$CARGO" test --offline -q >/dev/null
 ./target/debug/bbx check

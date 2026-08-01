@@ -53,7 +53,7 @@ fn main() -> ExitCode {
         #[cfg(feature = "ollama")]
         Some("apply") => match plan::apply(&root, 3) {
             Ok(sha) => {
-                eprintln!("\napplied as {sha}. REPLAN before the next step -- \
+                eprintln!("\napplied as {sha}. Run `bbx plan` again before the next step -- \
                            this commit changed the specs that plan it.");
                 ExitCode::SUCCESS
             }
