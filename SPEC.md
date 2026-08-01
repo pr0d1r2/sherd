@@ -199,7 +199,6 @@ T3|.|capability-parity audit `cavespec` vs what `bbx` needs. write the compariso
 T4|x|parse `§F` table → (dir, owns, ⊥owns, tokens), escape-aware|I,V1
 T5|~|fs walk — own impl landed, VIOLATES §C (`itok::walk` ⊥ reimpl). see B1|V23,B1
 T6|.|build federation DAG, depth+1, cycle detect|V1,V2,V4
-T7|.|orphan check: SPEC w/o parent `§F` row|V3
 T8|.|bind `itok::estimate`, tier floor `bpe`, method label|V17,V24
 T9|.|`.context-limits` reuse for node + file ceilings|I,V52
 T10|.|`bbx budget` + over-budget exit 1|V6,V7,V8
@@ -208,7 +207,6 @@ T12|.|id namespacing + resolver `path:Vn`|V10,V11
 T14|x|`bbx lens` render pack, `--depth rule` default|I,V15,V45
 T16|.|`bbx init` scaffold from child dirs|I
 T17|.|ollama client `BBX_MODEL`/`BBX_ENDPOINT`|I,V25
-T18|.|`bbx route` one-edge-per-step|V19
 T19|.|route ambiguous exit 3 / miss exit 2|V20
 T20|.|`--offline` model-free path|V18
 T21|.|`bbx check` drift spec↔code|I
@@ -216,14 +214,12 @@ T22|.|`§F`.tokens staleness, tier-tagged|V21,V26
 T23|.|coverage gap warn for un-specced source dirs|V16
 T24|~|`bbx graph --json` — `--dot`, `--tree`, `--table`, mermaid all land|I
 T25|.|`bbx validate` incl examined-vs-discovered counts|I,V48
-T27|.|invariant promotion helper leaf→ancestor|V13,V14
 T28|.|backprop: bug → leaf `§B`, decide promote|V14
 T29|.|synthetic fixture: 4 deep, shared module 2 parents (self-repo is a tree ∴ ⊥ cover DAG)|V4
 T31|.|ollama tier probe + fallback warn|V25
 T35|.|parse `§N`, line-anchored emit|V34
 T36|x|superseded — `§N` derivation is `src/fed:T6`, at the node that owns it|V36,V38,V39
 T37|.|`bbx sync` + exit 1 when wrote|I,V36
-T38|.|`check`: `§N` ≠ derived → drift|V36
 T40|.|vertical axis: `SPEC.why.md` format + id keying|V42,V43
 T41|.|`lens --depth rule\|why\|all`|V45
 T42|.|cross-file losslessness proof, asserted pre-write|V49,V44
@@ -246,7 +242,6 @@ T58|.|`cap.row` gate + `SPEC.why.md` reference resolution|V69,V70
 T59|.|PAY THE DEBT: record rationale for V1-V63 into `SPEC.why.md` before it accretes inline. rationale currently lives only in the design conversation|V69,V70,V44
 T60|.|`src/tokens/mod.rs` sole `itok::` call site; `src/spec/mod.rs` sole `cavespec::`. siblings private|V71,V72
 T61|.|facade-leak test: planted `itok::` outside `src/tokens/` ! fail to compile|V72,V61
-T62|.|dir-promotion check: flat `.rs` owning node-local invariants → promote|V73,V50
 T63|.|`lens --facet`, default `set`|V78,V81
 T64|.|setting-as-contract extraction — guard files → one line each|V82
 T65|x|`graph --mermaid` generated diagram|V83
