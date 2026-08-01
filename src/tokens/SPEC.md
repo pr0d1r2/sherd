@@ -22,8 +22,8 @@ V5: unreadable file → error, ⊥ silent 0 (itok B11d counted a dir as 0)
 id|status|task|cites
 T1|x|`count`, `count_file`, method label|V1,V2
 T2|x|`ENTRY_COST`, `working`|V3,V4
-T3|.|count a `.rs` file's code and its tests separately|`.:V50`
+T3|.|needs `tdd::split_module` — cross-node, name it before driving|`.:V50`
 T4|.|apply a tighter ceiling to `mod.rs`/`lib.rs`|`.:V51`
 T5|.|read per-path ceilings in `.context-limits` format|`.:V52`
-T6|.|tier select from `bbx.toml`, `ollama` exact tier + fallback warn|V2
-T7|.|planted `itok::` outside this node ! fail to compile|`.:V72`
+T6|.|needs `bbx.toml` and a TOML parser — neither exists|V2
+T7|.|needs a compile-fail test, ⊥ a function|`.:V72`

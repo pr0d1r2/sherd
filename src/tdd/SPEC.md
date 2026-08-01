@@ -39,10 +39,10 @@ id|status|task|cites
 T1|x|`split_module`, `insert_test`, `insert_impl` w/ structural test-region guard|V1,V7
 T2|x|red → judge → green → gate → repair loop|V2,V3,V4,V5
 T3|x|invariant-exists precondition|V6
-T4|~|`classify_failure` landed (LLM-authored). wiring it into the RED check still open|V2
+T4|~|needs wiring, ⊥ a new function — `classify_failure` exists|V2
 T5|.|`§T` row status flip on green (`.` → `x`)|V5
-T6|.|judge gets `signatures()` data model|V8,B2
-T7|.|`cargo build` before gate runs that exercise the bin|B3
+T6|x|judge gets `signatures()` data model|V8,B2
+T7|.|needs a hook change, ⊥ a function|B3
 T8|.|record per-request template overhead (~67 tok, measured) in entry-cost accounting|V2
 T9|x|step 2 ! define exactly the fn the test calls — pass the expected signature|V18
 

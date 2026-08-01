@@ -78,7 +78,9 @@ pub fn classify(node: &Path, text: &str) -> Kind {
     // classified every `report ...` row as a replacement (B5).
     let words: Vec<&str> = t.split(|c: char| !c.is_ascii_alphanumeric())
         .filter(|w| !w.is_empty()).collect();
-    let word = |ks: &[&str]| ks.iter().any(|k| words.contains(k));
+    // STEM match: "wiring" did not match "wire" and a row needing wiring
+    // counted as actionable (B8).
+    let word = |ks: &[&str]| ks.iter().any(|k| words.iter().any(|w| w.starts_with(k)));
     // WHITELIST, not blacklist. A row is actionable when it says "add one
     // function", not merely when it fails to match known-bad shapes. The
     // blacklist marked "replace the hand-rolled walk" actionable, and the loop

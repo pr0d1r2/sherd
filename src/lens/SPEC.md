@@ -18,8 +18,8 @@ id|status|task|cites
 T1|x|`pack` assembly, chain + children + cost|V1,V3
 T2|x|`Depth` rule\|why, `verdict`|V2,V4
 T3|.|`SPEC.why.md` resolution for `Depth::Why`|V2
-T4|.|budget derived from declared target tier, ⊥ constant|V4
+T4|.|needs `bbx.toml` — no tier is declared anywhere yet|V4
 T5|.|name the child dirs a node over `budget.node` could split into|`.:V9`
-T6|.|select facets when building a pack, default `set`|`.:V78`
-T7|.|report facets that overlap or leave content in no facet|`.:V81`
-T8|.|order a pack canonically, volatile content last|`.:V89`
+T6|.|needs facets represented in data — nothing marks them today|`.:V78`
+T7|.|needs facets represented in data — see T6|`.:V81`
+T8|.|needs a computable notion of volatile — undefined today|`.:V89`

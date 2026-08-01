@@ -30,7 +30,7 @@ T5|x|`find_exhaustive_violations` — dirs named twice, and child dirs w/ no row
 T6|.|`§N` derive from parent `§F`|V3
 T7|x|wire `find_exhaustive_violations` into `bbx check`|V11
 T8|.|orphan check — a `SPEC.md` no parent `§F` row points at|`.:V3`
-T9|.|descend one edge per step, reloading only that child|`.:V19`
+T9|.|needs a query→child match rule before it has a signature|`.:V19`
 T10|.|promote an invariant from a leaf to the common ancestor|`.:V13`
 T11|.|report `§N` that differs from what `§F` derives|`.:V36`
 T12|.|BLOCKED — needs Rust source, ⊥ `§F` data. see B9|`.:V73`
