@@ -208,15 +208,20 @@ fn run(prompt: &str, label: &'static str, log: &mut Vec<Step>) -> Result<String,
     // Count locally too: the server's number and ours must agree, and a
     // silent divergence means the prompt is not what this code thinks it is.
     let local = crate::tokens::count(prompt);
-    // Say what is being sent BEFORE sending it. A silent 40-90s wait is
-    // indistinguishable from a hang, which is V48 applied to a live process.
-    eprint!("  [{label}] -> {} tok, generating ", local.tokens);
+    // Say what is being sent, and what it should COST, before sending it. A
+    // silent 40-90s wait is indistinguishable from a hang (V21), and a
+    // prediction is what lets the escalation guards mean anything.
+    let eta = ollama::predict(local.tokens);
+    eprintln!("  [{label}] -> {} tok ({:.1} KB) - eta {:.0}s cold / {:.0}s if cached (~{} gen)",
+              local.tokens, prompt.len() as f64 / 1024.0,
+              eta.total_s(), eta.cached_s(), eta.gen_est);
+    eprint!("       ");
     let _ = std::io::stderr().flush();
     if ollama::verbose() {
         eprintln!("\n--- prompt [{label}] ---\n{prompt}\n--- end prompt ---");
     }
     let mut n = 0usize;
-    let r = ollama::generate_with(prompt, &mut |chunk| {
+    let r = ollama::generate_with(prompt, eta, &mut |chunk| {
         if ollama::verbose() {
             eprint!("{chunk}");
         } else {
@@ -232,12 +237,18 @@ fn run(prompt: &str, label: &'static str, log: &mut Vec<Step>) -> Result<String,
     if ollama::verbose() {
         eprintln!("--- end reply [{label}] ---");
     }
+    // Prediction against telemetry -- the comparison is the point. A delta
+    // that stays large means the pace model is wrong about THIS endpoint.
+    let actual = r.ms as f64 / 1000.0;
+    let basis = if ollama::last_cached() { eta.cached_s() } else { eta.total_s() };
+    let delta = (actual - basis) / basis * 100.0;
+    eprintln!("  [{label}] <- {} sent · {} gen · {actual:.1}s (eta {:.0}s, {delta:+.0}%){}",
+              r.prompt_tokens, r.eval_tokens, basis,
+              if ollama::last_cached() { "  [prefix CACHED]" } else { "" });
     if r.prompt_tokens.abs_diff(local.tokens) > local.tokens / 10 {
-        eprintln!("  [{label}] WARNING local {} vs server {} -- >10% apart",
+        eprintln!("  [{label}] note: local count {} vs server {} -- >10% apart",
                   local.tokens, r.prompt_tokens);
     }
-    eprintln!("  [{label}] <- sent {} tok · gen {} · {:.1}s",
-              r.prompt_tokens, r.eval_tokens, r.ms as f64 / 1000.0);
     log.push(Step { label, prompt_tokens: r.prompt_tokens, eval_tokens: r.eval_tokens, ms: r.ms });
     Ok(r.text)
 }

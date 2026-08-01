@@ -28,6 +28,8 @@ fn main() -> ExitCode {
         bbx::ollama::set_verbose(true);
     }
     let root = repo_root();
+    #[cfg(feature = "ollama")]
+    bbx::ollama::load_pace();
     match args.first().map(String::as_str) {
         Some("budget") => budget(&root, arg_dir(&args, &root)),
         Some("lens") => match args.get(1) {
@@ -166,11 +168,31 @@ fn ask(root: &Path, dir: &Path, question: &str) -> ExitCode {
         eprintln!("bbx: {}: no pack", dir.display());
         return ExitCode::from(2);
     };
-    eprintln!("# pack {} · {} nodes", p.cost, p.chain.len());
-    match bbx::ollama::generate(&format!("{}\n\n---\n{question}\n", p.text)) {
+    use std::io::Write;
+    let prompt = format!("{}\n\n---\n{question}\n", p.text);
+    let eta = bbx::ollama::predict(p.cost.tokens);
+    eprintln!("# pack {} · {} nodes · eta {:.0}s cold / {:.0}s if cached",
+              p.cost, p.chain.len(), eta.total_s(), eta.cached_s());
+    eprint!("# ");
+    let _ = std::io::stderr().flush();
+    let mut n = 0usize;
+    match bbx::ollama::generate_with(&prompt, eta, &mut |c| {
+        if bbx::ollama::verbose() { eprint!("{c}") } else {
+            n += 1;
+            if n % 25 == 0 { eprint!(".") }
+        }
+        let _ = std::io::stderr().flush();
+    }) {
         Ok(r) => {
+            eprintln!();
             println!("{}", r.text);
-            eprintln!("[sent {} tok · gen {} · {}ms]", r.prompt_tokens, r.eval_tokens, r.ms);
+            let actual = r.ms as f64 / 1000.0;
+            eprintln!("[{} sent · {} gen · {actual:.1}s (eta {:.0}s, {:+.0}%){}]",
+                      r.prompt_tokens, r.eval_tokens,
+                      if bbx::ollama::last_cached() { eta.cached_s() } else { eta.total_s() },
+                      (actual - if bbx::ollama::last_cached() { eta.cached_s() } else { eta.total_s() })
+                          / if bbx::ollama::last_cached() { eta.cached_s() } else { eta.total_s() } * 100.0,
+                      if bbx::ollama::last_cached() { " prefix CACHED" } else { "" });
             ExitCode::SUCCESS
         }
         Err(e) => {
