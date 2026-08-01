@@ -49,6 +49,21 @@ pub fn pack(root: &Path, dir: &Path, depth: Depth) -> std::io::Result<Pack> {
     Ok(Pack { chain, children: fed::edges(&own), cost: tokens::count(&text), text })
 }
 
+/// The chain ceiling for a node, from `.context-limits`.
+///
+/// A ceiling has to come from somewhere: asked for a split hint "when the
+/// pack exceeds the ceiling", the model invented a `budget.node` FILE and
+/// read it (B1). Now there is a real source, in itok's format.
+///
+/// # Errors
+/// Propagates a malformed `.context-limits` -- an unparseable ceiling is an
+/// error, not a silent default.
+pub fn ceiling_for(root: &Path, node: &Path) -> Result<u64, String> {
+    let rel = node.strip_prefix(root).unwrap_or(node);
+    let key = if rel.as_os_str().is_empty() { "SPEC.md".into() } else { rel.to_string_lossy().to_string() };
+    Ok(tokens::Ceilings::load(root)?.for_path(&key))
+}
+
 /// Budget verdict for a pack against a working-token allowance.
 #[derive(Debug, PartialEq, Eq)]
 pub enum Verdict {
@@ -68,6 +83,21 @@ pub fn verdict(cost: u64, budget: u64) -> Verdict {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_node_ceiling_comes_from_the_file_not_a_constant() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        // .context-limits names src/tdd; the value is read, not assumed.
+        let tdd = ceiling_for(root, &root.join("src/tdd")).unwrap();
+        assert!(tdd > tokens::DEFAULT_NODE,
+                "src/tdd is listed and should not fall back to the default: {tdd}");
+        // A new node under src inherits src's ceiling -- prefix matching, so
+        // adding a node does not silently drop it to the global default.
+        assert_eq!(ceiling_for(root, &root.join("src/nope")).unwrap(),
+                   ceiling_for(root, &root.join("src")).unwrap());
+        // A path sharing no listed prefix falls back, which is NOT "no limit".
+        assert_eq!(ceiling_for(root, &root.join("docs")).unwrap(), tokens::DEFAULT_NODE);
+    }
 
     #[test]
     fn verdict_reports_direction_and_distance() {

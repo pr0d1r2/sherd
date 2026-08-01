@@ -1,0 +1,27 @@
+# Per-path token CHAIN ceilings, gated by `bbx budget`. itok's format,
+# reused rather than reinvented -- a second format for one job would be two
+# readings of one rule.
+#
+# WHAT THIS CEILING IS: the cost of REACHING a node -- root plus every
+# ancestor plus itself -- which is what a worker pays before it sees any code.
+# Measured on the target tier (gpt-oss:20b, 131,072 window, 28,543 entry cost,
+# 102,529 working), the spec share is ~25%, so ~25,000 tokens.
+#
+# It forces a REVIEW, not a shrink. Set with real slack (~15-30%): a ceiling a
+# hair above current turns every legitimate addition into a raise, and a
+# threshold raised reflexively trains the reflex instead of catching the
+# problem. Raises belong in a commit with their reason.
+#
+# Measured 2026-08-01, `bbx budget`: root 9,164 · src 9,544 · deepest
+# src/tdd 13,137. Ceilings sit ~20% above each.
+SPEC.md        11000
+src            11500
+src/tdd        16000
+src/fed        14000
+src/ollama     13000
+src/plan       13000
+src/review     12500
+src/lens       12000
+src/tokens     12000
+src/spec       12000
+src/cli        12000
