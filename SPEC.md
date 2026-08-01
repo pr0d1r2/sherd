@@ -10,7 +10,6 @@ MOTIVATING NUMBER: `itok` = 135,096 tok (28,462 spec + 106,634 code) vs 102,529 
 
 dir|owns|⊥owns|tokens
 src|code nodes — tokens, spec, fed, lens facades & logic|inference harness, endpoint config|-
-scripts|inference harness driving the local endpoint, premise gate|Rust code, spec format|-
 
 ## §C CONSTRAINTS
 

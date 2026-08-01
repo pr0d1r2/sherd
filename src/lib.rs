@@ -8,3 +8,8 @@ pub mod fed;
 pub mod lens;
 pub mod spec;
 pub mod tokens;
+
+#[cfg(feature = "ollama")]
+pub mod ollama;
+#[cfg(feature = "ollama")]
+pub mod tdd;

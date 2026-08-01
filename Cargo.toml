@@ -18,12 +18,23 @@ path = "src/main.rs"
 name = "bbx"
 path = "src/lib.rs"
 
+[features]
+# Default ON because `tdd` is the point of installing; `--no-default-features`
+# still yields the deterministic, networkless core that §C demands (parse,
+# DAG, budget, ceiling -- none of which may call a model).
+default = ["ollama"]
+ollama = ["dep:ureq", "dep:serde_json"]
+
 [dependencies]
-# V72: these are named ONLY inside their facade module -- src/tokens/ and
-# src/spec/. Everything else goes through the facade, and module privacy
-# makes the compiler enforce it (error[E0603]).
+# V72: these are named ONLY inside their facade module -- src/tokens/,
+# src/spec/, src/ollama/. Everything else goes through the facade, and module
+# privacy makes the compiler enforce it (error[E0603]).
 itok = { path = "../itok", default-features = false, features = ["bpe"] }
 cavespec = { path = "../nanokit" }
+# ureq with default-features off = no TLS stack. ollama is plain http on the
+# LAN: no cloud, no cert chain, no ring/openssl. Same choice itok made.
+ureq = { version = "2.12", default-features = false, optional = true }
+serde_json = { version = "1", optional = true }
 
 [lints.rust]
 unsafe_code = "forbid"

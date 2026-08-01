@@ -11,6 +11,8 @@ bbx -- federated SPEC.md for small-context local models
   bbx lens <dir>       the context pack for one node
   bbx fed [dir]        the federation edges declared by a node
   bbx check [dir]      cavespec structural check of every node
+  bbx ask <dir> <q>    ask the endpoint from a node's lens pack
+  bbx tdd <dir> <Vn> <task>   red -> judge -> green -> gate -> repair
 
 exit: 0 clean · 1 violation · 2 usage";
 
@@ -25,6 +27,16 @@ fn main() -> ExitCode {
         },
         Some("fed") => fed_cmd(&arg_dir(&args, &root)),
         Some("check") => check(&root),
+        #[cfg(feature = "ollama")]
+        Some("ask") => match (args.get(1), args.get(2)) {
+            (Some(d), Some(q)) => ask(&root, &PathBuf::from(d), q),
+            _ => usage("ask needs <dir> and a question"),
+        },
+        #[cfg(feature = "ollama")]
+        Some("tdd") => match (args.get(1), args.get(2), args.get(3)) {
+            (Some(d), Some(v), Some(task)) => tdd_cmd(&root, &PathBuf::from(d), v, task),
+            _ => usage("tdd needs <dir> <invariant> <task>"),
+        },
         Some("-h" | "--help" | "help") => {
             println!("{USAGE}");
             ExitCode::SUCCESS
@@ -120,4 +132,35 @@ fn check(root: &Path) -> ExitCode {
     }
     println!("\n  {} nodes examined · {bad} violations", nodes.len());
     if bad > 0 { ExitCode::from(1) } else { ExitCode::SUCCESS }
+}
+
+#[cfg(feature = "ollama")]
+fn ask(root: &Path, dir: &Path, question: &str) -> ExitCode {
+    let Ok(p) = lens::pack(root, dir, lens::Depth::Rule) else {
+        eprintln!("bbx: {}: no pack", dir.display());
+        return ExitCode::from(2);
+    };
+    eprintln!("# pack {} · {} nodes", p.cost, p.chain.len());
+    match bbx::ollama::generate(&format!("{}\n\n---\n{question}\n", p.text)) {
+        Ok(r) => {
+            println!("{}", r.text);
+            eprintln!("[sent {} tok · gen {} · {}ms]", r.prompt_tokens, r.eval_tokens, r.ms);
+            ExitCode::SUCCESS
+        }
+        Err(e) => {
+            eprintln!("bbx: {e}");
+            ExitCode::from(2)
+        }
+    }
+}
+
+#[cfg(feature = "ollama")]
+fn tdd_cmd(root: &Path, dir: &Path, invariant: &str, task: &str) -> ExitCode {
+    match bbx::tdd::drive(root, dir, invariant, task, 3) {
+        Ok(_) => ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("bbx: {e}");
+            ExitCode::from(1)
+        }
+    }
 }
