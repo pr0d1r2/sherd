@@ -40,6 +40,37 @@ pub fn split_module(src: &str) -> (&str, &str) {
     }
 }
 
+/// The public SURFACE of an implementation: signatures and type shapes, no
+/// bodies. Step 1 needs this and must not have the bodies -- it is `§I`, not
+/// `§V`. Written after a run where the test author, given only the spec, could
+/// not see `Edge`'s fields and reached for the wrong one (B1 here).
+#[must_use]
+pub fn signatures(impl_src: &str) -> String {
+    let mut out = String::new();
+    let mut depth = 0usize;
+    for line in impl_src.lines() {
+        let s = line.trim();
+        let is_sig = s.starts_with("pub fn") || s.starts_with("pub struct")
+            || s.starts_with("pub enum") || s.starts_with("pub const");
+        if depth > 0 {
+            // inside a type body: keep field lines, they are part of the shape
+            if s == "}" { depth = 0; out.push_str("}\n"); }
+            else if !s.starts_with("//") && !s.is_empty() { out.push_str(line); out.push('\n'); }
+            continue;
+        }
+        if is_sig {
+            if s.starts_with("pub fn") {
+                let sig = s.split('{').next().unwrap_or(s).trim_end();
+                out.push_str(sig); out.push_str(" { /* ... */ }\n");
+            } else {
+                out.push_str(line); out.push('\n');
+                if s.ends_with('{') { depth = 1; }
+            }
+        }
+    }
+    out
+}
+
 /// Append a test into the tests module. The ONLY function that writes there --
 /// steps 2 and 4 structurally cannot touch the test, which is the guard
 /// against an implementation that games it.
@@ -84,7 +115,14 @@ fn tail(s: &str, n: usize) -> &str {
 }
 
 fn run(prompt: &str, label: &'static str, log: &mut Vec<Step>) -> Result<String, String> {
+    // Count locally too: the server's number and ours must agree, and a
+    // silent divergence means the prompt is not what this code thinks it is.
+    let local = crate::tokens::count(prompt);
     let r = ollama::generate(prompt)?;
+    if r.prompt_tokens.abs_diff(local.tokens) > local.tokens / 10 {
+        eprintln!("  [{label}] WARNING local {} vs server {} -- >10% apart",
+                  local.tokens, r.prompt_tokens);
+    }
     eprintln!("  [{label}] sent {} tok · gen {} · {}ms", r.prompt_tokens, r.eval_tokens, r.ms);
     log.push(Step { label, prompt_tokens: r.prompt_tokens, eval_tokens: r.eval_tokens, ms: r.ms });
     Ok(r.text)
@@ -110,11 +148,13 @@ pub fn drive(root: &Path, node: &Path, invariant: &str, task: &str, max_repair: 
         .to_string();
     eprintln!("node {} · {}\n", node.display(), inv.trim());
 
+    let surface = signatures(impl_r);
     let mut log = Vec::new();
 
     // 1 -- RED test. Sees spec and existing tests, not the implementation.
     let test_fn = ollama::rust_block(&run(&format!(
-        "{spec_txt}\n\n--- existing tests in this module ---\n{tests_r}\n\n\
+        "{spec_txt}\n\n--- public surface (signatures only) ---\n{surface}\n\n\
+         --- existing tests in this module ---\n{tests_r}\n\n\
          Write ONE new Rust `#[test]` function proving this invariant:\n  {inv}\n\n\
          Task: {task}\n\n\
          It must FAIL against the current implementation, and fail at an assertion -- \
@@ -124,9 +164,13 @@ pub fn drive(root: &Path, node: &Path, invariant: &str, task: &str, max_repair: 
 
     // 1b -- independent judge. Sees the invariant and the test, never the impl.
     let verdict = run(&format!(
-        "Invariant:\n  {inv}\n\nProposed test:\n```rust\n{test_fn}\n```\n\n\
-         Does this test actually prove that invariant? Answer YES or NO on the first \
-         line, then one sentence."), "1b judge", &mut log)?;
+        "--- data model ---\n{surface}\n\nInvariant:\n  {inv}\n\n\
+         Proposed test:\n```rust\n{test_fn}\n```\n\n\
+         Answer YES only if BOTH hold: (a) the test exercises the quantity the \
+         invariant is actually about -- check the field names against the data model \
+         above, a test asserting on the wrong field proves nothing; and (b) an \
+         implementation violating the invariant would fail it. Exhaustiveness is NOT \
+         required. Answer YES or NO on the first line, then one sentence."), "1b judge", &mut log)?;
     let first = verdict.trim().lines().next().unwrap_or("").to_string();
     eprintln!("  judge: {}", first.chars().take(80).collect::<String>());
     if !first.trim().to_uppercase().starts_with("YES") {
@@ -188,6 +232,15 @@ mod tests {
     use super::*;
 
     const SRC: &str = "pub fn a() {}\n\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn t() {}\n}\n";
+
+    #[test]
+    fn signatures_keep_shape_and_drop_bodies() {
+        let src = "pub struct E {\n    pub dir: String,\n}\n\npub fn go(a: u8) -> bool {\n    secret();\n    true\n}\n";
+        let s = signatures(src);
+        assert!(s.contains("pub dir: String"), "field shape must survive: {s}");
+        assert!(s.contains("pub fn go(a: u8) -> bool"), "signature must survive: {s}");
+        assert!(!s.contains("secret()"), "body must NOT survive: {s}");
+    }
 
     #[test]
     fn split_finds_the_test_boundary() {

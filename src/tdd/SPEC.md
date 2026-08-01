@@ -18,6 +18,10 @@ V4: test already green → STOP & restore. ⊥ a red test, nothing to drive
 V5: repair budget capped. exhaustion → report what was TRIED, ⊥ silent give-up
 V6: test ! cite a declared `§V` id. a test for an invariant that ⊥ exist encodes an unstated rule
 V7: `split_module` has ONE definition here. the code ceiling (`.:V50`) ! reuse it — 2 readings of one rule is the defect this project ends
+V8: judge ! see the DATA MODEL. w/o field shapes it cannot tell a test asserting on the wrong field from one asserting on the right one (B2)
+V9: judge answers on SUBJECT ∧ FALSIFIABILITY, ⊥ either alone. a test can be perfectly falsifiable & still test the wrong quantity (B2)
+V10: repeated rejection = evidence about the WORK. loosening a guard to make it pass is silencing it (B2)
+V11: gates GREEN ⊥ correctness. `cargo test` + `bbx check` both passed on semantically empty code (B2) — green for the wrong reason, inside the tool built to catch it
 
 ## §T TASKS
 
@@ -27,3 +31,13 @@ T2|x|red → judge → green → gate → repair loop|V2,V3,V4,V5
 T3|x|invariant-exists precondition|V6
 T4|.|assert RED fails at assertion ⊥ at compile|V2
 T5|.|`§T` row status flip on green (`.` → `x`)|V5
+T6|.|judge gets `signatures()` data model|V8,B2
+T7|.|`cargo build` before gate runs that exercise the bin|B3
+T8|.|record per-request template overhead (~67 tok, measured) in entry-cost accounting|V2
+
+## §B BUGS
+
+id|date|cause|fix
+B1|2026-08-01|step 1 saw spec + tests but ⊥ the data model ∴ test author could ⊥ see `Edge`'s fields & reached for `owns` to compute depth. judge caught it (twice)|`signatures()` — public surface, ⊥ bodies. it is `§I`, ⊥ `§V`
+B2|2026-08-01|judge LOOSENED from "does this prove the invariant" to "would a violator fail it" after 2 rejections read as over-strict. 2 rejections were the GUARD WORKING. under the weak bar it passed a test asserting on `not_owns` (prose) as if it were a path — impl & test agreed w/ each other & neither related to V2. gates GREEN, verdict MERGEABLE, code meaningless. self-consistent wrongness, the exact failure V3 exists to catch, caused by relaxing V3|judge ! require BOTH — right SUBJECT (field names vs data model) AND falsifiable. judge gets `signatures()` too. GENERALLY: a guard rejecting repeatedly is evidence about the WORK, ⊥ about the guard
+B3|2026-08-01|`cargo test` ⊥ refresh `target/debug/<bin>` — it builds a separate test harness ∴ 2 runs used a stale binary & reported identical token counts. read as "prompt unchanged" ⊥ "binary unchanged"|`cargo build` before any run that exercises the bin. gate ! rebuild first
