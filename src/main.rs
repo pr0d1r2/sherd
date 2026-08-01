@@ -13,6 +13,7 @@ bbx -- federated SPEC.md for small-context local models
   bbx check [dir]      cavespec structural check of every node
   bbx graph [--tree|--table|--dot]  federation DAG, generated from §F
   bbx plan             next 3 steps, with what would invalidate each
+  bbx apply            execute step 1 only, commit it, then stop
   bbx ask <dir> <q>    ask the endpoint from a node's lens pack
   bbx tdd <dir> <Vn> <task>   red -> judge -> green -> gate -> repair
 
@@ -49,6 +50,15 @@ fn main() -> ExitCode {
         }
         Some("check") => check(&root),
         Some("plan") => plan_cmd(&root),
+        #[cfg(feature = "ollama")]
+        Some("apply") => match plan::apply(&root, 3) {
+            Ok(sha) => {
+                eprintln!("\napplied as {sha}. REPLAN before the next step -- \
+                           this commit changed the specs that plan it.");
+                ExitCode::SUCCESS
+            }
+            Err(e) => { eprintln!("bbx: {e}"); ExitCode::from(1) }
+        },
         #[cfg(feature = "ollama")]
         Some("ask") => match (args.get(1), args.get(2)) {
             (Some(d), Some(q)) => ask(&root, &PathBuf::from(d), q),
