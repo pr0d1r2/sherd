@@ -255,7 +255,7 @@ pub fn is_ignored_dir(name: &str) -> bool {
         // never become federation nodes, because a node's SPEC.md reaches the
         // local model's prompt and supervisor instructions are not for it
         // (V13). Excluded by discovery, not by convention.
-        | ".claude" | ".github" | ".codex")
+        | ".claude" | ".github" | ".codex" | ".githooks")
 }
 pub fn find_exhaustive_violations<'a>(
     edges: &'a [Edge],
@@ -322,7 +322,7 @@ mod tests {
     fn supervisor_dirs_never_become_nodes() {
         // A SPEC.md under .claude/ would otherwise be discovered, chained, and
         // shipped into a worker prompt (V13).
-        for d in [".claude", ".github", ".codex"] {
+        for d in [".claude", ".github", ".codex", ".githooks"] {
             assert!(is_ignored_dir(d), "{d} must never be walked");
         }
         let found = discover(Path::new(env!("CARGO_MANIFEST_DIR")));

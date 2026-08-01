@@ -184,6 +184,21 @@ fn check(root: &Path) -> ExitCode {
             println!("{}:{}: cavespec/{}: {}", path.display(), v.line, v.rule, v.msg);
             bad += 1;
         }
+        // §F structure: duplicate rows (fed V12) and child dirs with no row
+        // (fed V11). Advisory -- a missing row is often a dir that is simply
+        // not a node yet, so it reports rather than fails.
+        let edges = fed::edges(&text);
+        let (dupes, missing) = fed::find_exhaustive_violations(&edges, node);
+        for e in dupes {
+            println!("{}: bbx/fed:V12: `{}` named twice in §F -- descent is ambiguous",
+                     path.display(), e.dir);
+            bad += 1;
+        }
+        for m in missing {
+            let name = m.file_name().unwrap_or_default().to_string_lossy();
+            println!("{}: bbx/fed:V11: `{name}/` exists on disk with no §F row -- \
+                      unreachable by descent (advisory)", path.display());
+        }
     }
     println!("\n  {} nodes examined · {bad} violations", nodes.len());
     if bad > 0 { ExitCode::from(1) } else { ExitCode::SUCCESS }

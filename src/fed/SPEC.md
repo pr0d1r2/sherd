@@ -28,7 +28,7 @@ T3|x|`discover` walk w/ ignores, via `is_ignored_dir` (LLM-authored)|V8
 T4|~|cycle detection over the federation DAG|V2
 T5|x|`find_exhaustive_violations` — dirs named twice, and child dirs w/ no row|V11
 T6|.|`§N` derive from parent `§F`|V3
-T7|.|wire `find_exhaustive_violations` into `bbx check` — landed but called only by tests|V11
+T7|x|wire `find_exhaustive_violations` into `bbx check`|V11
 
 ## §B BUGS
 
