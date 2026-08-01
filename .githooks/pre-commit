@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
-# The gate. Compiles with warnings DENIED: an unused parameter is how a stub
-# announces itself, and `detect_cycles(edges)` ignoring `edges` shipped through
-# a green gate because warnings were only warnings (fed B6).
+# The gate. Warnings DENIED in BOTH build and test: `cargo build` does not
+# compile #[cfg(test)] code, so an unused import in a test module shipped
+# through a "-D warnings" gate that never saw it (fed B8).
 set -e
 CARGO="${BBX_CARGO:-$(command -v cargo || true)}"
 if [ -z "$CARGO" ] || [ ! -x "$CARGO" ]; then
   echo "pre-commit: no cargo (set BBX_CARGO or enter the dev shell) -- refusing to pass unverified" >&2
   exit 1
 fi
-RUSTFLAGS="-D warnings" "$CARGO" build --offline -q
-"$CARGO" test --offline -q >/dev/null
+export RUSTFLAGS="-D warnings"
+"$CARGO" build --offline -q
+"$CARGO" test  --offline -q >/dev/null
 ./target/debug/bbx check

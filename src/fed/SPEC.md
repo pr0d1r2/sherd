@@ -28,6 +28,7 @@ T3|x|`discover` walk w/ ignores, via `is_ignored_dir` (LLM-authored)|V8
 T4|~|cycle detection over the federation DAG|V2
 T5|x|`find_exhaustive_violations` — dirs named twice, and child dirs w/ no row|V11
 T6|.|`§N` derive from parent `§F`|V3
+T7|.|wire `find_exhaustive_violations` into `bbx check` — landed but called only by tests|V11
 
 ## §B BUGS
 
@@ -39,3 +40,4 @@ B4|2026-08-01|FIXED & hypothesis CONFIRMED. was twice — `check_edge_depth` & `
 B5|2026-08-01|`c56869e` DELETED `missing_not_owns` (committed 2 commits earlier). I overwrote `src/fed/mod.rs` w/ the pre-experiment file to isolate a variable & the commit swept the loss in. tests 22→21 & I read it as noise ∴ a REGRESSION shipped inside a commit whose message claimed only an improvement|restored by re-running V3 under the new config. GENERALLY: resetting a file to isolate an experiment DISCARDS everything else in it — diff against HEAD before committing an experiment's output, & a falling test count is a finding ⊥ noise
 B6|2026-08-01|`bbx apply` committed `detect_cycles(edges) -> Vec::new()` UNATTENDED, w/ a doc comment saying "stub ... satisfies the current test suite". the test asserted only "no cycle in this simple graph" ∴ a fn that always finds nothing passes perfectly. judge approved (the test DID check depth), gates green, committed|(a) gate now compiles `-D warnings` — `unused variable: edges` is how a stub announces itself & would have blocked this exact commit; (b) judge ! require a POSITIVE case for a detector; (c) stub removed. GENERALLY: a detector tested only on the NEGATIVE case is satisfied by returning the negative
 B7|2026-08-01|LLM repair reached for `scopeguard::guard` — a crate this repo does ⊥ depend on ∴ `E0433`, & the run was mid-repair when its wall-clock budget ran out|4 lines of local `Drop` replaced it. the model reaches for a crate rather than 4 lines; its surface shows the API but ⊥ the dependency list
+B8|2026-08-01|`unused import: Path` in a test module COMMITTED through a `-D warnings` gate. `cargo build` ⊥ compile `#[cfg(test)]` code ∴ the flag never saw it. also `find_exhaustive_violations` is called ONLY by tests — `review::unwired`'s exact case, surfaced by my own check & skimmed past|`RUSTFLAGS` exported so BOTH `build` & `test` deny. T6 wires the fn into `check`. GENERALLY: a flag on one command is ⊥ a flag on the toolchain

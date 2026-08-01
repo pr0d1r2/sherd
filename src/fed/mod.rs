@@ -466,7 +466,7 @@ fn discover_ignores_globs() {
 #[test]
 fn exhaustive_invariant_detects_duplicates_and_missing() {
     use std::fs;
-    use std::path::{Path, PathBuf};
+    use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     // Create a unique temporary directory inside the OS temp dir.
