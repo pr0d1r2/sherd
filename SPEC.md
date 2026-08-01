@@ -202,14 +202,14 @@ T8|x|bind `itok::estimate`, tier floor `bpe`, method label|V17,V24
 T10|.|`bbx budget` + over-budget exit 1|V6,V7,V8
 T12|.|id namespacing + resolver `path:Vn`|V10,V11
 T14|x|`bbx lens` render pack, `--depth rule` default|I,V15,V45
-T16|.|`bbx init` scaffold from child dirs|I
+T16|x|moved — `src/cli:T4`|I
 T17|x|ollama client `BBX_MODEL`/`BBX_ENDPOINT`|I,V25
 T19|.|route ambiguous exit 3 / miss exit 2|V20
 T20|x|model-free path — `--no-default-features` drops `ollama` & its deps|V18
-T21|.|`bbx check` drift spec↔code|I
+T21|x|moved — `src/cli:T6`|I
 T23|.|coverage gap warn for un-specced source dirs|V16
-T24|~|`bbx graph --json` — `--dot`, `--tree`, `--table`, mermaid all land|I
-T25|.|`bbx validate` incl examined-vs-discovered counts|I,V48
+T24|x|moved — `src/cli:T7`|I
+T25|x|moved — `src/cli:T3`|I,V48
 T28|.|backprop: bug → leaf `§B`, decide promote|V14
 T36|x|superseded — `§N` derivation is `src/fed:T6`, at the node that owns it|V36,V38,V39
 T37|.|`bbx sync` + exit 1 when wrote|I,V36

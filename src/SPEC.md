@@ -16,6 +16,7 @@ tdd|red→judge→green→gate→repair loop, source region edits|HTTP, token co
 plan|open `§T` rows, horizon, confidence, `apply` one step|writing code, judging it|-
 review|mechanical checks on what `apply` committed|reading the diff, judging intent|-
 state|one idempotent cached store — pace, telemetry, applied rows|everything else|-
+cli|arg dispatch, usage, exit codes|every verb's logic|-
 
 ## §C CONSTRAINTS
 
