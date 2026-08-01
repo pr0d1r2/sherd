@@ -25,6 +25,9 @@ V11: gates GREEN ⊥ correctness. `cargo test` + `bbx check` both passed on sema
 V12: prompts that must READ an invariant get the NOTATION contract. asking a model to satisfy `⊥ skip levels` w/o the symbol key is asking it to guess (B6)
 V13: repair REPLACES exactly what the previous attempt added, tracked ⊥ guessed. name-prefix heuristics duplicate definitions (B7); full-region rewrite deletes unrelated code (B5)
 V14: surface keeps DOC COMMENTS. bare field names cannot distinguish `not_owns` (prose) from `dir` (path) & that is the judge's whole question (B4)
+V15: prompt = RULE depth. §G §C §I §V §T in, §B §R out. §T is the PLAN (the row names the work); §B/§R are archive. MEASURED: one §B row pushed step 1 1,210→1,520 tok & flipped a correct run to rejected (B9)
+V16: judge objection FED BACK, ⊥ discarded. it is actionable signal; hand-tuning the prompt instead burned 6 configurations before I noticed (B10)
+V17: model DETERMINISTIC @ temp 0 — 3/3 identical `gen` counts on one prompt ∴ outcome differences are prompt differences, & isolation works. ⊥ blame variance
 
 ## §T TASKS
 
@@ -37,6 +40,7 @@ T5|.|`§T` row status flip on green (`.` → `x`)|V5
 T6|.|judge gets `signatures()` data model|V8,B2
 T7|.|`cargo build` before gate runs that exercise the bin|B3
 T8|.|record per-request template overhead (~67 tok, measured) in entry-cost accounting|V2
+T9|.|step 2 ! define exactly the fn the test calls — pass the expected signature|V16
 
 ## §B BUGS
 
@@ -49,3 +53,6 @@ B5|2026-08-01|repair prompt said "reply w/ the corrected FULL implementation reg
 B6|2026-08-01|⊥ prompt carried `FORMAT.md`. model asked to satisfy `V2: ... ⊥ skip levels` w/ no symbol key — `⊥` could read as math bottom or noise. `cavespec` vendors FORMAT.md verbatim "so a tool that cites the format can read it"; bbx cites it everywhere & had ⊥ copy|vendor `FORMAT.md`; compile a NOTATION slice (symbols + section meanings, ~200 tok ⊥ the whole 750) into every prompt that reads an invariant. `.:V82` contract-⊥-implementation applied to our own prompts
 B7|2026-08-01|repair splice keyed on `\npub fn check_` ∴ when the model named it `find_depth_violations` the fix APPENDED instead of replacing → `E0428` redefined. a heuristic where a record would do|track the inserted block; ⊥ found → refuse & say so, ⊥ guess
 B8|2026-08-01|first PLANTED violation proving the pre-commit gate passed straight through. the plant cited `` `V998` `` in BACKTICKS ∴ FORMAT reserves backticks for verbatim & cavespec correctly ⊥ read it as a citation. a bad plant, ⊥ a bad gate — but indistinguishable from one until re-planted|plant a BARE `V777`; commit then REFUSED, HEAD ⊥ moved. GENERALLY: a guard test passes vacuously if the plant is ⊥ actually a violation — green for the wrong reason, one level up, in the act of proving a guard
+B9|2026-08-01|adding ONE §B row to `src/fed/SPEC.md` pushed step 1 from 1,210 to 1,520 tok & turned a run producing CORRECT code into one the judge rejected. bug history in a node spec pollutes the prompt that AUTHORS tests. `.:V43`/`.:V45` said rationale by reference for COST; the cost is also QUALITY|`rule_depth()` — §G §C §I §V §T in, §B §R out. dropping §T too was a 2nd error: §T is the plan, ⊥ the archive
+B10|2026-08-01|judge rejections were treated as a HARD STOP ∴ I hand-tuned the prompt across 6 configurations chasing 1 success, discarding an actionable objection each time. the loop had feedback available & ⊥ used it|feed the objection back, capped at 3. GENERALLY: a reviewer's REASON is signal; throwing it away & guessing is the expensive path
+B11|2026-08-01|attributed run-to-run differences to model variance. MEASURED FALSE: 3/3 trials identical `gen 3487` ∴ deterministic @ temp 0. every difference was a prompt change I made. `.:V59` — measurement ⊥ belief, on my own methodology|isolate ONE variable per run. determinism makes that possible

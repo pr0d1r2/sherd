@@ -34,6 +34,33 @@ pub struct Step {
     pub ms: u128,
 }
 
+/// The RULE depth of a spec: §G §C §I §V only.
+///
+/// §B and §R are rationale and history -- what was tried, what broke, what was
+/// measured. A prompt that must AUTHOR a test needs the rule, not the archive.
+/// Measured: adding one §B row to a node spec pushed step 1 from 1,210 to 1,520
+/// tokens and turned a run that produced correct code into one the judge
+/// rejected (B9). V43/V45 in the root spec say rules inline, rationale by
+/// reference; this is that rule applied to our own prompts.
+#[must_use]
+pub fn rule_depth(spec: &str) -> String {
+    // §T is the PLAN, not the archive -- the row being implemented names the
+    // work. Dropping it cost a run (B9). §B/§R are history and stay out.
+    const KEEP: [&str; 5] = ["\u{a7}G", "\u{a7}C", "\u{a7}I", "\u{a7}V", "\u{a7}T"];
+    let mut out = String::new();
+    let mut keeping = true;
+    for line in spec.lines() {
+        if line.starts_with("## \u{a7}") {
+            keeping = KEEP.iter().any(|k| line.contains(k));
+        }
+        if keeping {
+            out.push_str(line);
+            out.push('\n');
+        }
+    }
+    out
+}
+
 /// Split a Rust source file at the `#[cfg(test)]` boundary.
 ///
 /// One definition, because the code ceiling (root V50) needs exactly this
@@ -167,33 +194,55 @@ pub fn drive(root: &Path, node: &Path, invariant: &str, task: &str, max_repair: 
         .to_string();
     eprintln!("node {} · {}\n", node.display(), inv.trim());
 
+    let spec_rules = rule_depth(&spec_txt);
     let surface = signatures(impl_r);
     let mut log = Vec::new();
 
-    // 1 -- RED test. Sees spec and existing tests, not the implementation.
-    let test_fn = ollama::rust_block(&run(&format!(
-        "{NOTATION}\n--- spec ---\n{spec_txt}\n\n--- public surface (signatures only) ---\n{surface}\n\n\
+    // 1 -- RED test, with the judge's objection fed back on rejection. The
+    // judge's reason is actionable signal; discarding it and hand-tuning the
+    // prompt instead is what I did for six configurations before noticing (B10).
+    let base = format!(
+        "{NOTATION}\n--- spec (rules) ---\n{spec_rules}\n\n\
+         --- public surface (signatures only) ---\n{surface}\n\n\
          --- existing tests in this module ---\n{tests_r}\n\n\
          Write ONE new Rust `#[test]` function proving this invariant:\n  {inv}\n\n\
          Task: {task}\n\n\
          It must FAIL against the current implementation, and fail at an assertion -- \
-         not by failing to compile. Use only items that already exist, plus the ONE new \
-         public function you expect to be written. Reply with a single ```rust fenced \
-         block containing only the test function."), "1 red-test", &mut log)?);
+         not by failing to compile. It MUST include data that actually violates the \
+         invariant, and assert that the violation is reported. Use only items that \
+         already exist, plus the ONE new public function you expect to be written. \
+         Reply with a single ```rust fenced block containing only the test function.");
 
-    // 1b -- independent judge. Sees the invariant and the test, never the impl.
-    let verdict = run(&format!(
-        "{NOTATION}\n--- data model ---\n{surface}\n\nInvariant:\n  {inv}\n\n\
-         Proposed test:\n```rust\n{test_fn}\n```\n\n\
-         Answer YES only if BOTH hold: (a) the test exercises the quantity the \
-         invariant is actually about -- check the field names against the data model \
-         above, a test asserting on the wrong field proves nothing; and (b) an \
-         implementation violating the invariant would fail it. Exhaustiveness is NOT \
-         required. Answer YES or NO on the first line, then one sentence."), "1b judge", &mut log)?;
-    let first = verdict.trim().lines().next().unwrap_or("").to_string();
-    eprintln!("  judge: {}", first.chars().take(80).collect::<String>());
-    if !first.trim().to_uppercase().starts_with("YES") {
-        return Err(format!("judge rejected the test before it became law: {verdict}"));
+    let mut test_fn = String::new();
+    let mut accepted = false;
+    let mut objection = String::new();
+    for attempt in 0..3 {
+        let prompt = if attempt == 0 {
+            base.clone()
+        } else {
+            format!("{base}\n\nYour previous attempt was REJECTED by review:\n\
+                     ```rust\n{test_fn}\n```\nReason: {objection}\n\
+                     Write a corrected test that answers that objection.")
+        };
+        let label: &'static str = if attempt == 0 { "1 red-test" } else { "1 red-retry" };
+        test_fn = ollama::rust_block(&run(&prompt, label, &mut log)?);
+
+        let verdict = run(&format!(
+            "{NOTATION}\n--- data model ---\n{surface}\n\nInvariant:\n  {inv}\n\n\
+             Proposed test:\n```rust\n{test_fn}\n```\n\n\
+             Answer YES only if BOTH hold: (a) the test exercises the quantity the \
+             invariant is actually about -- check the field names against the data model \
+             above, a test asserting on the wrong field proves nothing; and (b) an \
+             implementation violating the invariant would fail it. Exhaustiveness is NOT \
+             required. Answer YES or NO on the first line, then one sentence."),
+            if attempt == 0 { "1b judge" } else { "1b re-judge" }, &mut log)?;
+        let first = verdict.trim().lines().next().unwrap_or("").to_string();
+        eprintln!("  judge: {}", first.chars().take(78).collect::<String>());
+        if first.trim().to_uppercase().starts_with("YES") { accepted = true; break }
+        objection = verdict.trim().to_string();
+    }
+    if !accepted {
+        return Err(format!("judge rejected the test 3 times -- last objection: {objection}"));
     }
 
     std::fs::write(&mod_path, insert_test(&original, &test_fn)).map_err(|e| e.to_string())?;
@@ -209,8 +258,8 @@ pub fn drive(root: &Path, node: &Path, invariant: &str, task: &str, max_repair: 
         "--- implementation ---\n{impl_r}\n\n--- failing test ---\n```rust\n{test_fn}\n```\n\n\
          --- failure ---\n{}\n\n\
          Write ONLY the new function(s) to ADD to the implementation so this test passes. \
-         Do not restate existing code. Do not modify the test. Reply with a single ```rust \
-         fenced block.", tail(&red_out, 1500)), "2 green", &mut log)?);
+         Do not restate existing code. \
+         Do not modify the test. Reply with a single ```rust fenced block.", tail(&red_out, 1500)), "2 green", &mut log)?);
     let cur = std::fs::read_to_string(&mod_path).map_err(|e| e.to_string())?;
     std::fs::write(&mod_path, insert_impl(&cur, &code)).map_err(|e| e.to_string())?;
     // Track exactly what we added, so repair REPLACES it rather than guessing
@@ -265,6 +314,17 @@ mod tests {
     use super::*;
 
     const SRC: &str = "pub fn a() {}\n\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn t() {}\n}\n";
+
+    #[test]
+    fn rule_depth_drops_the_archive_sections() {
+        let s = "## \u{a7}G GOAL\ngoal\n\n## \u{a7}V INVARIANTS\nV1: a\n\n## \u{a7}B BUGS\nB1|x|cause|fix\n";
+        let r = rule_depth(s);
+        assert!(r.contains("V1: a"), "rules must survive: {r}");
+        assert!(!r.contains("B1|"), "§B must be dropped: {r}");
+        let s2 = "## \u{a7}T TASKS\nT1|.|do the thing|V1\n\n## \u{a7}B BUGS\nB1|x|c|f\n";
+        assert!(rule_depth(s2).contains("T1|"), "§T is the plan and must survive");
+        assert!(!r.contains("BUGS"), "§B header must be dropped: {r}");
+    }
 
     #[test]
     fn signatures_keep_shape_and_drop_bodies() {
