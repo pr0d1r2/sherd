@@ -133,38 +133,70 @@ pub fn missing_not_owns(edges: &[Edge]) -> Vec<&Edge> {
     edges.iter().filter(|e| e.not_owns.trim().is_empty()).collect()
 }
 
-/// The federation as a mermaid flowchart, derived from `§F`.
+/// The federation as a mermaid graph, derived from `§F`.
 ///
-/// GENERATED, never authored (`.:V83`). A hand-drawn architecture diagram is a
-/// second reading of what `§F` already declares, and the two drift.
+/// GENERATED, never authored (`.:V83`).
 ///
-/// Deliberately plain: nodes declared once, no HTML in labels, ASCII only.
-/// GitLab renders mermaid with `htmlLabels` disabled, so `<br/>` and `<i>`
-/// do not render and can wedge the parser (B6 here).
+/// Maximally conservative syntax, because two richer versions failed to render
+/// (B6): `graph TD` not `flowchart` (older mermaid, which GitLab pins, does not
+/// know `flowchart`), bare directory names as labels, no HTML, no colons, no
+/// punctuation, ASCII only. The lens text lives in [`table`], which is plain
+/// markdown and always renders.
 #[must_use]
 pub fn mermaid(root: &Path) -> String {
     let mut defs = String::new();
     let mut links = String::new();
     let mut seen: Vec<String> = Vec::new();
-    let mut declare = |defs: &mut String, seen: &mut Vec<String>, id: &str, text: String| {
-        if !seen.iter().any(|s| s == id) {
-            seen.push(id.to_string());
-            defs.push_str(&format!("    {id}[\"{text}\"]\n"));
-        }
-    };
     for node in discover(root) {
         let rel = node.strip_prefix(root).unwrap_or(&node);
         let from = label(rel);
-        declare(&mut defs, &mut seen, &from, disp(rel));
+        if !seen.iter().any(|s| *s == from) {
+            seen.push(from.clone());
+            defs.push_str(&format!("    {from}[{}]\n", ident(&disp(rel))));
+        }
         let Ok(text) = std::fs::read_to_string(node.join("SPEC.md")) else { continue };
         for e in edges(&text) {
-            let child = rel.join(&e.dir);
-            let id = label(&child);
-            declare(&mut defs, &mut seen, &id, format!("{}: {}", e.dir, trim(&e.owns, 40)));
+            let id = label(&rel.join(&e.dir));
+            if !seen.iter().any(|s| *s == id) {
+                seen.push(id.clone());
+                defs.push_str(&format!("    {id}[{}]\n", ident(&e.dir)));
+            }
             links.push_str(&format!("    {from} --> {id}\n"));
         }
     }
-    format!("flowchart TD\n{defs}{links}")
+    format!("graph TD\n{defs}{links}")
+}
+
+/// The `§F` lens text as a markdown table -- what each node owns and, more
+/// usefully, what it does NOT (`.:V66`). Generated alongside [`mermaid`]:
+/// plain markdown renders everywhere, and carries more than a node label can.
+#[must_use]
+pub fn table(root: &Path) -> String {
+    let mut out = String::from("| node | owns | does not own |\n|---|---|---|\n");
+    for node in discover(root) {
+        let rel = node.strip_prefix(root).unwrap_or(&node);
+        let Ok(text) = std::fs::read_to_string(node.join("SPEC.md")) else { continue };
+        for e in edges(&text) {
+            out.push_str(&format!("| `{}` | {} | {} |\n",
+                rel.join(&e.dir).display(), cell(&e.owns), cell(&e.not_owns)));
+        }
+    }
+    out
+}
+
+/// A markdown table cell: escape the delimiter, keep the text otherwise intact.
+fn cell(s: &str) -> String {
+    s.replace('|', "\\|")
+}
+
+/// A mermaid node label with no character that any mermaid version treats as
+/// syntax: letters, digits, spaces, hyphens and underscores only.
+fn ident(s: &str) -> String {
+    let t: String = s.chars()
+        .map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { ' ' })
+        .collect();
+    let t = t.split_whitespace().collect::<Vec<_>>().join(" ");
+    if t.is_empty() { "root".into() } else { t }
 }
 
 /// The same graph in graphviz `dot`.
@@ -235,9 +267,26 @@ mod tests {
     fn mermaid_is_derived_from_f_rows() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
         let m = mermaid(root);
-        assert!(m.starts_with("flowchart TD"), "{m}");
+        assert!(m.starts_with("graph TD"), "{m}");
         assert!(m.contains("root --> src\n"), "root must point at src: {m}");
         assert!(m.contains("src --> src_tdd"), "src must point at its children: {m}");
+    }
+
+    #[test]
+    fn mermaid_uses_the_widely_supported_directive() {
+        let m = mermaid(Path::new(env!("CARGO_MANIFEST_DIR")));
+        assert!(m.starts_with("graph TD"), "`flowchart` is not in older mermaid: {m}");
+        for l in m.lines().filter(|l| l.contains('[')) {
+            let inner = l.split_once('[').unwrap().1.trim_end_matches(']');
+            assert!(inner.chars().all(|c| c.is_ascii_alphanumeric()
+                        || c == ' ' || c == '-' || c == '_'),
+                    "label has syntax-significant chars: {l}");
+        }
+    }
+
+    #[test]
+    fn table_escapes_the_delimiter() {
+        assert_eq!(cell("rule|why"), "rule\\|why");
     }
 
     #[test]
