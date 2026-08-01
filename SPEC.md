@@ -82,6 +82,7 @@ R21|human docs grow|`set-and-setting` human 24,965 vs itok 5,236 = 4.8x. CHANGEL
 R22|mermaid density|mermaid 71 tok vs 40 tok prose for the same info = 1.8x. bytes/tok: prose 4.15 · README 3.51 · mermaid 3.20 · caveman SPEC 2.95|measured
 R23|caveman saving|MEASURED 22%, ⊥ the 75% FORMAT.md claims (10 / 13 / 35% on 3 invariants vs faithful prose). symbols cost 1-3 tok for 2-3 bytes ∴ the saving is STRUCTURAL (omit rationale), ⊥ encodative. n=3, own comparators|measured
 R24|profile shares|itok by profile: implement 47.4% · tdd 81.4% · refactor 80.9% · harden 31.2% · document 17.5%. tdd @ ONE node = 6.1% ∴ 13x from composing facet × horizontal|derived from R18
+R25|widening cost|same 11.6k pack: APPEND a facet 4.12s (prefix cached, only new tok prefill) · PREPEND 8.60s (full cold) = 2.1x ∴ optional facets belong at the END|measured @ .181
 
 ## §V INVARIANTS
 
@@ -164,6 +165,9 @@ V83: structural diagram GENERATED from `§F` (`graph --mermaid`), ⊥ authored. 
 V84: guard-infra encoding FLEET standard is materializable (flake input, content-addressed). repo-specific facts — tests, `.context-limits`, baselines — STAY. ⊥ materialize what encodes THIS repo
 V86: PROFILE = task-dependent SELECTION over facets. `set`/`setting` is the DEFAULT profile (`implement`), ⊥ a partition of the repo. `tests` ∈ setting under `implement` & ∈ set under `tdd` — the file ⊥ change, the TASK does
 V87: axes COMPOSE multiplicatively. facet alone fails TDD — MEASURED 81.4% of itok still loads (B3). facet × horizontal @ one node = 6.1%, 13x smaller ∴ neither axis alone is sufficient
+V89: pack layout = canonical facet ORDER, volatile last. widening mid-run re-prefills everything AFTER the insertion point ∴ declare the profile up front (V88) & build the pack once
+V90: MEASURED widening cost — append 4.12s (only new tok, prefix cached) vs prepend 8.60s (everything) on the same 11.6k pack = 2.1x, & the gap grows w/ prefix size
+V91: ONE primitive at every axis — a cheap summary that supports a decision + a pointer to the expensive thing. horizontal `§F` owns/⊥owns → child. vertical rule → `SPEC.why.md`. facet contract line → implementation
 V88: profile DECLARED per task, ⊥ inferred. an inferred profile silently loads the wrong facets & the failure looks like a model that forgot
 V85: `AGENTS.md` ∈ SET, ⊥ SETTING. it says HOW to work ∴ needed while working. guardrails say what is CHECKED after ∴ ⊥ needed while working
 V74: §C claims ! have a runner. `fed::walk` contradicted §C for a whole session & no gate could see it (B1) — a constraint no check reads is a comment
@@ -233,6 +237,8 @@ T65|.|`graph --mermaid` generated diagram|V83
 T66|.|facet partition check — exhaustive + disjoint|V81
 T67|.|materializability audit: which guard files are fleet standard vs repo facts|V84,R20
 T68|.|report caveman 22%-⊥-75% upstream to cavekit FORMAT.md|R23
+T69|.|profile declaration — flag > §T row > `bbx.toml` default. ⊥ inference|V88
+T70|.|canonical facet order in `pack()`, volatile last|V89,V76
 
 ## §B BUGS
 
