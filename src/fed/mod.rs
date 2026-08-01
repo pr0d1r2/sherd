@@ -245,6 +245,67 @@ fn disp(p: &Path) -> String {
     if s.is_empty() { ".".into() } else { s }
 }
 
+/// A markdown table cell: escape the delimiter, keep the text otherwise intact.
+fn cell(s: &str) -> String {
+    s.replace('|', "\\|")
+}
+
+/// A mermaid node label with no character that any mermaid version treats as
+/// syntax: letters, digits, spaces, hyphens and underscores only.
+fn ident(s: &str) -> String {
+    let t: String = s.chars()
+        .map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { ' ' })
+        .collect();
+    let t = t.split_whitespace().collect::<Vec<_>>().join(" ");
+    if t.is_empty() { "root".into() } else { t }
+}
+
+/// The federation as a plain ASCII tree.
+///
+/// Renders in any markdown, any viewer, forever -- no renderer to fail (B15).
+/// Same `§F` rows as [`mermaid`] and [`table`], so it cannot drift.
+#[must_use]
+pub fn tree(root: &Path) -> String {
+    let mut out = String::from(".\n");
+    fn walk_tree(root: &Path, rel: &Path, prefix: &str, out: &mut String) {
+        let Ok(text) = std::fs::read_to_string(root.join(rel).join("SPEC.md")) else { return };
+        let es = edges(&text);
+        for (i, e) in es.iter().enumerate() {
+            let last = i + 1 == es.len();
+            out.push_str(&format!("{prefix}{}{}\n", if last { "`-- " } else { "|-- " }, e.dir));
+            let deeper = format!("{prefix}{}", if last { "    " } else { "|   " });
+            walk_tree(root, &rel.join(&e.dir), &deeper, out);
+        }
+    }
+    walk_tree(root, Path::new(""), "", &mut out);
+    out
+}
+
+/// The same graph in graphviz `dot`.
+#[must_use]
+pub fn dot(root: &Path) -> String {
+    let mut out = String::from("digraph federation {\n  rankdir=TB;\n  node [shape=box];\n");
+    for node in discover(root) {
+        let rel = node.strip_prefix(root).unwrap_or(&node);
+        let Ok(text) = std::fs::read_to_string(node.join("SPEC.md")) else { continue };
+        for e in edges(&text) {
+            out.push_str(&format!("  \"{}\" -> \"{}\";\n", disp(rel), rel.join(&e.dir).display()));
+        }
+    }
+    out.push_str("}\n");
+    out
+}
+
+fn label(p: &Path) -> String {
+    let s = p.to_string_lossy().replace(['/', '.', '-'], "_");
+    if s.is_empty() { "root".into() } else { s }
+}
+
+fn disp(p: &Path) -> String {
+    let s = p.to_string_lossy().to_string();
+    if s.is_empty() { ".".into() } else { s }
+}
+
 /// Label text safe for a mermaid node: ASCII only, no pipes, backticks,
 /// quotes, brackets or HTML -- each of which breaks a bracketed label.
 fn trim(s: &str, n: usize) -> String {
