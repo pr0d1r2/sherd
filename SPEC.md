@@ -81,6 +81,7 @@ R20|fleet duplication|guard-infra near-identical absolute size across unrelated 
 R21|human docs grow|`set-and-setting` human 24,965 vs itok 5,236 = 4.8x. CHANGELOG alone 13,762 — append-only, never needed to implement|measured
 R22|mermaid density|mermaid 71 tok vs 40 tok prose for the same info = 1.8x. bytes/tok: prose 4.15 · README 3.51 · mermaid 3.20 · caveman SPEC 2.95|measured
 R23|caveman saving|MEASURED 22%, ⊥ the 75% FORMAT.md claims (10 / 13 / 35% on 3 invariants vs faithful prose). symbols cost 1-3 tok for 2-3 bytes ∴ the saving is STRUCTURAL (omit rationale), ⊥ encodative. n=3, own comparators|measured
+R24|profile shares|itok by profile: implement 47.4% · tdd 81.4% · refactor 80.9% · harden 31.2% · document 17.5%. tdd @ ONE node = 6.1% ∴ 13x from composing facet × horizontal|derived from R18
 
 ## §V INVARIANTS
 
@@ -154,13 +155,16 @@ V71: facade dir named by CAPABILITY ⊥ vendor — `src/tokens/` ⊥ `src/itok/`
 V72: ∀ external dep ! have ONE call site — its facade `mod.rs`. siblings private ∴ **compiler** enforces it (`error[E0603]`), ⊥ grep. VERIFIED cargo 1.96.1. guards the "rule never carried to a sibling path" class @ its source
 V76: lens pack ordered STABILITY-DESCENDING — root, ancestors, then node. an edit invalidates every token of prefill AFTER it (R15) ∴ volatile content LAST. `pack()` order is load-bearing, ⊥ cosmetic
 V77: federation's payoff on local hw is CACHE LOCALITY, ⊥ only fit. root+ancestor prefix byte-identical across ∀ node ∴ stays hot; only the leaf re-prefills. a monolith edited near its top pays full re-prefill EVERY turn (R15/R16)
-V78: repo partitions SET \| SETTING \| HUMAN. SET = impl + `SPEC.md` + `AGENTS.md` — loaded to WORK. SETTING = tests + guardrails — loaded only when working ON them. HUMAN = docs — loaded only for doc work
+V78: FACET = stable classification of content (impl · tests · spec · agents · guard-infra · guard-local · human). a property of the FILE, fixed
 V79: facet value = token share × P(task ⊥ needs it). tests 34% × ~0.7 ≈ 24% · human 2.7% × ~0.95 ≈ 2.6% ∴ rank by the PRODUCT, ⊥ by size
 V80: more facets help ONLY where a facet matches how tasks cluster. a facet no task selects is a manifest to maintain — R4 rejected that once already
 V81: facets ! PARTITION — exhaustive & disjoint, same rule as sibling lenses (V64/V65). else content double-loads or vanishes between facets
 V82: SETTING enters a pack as CONTRACT ⊥ implementation — one line per guard (`line cap 80`, `clippy pedantic`, `coverage floor 98`). ~200 tok replaces ~31k. a guard the agent cannot SEE is B1
 V83: structural diagram GENERATED from `§F` (`graph --mermaid`), ⊥ authored. a hand-drawn architecture diagram is a second reading of what `§F` declares — cavespec's founding defect
 V84: guard-infra encoding FLEET standard is materializable (flake input, content-addressed). repo-specific facts — tests, `.context-limits`, baselines — STAY. ⊥ materialize what encodes THIS repo
+V86: PROFILE = task-dependent SELECTION over facets. `set`/`setting` is the DEFAULT profile (`implement`), ⊥ a partition of the repo. `tests` ∈ setting under `implement` & ∈ set under `tdd` — the file ⊥ change, the TASK does
+V87: axes COMPOSE multiplicatively. facet alone fails TDD — MEASURED 81.4% of itok still loads (B3). facet × horizontal @ one node = 6.1%, 13x smaller ∴ neither axis alone is sufficient
+V88: profile DECLARED per task, ⊥ inferred. an inferred profile silently loads the wrong facets & the failure looks like a model that forgot
 V85: `AGENTS.md` ∈ SET, ⊥ SETTING. it says HOW to work ∴ needed while working. guardrails say what is CHECKED after ∴ ⊥ needed while working
 V74: §C claims ! have a runner. `fed::walk` contradicted §C for a whole session & no gate could see it (B1) — a constraint no check reads is a comment
 V75: format facts read from the CHECKER's own source, ⊥ a vendored `FORMAT.md`. the local copy was 6 sections while the dep shipped 7 (B2)
@@ -235,3 +239,4 @@ T68|.|report caveman 22%-⊥-75% upstream to cavekit FORMAT.md|R23
 id|date|cause|fix
 B1|2026-08-01|`fed::walk` hand-rolled while §C says fs walk = `itok::walk`/`itok::glob`, ⊥ reimpl. wrote it w/o reading itok's walk API — the exact belief-⊥-measurement trap V59 names, committed in the first commit that could commit it. ⊥ caught by `check`: no runner reads §C|V74. port to `itok::walk` or amend §C w/ the measured reason itok's walk ⊥ fit
 B2|2026-08-01|`§R` written as RECORDS w/ `id|state|record`. FORMAT 4.1.0 §R = RESEARCH `id|topic|finding|src`. assumed from a stale local `FORMAT.md` (6 sections) while the dep shipped 4.1.0 (7). 16 violations on first `bbx check`, all real|read the CHECKER's own `SECTIONS`/`CANONICAL_WORDS`, ⊥ a vendored copy. §R now RESEARCH; closed options → `.spec-records` (R13)
+B3|2026-08-01|SPEC defect, mine: V78 written as a STATIC partition — SET = impl+spec+agents, SETTING = tests+guardrails — & committed. TDD breaks it: the test IS the work ∴ `tests` ∈ set, & nothing about the file changed. facet (property of the FILE) conflated w/ profile (property of the TASK). MEASURED after: `tdd` loads 81.4% of itok, `refactor` 80.9% ∴ the axis nearly collapses for 2 of 5 profiles|V78 now names the classification only; V86 adds PROFILE as the task-dependent selection; V87 records that facet × horizontal = 6.1% where facet alone = 81.4%. found by a READER asking about TDD, ⊥ by any check — no gate reads a partition's fitness for a workflow
