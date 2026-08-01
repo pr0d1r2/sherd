@@ -295,6 +295,19 @@ pub fn find_exhaustive_violations<'a>(
 
     (duplicates, missing)
 }
+/// Return all edges that violate the V73 invariant.
+///
+/// An edge violates V73 if it declares a flat `.rs` file at the root of the federation table.
+/// In other words, the edge's `dir` field is `"."` and its `owns` field ends with `".rs"`.
+///
+/// The function returns references to the offending edges so that callers can inspect
+/// their fields without taking ownership.
+pub fn find_flat_rs_promotions(edges: &[Edge]) -> Vec<&Edge> {
+    edges
+        .iter()
+        .filter(|e| e.dir == "." && e.owns.ends_with(".rs"))
+        .collect()
+}
 
 #[cfg(test)]
 mod tests {
@@ -547,5 +560,27 @@ fn exhaustive_invariant_detects_duplicates_and_missing() {
         "Missing child directory 'child2' not found in the report: {:?}",
         missing
     );
+}
+
+#[test]
+fn flat_rs_promotion_detected() {
+    // A federation table that declares a flat `.rs` file at the root.
+    // According to V73, such a file should be promoted to its own directory,
+    // so this edge is a violation.
+    let t = "## \u{a7}F FEDERATION\ndir|owns|\u{22a5}owns|tokens\n.|foo.rs||-\n";
+    let e = edges(t);
+    assert_eq!(e.len(), 1, "expected one edge in the test data");
+
+    // The new public function that checks V73 should return the offending rows.
+    // It is expected to be implemented elsewhere in this module.
+    let violations = find_flat_rs_promotions(&e);
+
+    // Current implementation does not perform this check,
+    // so `violations` will be empty and the assertion below will fail.
+    assert!(
+        !violations.is_empty(),
+        "Expected a violation for edge with flat `.rs`, but none were reported"
+    );
+    assert_eq!(violations[0].dir, ".", "the violating edge should be at the root");
 }
 }
