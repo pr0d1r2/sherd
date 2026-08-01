@@ -197,7 +197,7 @@ T1|x|scaffold single crate `bbx`, module=dir+`mod.rs`, explicit `[[bin]]`, deps 
 T2|x|bind `cavespec` — `check`, `fmt`, section split. ⊥ reimpl|C
 T3|.|capability-parity audit `cavespec` vs what `bbx` needs. write the comparison BEFORE relying on it|V59
 T4|x|parse `§F` table → (dir, owns, ⊥owns, tokens), escape-aware|I,V1
-T6|.|build federation DAG, depth+1, cycle detect|V1,V2,V4
+T6|x|superseded — edges/chain/discover land; depth & cycle are `src/fed:T4`|V1,V2,V4
 T8|x|bind `itok::estimate`, tier floor `bpe`, method label|V17,V24
 T10|.|`bbx budget` + over-budget exit 1|V6,V7,V8
 T12|.|id namespacing + resolver `path:Vn`|V10,V11
@@ -226,14 +226,14 @@ T48|.|sibling-divergence detector for V13|V62
 T49|.|`§F`/`§N` upstream to FORMAT/cavespec before shipping a dialect|V47
 T50|.|corpus run over 54-spec fleet, FP rate reported|V58
 T52|.|planted-violation test ∀ guard + accepts-real-shapes companion|V61
-T53|.|PREMISE GATE: `gpt-oss:20b` completes from `lens` pack a task it fails from monolith. `itok` SPEC.md = pressure fixture|V60,V27
+T53|x|PREMISE GATE run — `bbx oneshot` vs `bbx tdd`, R29/R32/R33. bounds MAX CALL 2.1x→2.9x, ⊥ total, ⊥ quality|V60,V27
 T54|x|self-federate: root `§F` + per-node `SPEC.md`|V27,V30
 T55|.|CI: `bbx validate` self exit 0; globs by data dependency|V27,V57
 T56|x|`§F` gains `⊥owns` column — parse & emit|I,V66
 T57|x|superseded — `src/fed:T5`/`T7`: duplicate rows fail, missing rows advisory|V64,V65
 T58|.|`cap.row` gate — inline `§V`/`§R`/`§B` text over 200B|V69,V70
 T59|.|PAY THE DEBT: record rationale for V1-V63 into `SPEC.why.md` before it accretes inline. rationale currently lives only in the design conversation|V69,V70,V44
-T60|.|`src/tokens/mod.rs` sole `itok::` call site; `src/spec/mod.rs` sole `cavespec::`. siblings private|V71,V72
+T60|x|facades land — `itok::` only in `src/tokens`, `cavespec::` only in `src/spec`|V71,V72
 T61|.|facade-leak test: planted `itok::` outside `src/tokens/` ! fail to compile|V72,V61
 T64|.|setting-as-contract extraction — guard files → one line each|V82
 T65|x|`graph --mermaid` generated diagram|V83
