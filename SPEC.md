@@ -68,6 +68,10 @@ R9|gpt-oss:20b arch|24 layers, 8 KV heads, k/v len 64, sliding_window 128, ctx 1
 R10|target box|24GB M5 Pro: ctx 131,072 ALLOCATED, 11.98G of 24G resident, 100% GPU, ⊥ CPU spill, ollama 0.32.3|ollama `/api/ps`, measured
 R11|KV cost|KV/tok = 2 × layers × kv_heads × head_dim × bytes. sliding-window halves it (12 of 24 layers full) ∴ 24GB needs NO KV quant|derived from R9 + R10
 R12|32k models|any 32k-ctx model leaves 4,225 working after 28,543 entry cost ∴ unusable for SDD at EVERY hw tier, incl M64|derived from R9/R11
+R14|prompt cache|identical prefix → prefill 4.60s → 0.04s (~115x). cache is per-PREFIX & survives across requests|ollama 0.32.3 @ .181, measured
+R15|edit locality|an edit invalidates all prefill AFTER it. same 7k pack: cached 0.04s · edit TAIL 0.49s · edit HEAD 4.61s (full cold)|measured, 3 runs
+R16|prefill dominance|workload is prefill-bound ⊥ decode-bound. 7k: 4.60s prefill vs 1.83s decode. 28k: 30.32s vs 5.74s = 83% prefill|measured @ .181
+R17|prefill superlinear|1,519 tok/s @ 7k → 1,233 @ 15k → 941 @ 28k. 4.09x tokens costs 6.59x time ∴ small packs pay off faster than linearly|measured, 3 points
 R13|cavespec §R|FORMAT 4.1.0 §R = RESEARCH (`id|topic|finding|src`), ⊥ records. closed options live in `.spec-records`|cavespec 0.4.0 `check.rs`, FORMAT.md
 
 ## §V INVARIANTS
@@ -140,6 +144,8 @@ V70: `cap.row` enforced BEFORE rationale is written, ⊥ after. a spec compacted
 — module as unit —
 V71: facade dir named by CAPABILITY ⊥ vendor — `src/tokens/` ⊥ `src/itok/`. reader asks "count tokens" ⊥ "itok" (V67), & a swapped dep makes a vendor name lie. vendor named in `owns`/`⊥owns`
 V72: ∀ external dep ! have ONE call site — its facade `mod.rs`. siblings private ∴ **compiler** enforces it (`error[E0603]`), ⊥ grep. VERIFIED cargo 1.96.1. guards the "rule never carried to a sibling path" class @ its source
+V76: lens pack ordered STABILITY-DESCENDING — root, ancestors, then node. an edit invalidates every token of prefill AFTER it (R15) ∴ volatile content LAST. `pack()` order is load-bearing, ⊥ cosmetic
+V77: federation's payoff on local hw is CACHE LOCALITY, ⊥ only fit. root+ancestor prefix byte-identical across ∀ node ∴ stays hot; only the leaf re-prefills. a monolith edited near its top pays full re-prefill EVERY turn (R15/R16)
 V74: §C claims ! have a runner. `fed::walk` contradicted §C for a whole session & no gate could see it (B1) — a constraint no check reads is a comment
 V75: format facts read from the CHECKER's own source, ⊥ a vendored `FORMAT.md`. the local copy was 6 sections while the dep shipped 7 (B2)
 V73: dir promotion has 2 triggers — (a) V50 code ceiling, (b) module owns SPEC worth its own node even under ceiling. vendor facades are (b): few hundred lines carrying V17/V24/V25. ⊥ promote every `.rs` — 30 files → 60 is ceremony
