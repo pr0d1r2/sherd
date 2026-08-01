@@ -4,5 +4,6 @@
 //! `SPEC.md` (§C: node = dir = Rust module). `mod.rs` composes, it does not
 //! implement (V51).
 
+pub mod fed;
 pub mod spec;
 pub mod tokens;
