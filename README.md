@@ -55,7 +55,8 @@ graph TD
     src --> src_fed
     src --> src_lens
     src --> src_ollama
-    src --> src_tdd```
+    src --> src_tdd
+```
 
 What each node owns, and — more usefully — what it does not, so a reader
 knows when to stop looking. Also generated, by `bbx graph --table`:
