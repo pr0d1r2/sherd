@@ -7,6 +7,7 @@
 pub mod fed;
 pub mod lens;
 pub mod plan;
+pub mod review;
 pub mod spec;
 pub mod state;
 pub mod tokens;

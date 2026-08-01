@@ -13,6 +13,9 @@ fed|`§F` parse, edges, chain root→node, `SPEC.md` discovery|counting, renderi
 lens|pack assembly, depth `rule`\|`why`, budget verdict|parsing, counting internals|-
 ollama|local endpoint client, `num_ctx`, fence extraction|prompt construction, loop control|-
 tdd|red→judge→green→gate→repair loop, source region edits|HTTP, token counting|-
+plan|open `§T` rows, horizon, confidence, `apply` one step|writing code, judging it|-
+review|mechanical checks on what `apply` committed|reading the diff, judging intent|-
+state|one idempotent cached store — pace, telemetry, applied rows|everything else|-
 
 ## §C CONSTRAINTS
 
