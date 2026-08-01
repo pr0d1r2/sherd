@@ -85,7 +85,7 @@ pub fn classify(node: &Path, text: &str) -> Kind {
     // cannot replace anything (B4).
     if word(&["replace", "remove", "port", "migrate", "rewrite", "delete", "supersede"]) {
         Kind::Replaces
-    } else if word(&["promote", "wire", "move", "record", "flip", "plant"]) {
+    } else if word(&["blocked", "promote", "wire", "move", "record", "flip", "plant"]) {
         Kind::NotAFunction
     } else if has(&["cmd", "cli", "verb", "`bbx ", "flag", "--"]) {
         Kind::Cli
@@ -300,6 +300,14 @@ mod tests {
         let n = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/fed");
         assert_eq!(classify(&n, "replace the hand-rolled walk with `itok::walk`"), Kind::Replaces);
         assert!(!Kind::Replaces.actionable());
+    }
+
+    #[test]
+    fn a_blocked_row_is_never_handed_back() {
+        // Marking a row BLOCKED in its text did nothing -- plan handed it
+        // straight back as step 1 (plan B7).
+        let n = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/fed");
+        assert!(!classify(&n, "BLOCKED — needs Rust source, ⊥ §F data").actionable());
     }
 
     #[test]
