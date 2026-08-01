@@ -221,7 +221,7 @@ fn run(prompt: &str, label: &'static str, log: &mut Vec<Step>) -> Result<String,
         eprintln!("\n--- prompt [{label}] ---\n{prompt}\n--- end prompt ---");
     }
     let mut n = 0usize;
-    let r = ollama::generate_with(prompt, eta, &mut |chunk| {
+    let r = ollama::generate_labelled(prompt, label, eta, &mut |chunk| {
         if ollama::verbose() {
             eprint!("{chunk}");
         } else {
@@ -250,7 +250,11 @@ fn run(prompt: &str, label: &'static str, log: &mut Vec<Step>) -> Result<String,
               r.prompt_tokens, r.eval_tokens, basis,
               if ollama::last_cached() { "  [prefix CACHED]" } else { "" });
     if !r.thinking.is_empty() {
-        eprintln!("       (+{} reasoning tokens, hidden -- see -v)", r.thinking.len() / 4);
+        eprintln!("       (+{} reasoning tokens, hidden -- see -v){}",
+                  r.thinking.len() / 4,
+                  if ollama::last_load_ms() > 500 {
+                      format!("  [endpoint was COLD: {}ms model load]", ollama::last_load_ms())
+                  } else { String::new() });
     }
     if r.prompt_tokens.abs_diff(local.tokens) > local.tokens / 10 {
         eprintln!("  [{label}] note: local count {} vs server {} -- >10% apart",

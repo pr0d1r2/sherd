@@ -31,6 +31,8 @@ static DECODE_TOK_S: AtomicU64 = AtomicU64::new(50);
 static EXPECT_GEN: AtomicU64 = AtomicU64::new(1200);
 /// Whether the last call's prefix was served from cache.
 static LAST_CACHED: AtomicBool = AtomicBool::new(false);
+/// Model load time on the last call -- non-zero means the endpoint was COLD.
+static LAST_LOAD_MS: AtomicU64 = AtomicU64::new(0);
 
 #[must_use]
 pub fn last_cached() -> bool {
@@ -107,6 +109,60 @@ impl Eta {
     }
 }
 
+/// Size bucket for a prompt. Prefill rate DEGRADES with length -- measured
+/// 1,519 tok/s at 7k, 1,233 at 15k, 941 at 28k (R17) -- so one scalar rate is
+/// wrong at both ends. Bucketing keeps the physics without fitting a curve.
+#[must_use]
+pub fn bucket(prompt_tokens: u64) -> &'static str {
+    match prompt_tokens {
+        0..=1_999 => "b0",
+        2_000..=7_999 => "b2",
+        8_000..=31_999 => "b8",
+        _ => "b32",
+    }
+}
+
+/// Append one observation, deduped by content so replaying an identical call
+/// cannot double-count it. Capped, oldest dropped, so state stays bounded.
+///
+/// Retained raw rather than folded away: an average cannot be re-derived into
+/// a median, a percentile, or a per-size fit, but samples can become all three.
+pub fn record_obs(label: &str, prompt_tok: u64, prefill_ms: u128, eval_tok: u64,
+                  decode_ms: u128, cold: bool) {
+    const KEEP: usize = 200;
+    let row = format!("{label} {prompt_tok} {prefill_ms} {eval_tok} {decode_ms} {}",
+                      u8::from(cold));
+    let mut st = crate::state::State::load();
+    let key = crate::state::content_hash(row.as_bytes());
+    if st.get("obs", &key).is_some() {
+        return; // idempotent: this exact observation is already recorded
+    }
+    st.set("obs", &key, row);
+    st.trim_kind("obs", KEEP);
+    st.save();
+}
+
+/// Median prefill rate for prompts of this size, from retained samples.
+/// `None` until at least two samples exist in the bucket -- one sample is not
+/// a rate, and a cold-load call is excluded entirely.
+#[must_use]
+pub fn derived_prefill(prompt_tokens: u64) -> Option<f64> {
+    let want = bucket(prompt_tokens);
+    let st = crate::state::State::load();
+    let mut rates: Vec<f64> = st.all("obs").iter().filter_map(|row| {
+        let f: Vec<&str> = row.split(' ').collect();
+        if f.len() < 6 || f[5] == "1" { return None }
+        let (tok, ms) = (f[1].parse::<u64>().ok()?, f[2].parse::<f64>().ok()?);
+        if bucket(tok) != want || ms <= 0.0 { return None }
+        let r = tok as f64 / (ms / 1000.0);
+        // A cache hit is not evidence about cold prefill (V9).
+        if r > 3_000.0 { None } else { Some(r) }
+    }).collect();
+    if rates.len() < 2 { return None }
+    rates.sort_by(f64::total_cmp);
+    Some(rates[rates.len() / 2])
+}
+
 /// What this call should cost, given what the endpoint has done so far.
 #[must_use]
 pub fn predict(prompt_tokens: u64) -> Eta {
@@ -121,7 +177,9 @@ pub fn predict(prompt_tokens: u64) -> Eta {
 /// happened (B5).
 #[must_use]
 pub fn predict_for(label: &str, prompt_tokens: u64) -> Eta {
-    let pre = PREFILL_TOK_S.load(Ordering::Relaxed).max(1) as f64;
+    // Derived per-size median first; the EWMA scalar is only the fallback.
+    let pre = derived_prefill(prompt_tokens)
+        .unwrap_or_else(|| PREFILL_TOK_S.load(Ordering::Relaxed).max(1) as f64);
     let dec = DECODE_TOK_S.load(Ordering::Relaxed).max(1) as f64;
     let gen = if label.is_empty() {
         EXPECT_GEN.load(Ordering::Relaxed)
@@ -131,6 +189,31 @@ pub fn predict_for(label: &str, prompt_tokens: u64) -> Eta {
             .unwrap_or_else(|| EXPECT_GEN.load(Ordering::Relaxed))
     };
     Eta { prefill_s: prompt_tokens as f64 / pre, decode_s: gen as f64 / dec, gen_est: gen }
+}
+
+/// Raise a step kind's expected generation to at least `seen`.
+///
+/// Used when a call is killed: the observation is a lower bound, not a mean,
+/// so it must not be averaged down with the estimate that was already wrong.
+pub fn raise_gen_floor(label: &str, seen: u64) {
+    if label.is_empty() || seen == 0 {
+        return;
+    }
+    let mut st = crate::state::State::load();
+    if st.get_u64("gen", label).unwrap_or(0) < seen {
+        st.set("gen", label, seen.to_string());
+        st.save();
+    }
+}
+
+/// Was the model cold -- loaded from disk for this call?
+///
+/// Ollama reports `load_duration`. A cold load is seconds of wall clock that
+/// is not generation, so it must not be folded into the learned rates or the
+/// endpoint looks permanently slower than it is.
+#[must_use]
+pub fn last_load_ms() -> u64 {
+    LAST_LOAD_MS.load(Ordering::Relaxed)
 }
 
 /// Record how much this kind of step actually generated.
@@ -211,11 +294,38 @@ pub fn generate_with(
     eta: Eta,
     on_chunk: &mut dyn FnMut(&str),
 ) -> Result<Reply, String> {
+    generate_labelled(prompt, "", eta, on_chunk)
+}
+
+/// Escalation ladder, as multiples of the estimate.
+///
+/// Widened from 1/2/3/4 after a healthy run was killed at 42s: the estimate
+/// was 11s because gen_est knew nothing about the 2,614 REASONING tokens
+/// gpt-oss emits before its first output token. A ladder tight enough to abort
+/// a working call also prevents the measurement that would fix the estimate,
+/// so the notices stay early and the kill moves far out (B6).
+const NOTICE_1: f64 = 1.0;
+const NOTICE_2: f64 = 2.0;
+const WARN: f64 = 5.0;
+const ABORT: f64 = 10.0;
+
+/// As [`generate_with`], but records what it learned against a step KIND --
+/// including on abort, so a killed call still teaches the next estimate.
+///
+/// # Errors
+/// See [`generate_with`].
+pub fn generate_labelled(
+    prompt: &str,
+    label: &str,
+    eta: Eta,
+    on_chunk: &mut dyn FnMut(&str),
+) -> Result<Reply, String> {
     let budget = eta.total();
     // Hard ceiling: 4x the prediction. Also the socket read timeout, so a
     // server that accepts and then says nothing fails here rather than hanging
     // forever -- silence is the failure mode a streaming client must bound.
-    let hard = budget * 4;
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let hard = budget.mul_f64(ABORT);
     let body = serde_json::json!({
         "model": model(),
         "prompt": prompt,
@@ -258,35 +368,48 @@ pub fn generate_with(
         // Escalate against the prediction: notice, notice again, warn, abort.
         // A prediction nobody checks is a decoration.
         let over = started.elapsed().as_secs_f64() / budget.as_secs_f64();
-        let level = if over >= 4.0 { 4 } else if over >= 3.0 { 3 }
-                    else if over >= 2.0 { 2 } else if over >= 1.0 { 1 } else { 0 };
+        let level = if over >= ABORT { 4 } else if over >= WARN { 3 }
+                    else if over >= NOTICE_2 { 2 } else if over >= NOTICE_1 { 1 } else { 0 };
         if level > warned {
             warned = level;
             let el = started.elapsed().as_secs_f64();
             match level {
                 1 => eprintln!("\n  [pace] {el:.0}s: past the {:.0}s estimate, still streaming", budget.as_secs_f64()),
                 2 => eprintln!("\n  [pace] {el:.0}s: 2x the estimate -- the endpoint is slower than this run assumed"),
-                3 => eprintln!("\n  [pace] WARNING {el:.0}s: 3x the estimate. Aborting at {:.0}s.", hard.as_secs_f64()),
-                _ => return Err(format!(
+                3 => eprintln!("\n  [pace] WARNING {el:.0}s: {WARN:.0}x the estimate. Hard stop at {:.0}s.", hard.as_secs_f64()),
+                _ => {
+                    // A killed call still teaches: record what it managed as a
+                    // FLOOR, so the next estimate for this kind is not as low.
+                    let seen = (text.len() + thinking.len()) as u64 / 4;
+                    raise_gen_floor(label, seen);
+                    return Err(format!(
                         "aborted after {el:.0}s -- 4x the {:.0}s estimate. \
-                         {} output + {} reasoning tokens so far. Endpoint {} may be \
-                         overloaded, or BBX_NUM_CTX too large for its memory.",
-                        budget.as_secs_f64(), text.len() / 4, thinking.len() / 4, endpoint())),
+                         {} output + {} reasoning tokens so far (recorded as a floor \
+                         for `{label}`). Endpoint {} may be overloaded, or \
+                         BBX_NUM_CTX too large for its memory.",
+                        budget.as_secs_f64(), text.len() / 4, thinking.len() / 4, endpoint()));
+                }
             }
         }
         // Counts arrive only on the final frame.
         if v["done"].as_bool().unwrap_or(false) {
             prompt_tokens = v["prompt_eval_count"].as_u64().unwrap_or(0);
             eval_tokens = v["eval_count"].as_u64().unwrap_or(0);
+            LAST_LOAD_MS.store(v["load_duration"].as_u64().unwrap_or(0) / 1_000_000,
+                               Ordering::Relaxed);
         }
     }
     let reply = Reply { text, thinking, prompt_tokens, eval_tokens, ms: started.elapsed().as_millis() };
     // Split the observed time at the first token: everything before it is
     // prefill, everything after is decode. Two rates, learned separately,
     // because they scale differently (R16/R17).
-    let pre_ms = first_chunk.map_or(reply.ms, |t| (t - started).as_millis());
+    // Subtract model load: it is disk time, not prefill.
+    let load_ms = u128::from(LAST_LOAD_MS.load(Ordering::Relaxed));
+    let pre_ms = first_chunk.map_or(reply.ms, |t| (t - started).as_millis()).saturating_sub(load_ms);
     observe(&reply, pre_ms, reply.ms.saturating_sub(pre_ms));
     LAST_CACHED.store(was_cached(reply.prompt_tokens, pre_ms), Ordering::Relaxed);
+    record_obs(label, reply.prompt_tokens, pre_ms, reply.eval_tokens,
+               reply.ms.saturating_sub(pre_ms), load_ms > 500);
     save_pace();
     Ok(reply)
 }

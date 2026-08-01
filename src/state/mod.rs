@@ -84,6 +84,29 @@ impl State {
         self.map.retain(|(k, _), _| k != kind);
     }
 
+    /// Every value of one kind.
+    #[must_use]
+    pub fn all(&self, kind: &str) -> Vec<String> {
+        self.map.iter().filter(|((k, _), _)| k == kind).map(|(_, v)| v.clone()).collect()
+    }
+
+    /// Keep at most `n` entries of a kind, dropping lowest keys first.
+    ///
+    /// Bounds the file without timestamps, which would break idempotence --
+    /// a state file that changes when nothing changed is not a cache.
+    pub fn trim_kind(&mut self, kind: &str, n: usize) {
+        let mut keys: Vec<(String, String)> =
+            self.map.keys().filter(|(k, _)| k == kind).cloned().collect();
+        let excess = keys.len().saturating_sub(n);
+        if excess == 0 {
+            return;
+        }
+        keys.sort();
+        for k in keys.into_iter().take(excess) {
+            self.map.remove(&k);
+        }
+    }
+
     #[must_use]
     pub fn serialise(&self) -> String {
         self.map.iter().map(|((k, key), v)| format!("{k} {key} {v}\n")).collect()
@@ -156,6 +179,29 @@ mod tests {
         a.clear_kind("plan");
         assert!(a.get("plan", "1").is_none());
         assert_eq!(a.get("pace", "prefill"), Some("900"));
+    }
+
+    #[test]
+    fn trim_kind_bounds_the_file_and_leaves_others_alone() {
+        let mut a = State::default();
+        for i in 0..10 {
+            a.set("obs", &format!("{i:02}"), format!("row {i}"));
+        }
+        a.set("pace", "prefill", "900");
+        a.trim_kind("obs", 4);
+        assert_eq!(a.all("obs").len(), 4, "must bound to n");
+        assert_eq!(a.get("pace", "prefill"), Some("900"), "other kinds untouched");
+        assert!(a.get("obs", "09").is_some(), "newest kept");
+        assert!(a.get("obs", "00").is_none(), "oldest dropped");
+    }
+
+    #[test]
+    fn trim_kind_is_a_noop_under_the_limit() {
+        let mut a = State::default();
+        a.set("obs", "01", "x");
+        let before = a.serialise();
+        a.trim_kind("obs", 10);
+        assert_eq!(a.serialise(), before, "trimming under the limit must not change state");
     }
 
     #[test]
