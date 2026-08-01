@@ -126,6 +126,12 @@ pub fn depth_violations(edges: &[Edge]) -> Vec<&Edge> {
         .filter(|e| e.dir.split('/').count() != 1)
         .collect()
 }
+/// Return all edges that violate the V3 invariant.
+///
+/// An edge violates V3 if its `not_owns` field is empty (or contains only whitespace).
+pub fn missing_not_owns(edges: &[Edge]) -> Vec<&Edge> {
+    edges.iter().filter(|e| e.not_owns.trim().is_empty()).collect()
+}
 
 #[cfg(test)]
 mod tests {
@@ -177,5 +183,24 @@ fn depth_invariant_violated() {
         "Expected a violation for edge with dir 'src/subdir', but none were reported"
     );
     assert_eq!(violations[0].dir, "src/subdir");
+}
+
+#[test]
+fn missing_not_owns_detected() {
+    // Federation table with an edge that has an empty ⊥owns cell.
+    let t = "## \u{a7}F FEDERATION\ndir|owns|\u{22a5}owns|tokens\nsrc|code nodes||1200\n";
+    let e = edges(t);
+    assert_eq!(e.len(), 1, "Expected exactly one edge in the test data");
+
+    // The new public function that checks V3 should return the offending rows.
+    let violations = missing_not_owns(&e);
+
+    // Current implementation does not perform this check,
+    // so `violations` will be empty and the assertion below will fail.
+    assert!(
+        !violations.is_empty(),
+        "Expected a violation for edge with empty ⊥owns, but none were reported"
+    );
+    assert_eq!(violations[0].dir, "src");
 }
 }

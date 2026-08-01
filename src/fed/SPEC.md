@@ -21,8 +21,8 @@ id|status|task|cites
 T1|x|`edges` parse w/ escape handling|V1,V4,V6,V7
 T2|x|`chain` root→node|V2
 T3|x|`discover` walk w/ ignores|V8
-T4|.|depth+1 validation, cycle detect, DAG build|V2
-T5|~|`missing_not_owns` landed (LLM-authored). exhaustive+disjoint still open|V3
+T4|~|`depth_violations` landed (LLM-authored, composed form). cycle detect + DAG build still open|V2
+T5|~|`missing_not_owns` landed (LLM-authored, composed form). exhaustive+disjoint still open|V3
 T6|.|`§N` derive from parent `§F`|V3
 
 ## §B BUGS
@@ -32,3 +32,4 @@ B1|2026-08-01|FIXED by replacement. `find_depth_violations` (LLM-authored) hand-
 B2|2026-08-01|FIXED by replacement. LLM-authored test wrote `temp_depth_test` in CWD, ⊥ a real temp dir ∴ races under parallel test runs & leaks the dir if the test panics before cleanup|`std::env::temp_dir()` + unique name, cleanup on drop
 B3|2026-08-01|FIXED by replacement. `find_depth_violations` read EVERY `*.md`, ⊥ only `SPEC.md` ∴ a federation table in a README is treated as authoritative|scope to `SPEC.md`, per `.:V5`/`.:V1`
 B4|2026-08-01|FIXED & hypothesis CONFIRMED. was twice — `check_edge_depth` & `missing_not_owns`, independent tasks, both re-scan the `§F` section itself — its own `in_f` loop & header skip — instead of calling `edges(text)` & checking `e.dir`. residual two-readings, milder than B1's duplicate walker but real|HYPOTHESIS: step 2 gets the FULL impl body ∴ sees `edges()`'s scan loop & IMITATES it. surface-by-example induces copying. VERIFIED: step 2 given SIGNATURES ⊥ bodies → `depth_violations(&[Edge])`, 5 lines ⊥ 30, COMPOSES w/ `edges()`, `in_f` 6→3. also 20% cheaper (max call 1,438→1,243)
+B5|2026-08-01|`c56869e` DELETED `missing_not_owns` (committed 2 commits earlier). I overwrote `src/fed/mod.rs` w/ the pre-experiment file to isolate a variable & the commit swept the loss in. tests 22→21 & I read it as noise ∴ a REGRESSION shipped inside a commit whose message claimed only an improvement|restored by re-running V3 under the new config. GENERALLY: resetting a file to isolate an experiment DISCARDS everything else in it — diff against HEAD before committing an experiment's output, & a falling test count is a finding ⊥ noise
