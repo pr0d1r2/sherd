@@ -99,7 +99,6 @@ pub fn discover(root: &Path) -> Vec<PathBuf> {
 }
 
 fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
-    const IGNORE: [&str; 4] = ["target", ".git", "node_modules", ".direnv"];
     if dir.join("SPEC.md").is_file() {
         out.push(dir.to_path_buf());
     }
@@ -110,7 +109,7 @@ fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
             continue;
         }
         let name = p.file_name().unwrap_or_default().to_string_lossy().to_string();
-        if IGNORE.contains(&name.as_str()) {
+        if is_ignored_dir(&name) {
             continue;
         }
         walk(&p, out);
@@ -244,6 +243,14 @@ fn disp(p: &Path) -> String {
     let s = p.to_string_lossy().to_string();
     if s.is_empty() { ".".into() } else { s }
 }
+/// Return `true` if the directory name should be ignored by the walker.
+///
+/// The repository contains a handful of directories that are not part of the
+/// source tree and should never be traversed: `target`, `.git`,
+/// `node_modules`, and `.direnv`.  All other names are considered valid.
+pub fn is_ignored_dir(name: &str) -> bool {
+    matches!(name, "target" | ".git" | "node_modules" | ".direnv")
+}
 
 #[cfg(test)]
 mod tests {
@@ -373,5 +380,47 @@ fn missing_not_owns_detected() {
         "Expected a violation for edge with empty ⊥owns, but none were reported"
     );
     assert_eq!(violations[0].dir, "src");
+}
+
+#[test]
+fn discover_ignores_globs() {
+    // The root of the repository (where the tests run).
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    // Run the walker.
+    let discovered = discover(root);
+
+    // Directory names that must be skipped by the walker.
+    let ignored_names = ["target", ".git", "node_modules", ".direnv"];
+
+    for name in &ignored_names {
+        // The new public helper should report these as ignored.
+        assert!(
+            is_ignored_dir(name),
+            "is_ignored_dir should return true for '{}'",
+            name
+        );
+
+        // Verify that the walker never returned a path ending with an ignored dir.
+        let contains = discovered.iter().any(|p| {
+            p.file_name()
+                .and_then(|s| s.to_str())
+                .map_or(false, |s| s == *name)
+        });
+        assert!(
+            !contains,
+            "discovered paths contain ignored directory '{}': {:?}",
+            name,
+            discovered
+                .iter()
+                .filter(|p| p.file_name().and_then(|s| s.to_str()) == Some(*name))
+                .collect::<Vec<_>>()
+        );
+    }
+
+    // A normal directory should not be reported as ignored.
+    assert!(
+        !is_ignored_dir("src"),
+        "normal directory 'src' incorrectly marked as ignored"
+    );
 }
 }

@@ -20,7 +20,7 @@ V8: ignore globs — `target/`, `.git/`, `node_modules/`, `.direnv/` ⊥ walked
 id|status|task|cites
 T1|x|`edges` parse w/ escape handling|V1,V4,V6,V7
 T2|x|`chain` root→node|V2
-T3|x|`discover` walk w/ ignores|V8
+T3|x|`discover` walk w/ ignores, via `is_ignored_dir` (LLM-authored)|V8
 T4|~|`depth_violations` landed (LLM-authored, composed form). cycle detect + DAG build still open|V2
 T5|~|`missing_not_owns` landed (LLM-authored, composed form). exhaustive+disjoint still open|V3
 T6|.|`§N` derive from parent `§F`|V3

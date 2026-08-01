@@ -204,15 +204,40 @@ fn tail(s: &str, n: usize) -> &str {
 }
 
 fn run(prompt: &str, label: &'static str, log: &mut Vec<Step>) -> Result<String, String> {
+    use std::io::Write;
     // Count locally too: the server's number and ours must agree, and a
     // silent divergence means the prompt is not what this code thinks it is.
     let local = crate::tokens::count(prompt);
-    let r = ollama::generate(prompt)?;
+    // Say what is being sent BEFORE sending it. A silent 40-90s wait is
+    // indistinguishable from a hang, which is V48 applied to a live process.
+    eprint!("  [{label}] -> {} tok, generating ", local.tokens);
+    let _ = std::io::stderr().flush();
+    if ollama::verbose() {
+        eprintln!("\n--- prompt [{label}] ---\n{prompt}\n--- end prompt ---");
+    }
+    let mut n = 0usize;
+    let r = ollama::generate_with(prompt, &mut |chunk| {
+        if ollama::verbose() {
+            eprint!("{chunk}");
+        } else {
+            n += 1;
+            // One dot per ~25 chunks: visible motion, not a firehose.
+            if n % 25 == 0 {
+                eprint!(".");
+            }
+        }
+        let _ = std::io::stderr().flush();
+    })?;
+    eprintln!();
+    if ollama::verbose() {
+        eprintln!("--- end reply [{label}] ---");
+    }
     if r.prompt_tokens.abs_diff(local.tokens) > local.tokens / 10 {
         eprintln!("  [{label}] WARNING local {} vs server {} -- >10% apart",
                   local.tokens, r.prompt_tokens);
     }
-    eprintln!("  [{label}] sent {} tok · gen {} · {}ms", r.prompt_tokens, r.eval_tokens, r.ms);
+    eprintln!("  [{label}] <- sent {} tok · gen {} · {:.1}s",
+              r.prompt_tokens, r.eval_tokens, r.ms as f64 / 1000.0);
     log.push(Step { label, prompt_tokens: r.prompt_tokens, eval_tokens: r.eval_tokens, ms: r.ms });
     Ok(r.text)
 }

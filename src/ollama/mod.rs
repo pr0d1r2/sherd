@@ -3,7 +3,22 @@
 //! Plain HTTP to a LAN box -- no TLS, no cloud, no key. Feature-gated so
 //! `--no-default-features` leaves the deterministic core §C requires.
 
+use std::io::{BufRead, BufReader};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
+
+/// Dump full prompts and replies. Off by default -- a prompt is ~1-3k tokens
+/// and nobody wants that per step unless they are debugging one.
+static VERBOSE: AtomicBool = AtomicBool::new(false);
+
+pub fn set_verbose(on: bool) {
+    VERBOSE.store(on, Ordering::Relaxed);
+}
+
+#[must_use]
+pub fn verbose() -> bool {
+    VERBOSE.load(Ordering::Relaxed)
+}
 
 /// One round-trip, with what it cost. A call without its cost is not evidence.
 #[derive(Debug, Clone)]
@@ -30,14 +45,20 @@ fn num_ctx() -> u64 {
     std::env::var("BBX_NUM_CTX").ok().and_then(|v| v.parse().ok()).unwrap_or(131_072)
 }
 
+/// Generate, STREAMING. Progress is reported as it arrives, because a
+/// 90-second silent wait is indistinguishable from a hang -- V48 applied to
+/// a running process rather than to a report.
+///
+/// `on_chunk` receives each token as the server emits it.
+///
 /// # Errors
 /// Transport failure or a response that is not the expected JSON shape. A
 /// miss is an error, never an empty success (V20).
-pub fn generate(prompt: &str) -> Result<Reply, String> {
+pub fn generate_with(prompt: &str, on_chunk: &mut dyn FnMut(&str)) -> Result<Reply, String> {
     let body = serde_json::json!({
         "model": model(),
         "prompt": prompt,
-        "stream": false,
+        "stream": true,
         "options": { "num_ctx": num_ctx(), "temperature": 0 },
     });
     let started = Instant::now();
@@ -45,14 +66,34 @@ pub fn generate(prompt: &str) -> Result<Reply, String> {
         .set("Content-Type", "application/json")
         .send_string(&body.to_string())
         .map_err(|e| format!("{}: {e}", endpoint()))?;
-    let v: serde_json::Value =
-        serde_json::from_reader(resp.into_reader()).map_err(|e| e.to_string())?;
-    Ok(Reply {
-        text: v["response"].as_str().unwrap_or_default().to_string(),
-        prompt_tokens: v["prompt_eval_count"].as_u64().unwrap_or(0),
-        eval_tokens: v["eval_count"].as_u64().unwrap_or(0),
-        ms: started.elapsed().as_millis(),
-    })
+
+    let mut text = String::new();
+    let (mut prompt_tokens, mut eval_tokens) = (0, 0);
+    for line in BufReader::new(resp.into_reader()).lines() {
+        let line = line.map_err(|e| e.to_string())?;
+        if line.trim().is_empty() {
+            continue;
+        }
+        let v: serde_json::Value = serde_json::from_str(&line).map_err(|e| e.to_string())?;
+        if let Some(chunk) = v["response"].as_str() {
+            text.push_str(chunk);
+            on_chunk(chunk);
+        }
+        // Counts arrive only on the final frame.
+        if v["done"].as_bool().unwrap_or(false) {
+            prompt_tokens = v["prompt_eval_count"].as_u64().unwrap_or(0);
+            eval_tokens = v["eval_count"].as_u64().unwrap_or(0);
+        }
+    }
+    Ok(Reply { text, prompt_tokens, eval_tokens, ms: started.elapsed().as_millis() })
+}
+
+/// Generate with no progress reporting.
+///
+/// # Errors
+/// See [`generate_with`].
+pub fn generate(prompt: &str) -> Result<Reply, String> {
+    generate_with(prompt, &mut |_| {})
 }
 
 /// Pull code out of whatever prose the model wrapped it in. Longest fenced

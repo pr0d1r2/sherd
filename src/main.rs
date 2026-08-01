@@ -15,10 +15,18 @@ bbx -- federated SPEC.md for small-context local models
   bbx ask <dir> <q>    ask the endpoint from a node's lens pack
   bbx tdd <dir> <Vn> <task>   red -> judge -> green -> gate -> repair
 
+  -v, --verbose        dump every prompt and stream every reply
+
 exit: 0 clean · 1 violation · 2 usage";
 
 fn main() -> ExitCode {
-    let args: Vec<String> = std::env::args().skip(1).collect();
+    let mut args: Vec<String> = std::env::args().skip(1).collect();
+    // -v / --verbose is positional-agnostic: it is a mode, not an argument.
+    #[cfg(feature = "ollama")]
+    if let Some(i) = args.iter().position(|a| a == "-v" || a == "--verbose") {
+        args.remove(i);
+        bbx::ollama::set_verbose(true);
+    }
     let root = repo_root();
     match args.first().map(String::as_str) {
         Some("budget") => budget(&root, arg_dir(&args, &root)),
