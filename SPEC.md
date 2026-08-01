@@ -178,6 +178,8 @@ V90: MEASURED widening cost — append 4.12s (only new tok, prefix cached) vs pr
 V96: assets classed by AUDIENCE, ⊥ only by concern. **worker** → the 20B prompt · **supervisor** → the higher agent only · **human** → readers. supervisor text in a worker prompt is wasted tokens AND instructions aimed at the wrong reader — "revert this" means nothing to a model writing one function
 V97: audience enforced by DISCOVERY, ⊥ convention. `.claude/`, `.github/`, `.codex/` ⊥ walked ∴ a `SPEC.md` dropped there can never become a node & can never reach a prompt
 V92: TWO brains, split by what each can do. local 20B writes code from a narrow context; the higher agent JUDGES. MEASURED: gates passed wrong code 3x (stub w/ a doc comment saying so · data-laundering `sanitize_first_cell` · wrong-field test) & a human-level reader caught all 3
+V98: a run duration is a FLOOR, ⊥ a ceiling. finish the cycle in flight, then check the clock — a run killed between `apply` and its review leaves generated code uncommitted, which already happened once (`src/fed:B7`)
+V99: a run ENDS in a summary commit — cycles, what was applied & judged, anchors planted, halt cause, cost, what is next. autonomous means the report ! survive where a human finds it, same argument as V95
 V95: a halt is COMMITTED (`--allow-empty`), ⊥ only printed. autonomous means nobody reads stdout ∴ the reason must survive in git where a human finds it later
 V93: the loop STOPS on: nothing actionable · same row failed 2x · `check` unclean · 2 aborts @ 10x · 2 reverts in a row. an "infinite loop" w/o stop conditions optimizes for whatever the gate rewards
 V94: nothing actionable → MAINTENANCE, ⊥ done. §B w/o §V · claims w/o runners · duplication · unmanaged rows · budgets · stale §R

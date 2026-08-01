@@ -1,14 +1,37 @@
 ---
-description: One oversight cycle over bbx -- plan, apply, review the diff, plant anchors, commit. Halts with a recorded reason. Safe to run in a loop.
+description: Oversight cycles over bbx for a given duration -- plan, apply, review the diff, plant anchors, commit. Halts with a recorded reason. Ends with a summary commit.
+argument-hint: [duration, e.g. 1h or 30m -- omit for a single cycle]
 ---
 
-# /introspect
+# /introspect $ARGUMENTS
 
-One cycle. A local 20B writes code; **you** do the judgement it cannot. Run me
-again for the next cycle, or under `/loop` to keep going.
+A local 20B writes code; **you** do the judgement it cannot.
 
 Designed to run with **nobody watching**. So: every halt is recorded as a
 commit, never only printed, and nothing is ever merged or pushed to `main`.
+
+## Duration
+
+`$ARGUMENTS` is a floor, not a ceiling — `1h`, `30m`, `90m`. Omitted means one
+cycle.
+
+Fix the deadline once, at the start, and never recompute it:
+
+```sh
+START=$(date +%s); DEADLINE=$((START + 3600))   # for 1h
+```
+
+Then, **before starting each cycle**, check `date +%s` against it.
+
+- Before the deadline → start another cycle.
+- At or past it → stop and write the summary.
+- **Never abandon a cycle in flight.** A run killed between `apply` and its
+  review leaves generated code uncommitted in the tree, which is how a
+  previous run left `scopeguard::guard` sitting in `src/fed`. Finish the
+  cycle you started, then check the clock.
+
+A cycle has run 10–25 minutes in practice, so `1h` is 3–5 cycles, not 30.
+Halt conditions override the clock: a halt stops the run with time remaining.
 
 ## Why you review at all
 
@@ -83,6 +106,24 @@ git commit --allow-empty -m "halt(introspect): <one line>
 ```
 
 Then stop. Do not start another cycle.
+
+## Summary
+
+At the end -- deadline reached or halted -- write one commit so the run is
+auditable by someone who was not watching:
+
+```sh
+git commit --allow-empty -m "introspect: <n> cycles over <duration>
+
+applied:   <node> <id> -- kept | fixed | reverted, one line each
+anchors:   <§B/§V/§T rows planted, and where>
+halted:    <condition, or 'deadline'>
+cost:      <cycles, local calls, tokens sent>
+next:      <what the following run should start on>"
+```
+
+`bbx plan` and `git log --oneline` are the inputs; do not estimate what you
+can read.
 
 ## Maintenance mode
 
