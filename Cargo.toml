@@ -7,6 +7,13 @@ rust-version = "1.82"
 license = "MIT"
 description = "two-axis federation of SPEC.md and source over a dir DAG, for small-context local models"
 
+# R8: crates.io `bbx` is taken (BBCode parser, lib-only). The BIN name is
+# verified free on brew, debian and PATH, so the package is renamed and the
+# binary is not.
+[[bin]]
+name = "bbx"
+path = "src/main.rs"
+
 [lib]
 name = "bbx"
 path = "src/lib.rs"
