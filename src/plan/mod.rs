@@ -234,12 +234,30 @@ pub fn plan(root: &Path) -> Plan {
     Plan { steps, unmanaged, total_open }
 }
 
-/// The first `§V` id a row cites -- the invariant `apply` will drive.
+/// The first `§V` a row cites, as `(where it is declared, id)`.
+///
+/// A cite may be bare (`V3`, this node) or namespaced (`` `.:V73` ``, root;
+/// `` `src/fed:V9` ``, that node). Moving rows down rewrote every cite to the
+/// namespaced form, which is correct for cavespec and was invisible to this
+/// parser -- so every moved row became undrivable (B6).
 #[must_use]
-pub fn cited_invariant(t: &Task) -> Option<String> {
-    t.cites.split(',').map(str::trim)
-        .find(|c| c.starts_with('V') && c[1..].chars().all(|d| d.is_ascii_digit()))
-        .map(ToString::to_string)
+pub fn cited_invariant(t: &Task) -> Option<(std::path::PathBuf, String)> {
+    for raw in t.cites.split(',') {
+        let c = raw.trim().trim_matches('`');
+        let (owner, id) = match c.rsplit_once(':') {
+            Some((path, id)) => (path, id),
+            None => ("", c),
+        };
+        if id.starts_with('V') && id.len() > 1 && id[1..].chars().all(|d| d.is_ascii_digit()) {
+            let node = match owner {
+                "" => t.node.clone(),                       // bare: this node
+                "." => std::path::PathBuf::new(),           // root
+                p => std::path::PathBuf::from(p),
+            };
+            return Some((node, id.to_string()));
+        }
+    }
+    None
 }
 
 #[cfg(test)]
@@ -347,10 +365,15 @@ mod tests {
     fn cited_invariant_takes_the_first_v_id() {
         let mk = |c: &str| Task { node: PathBuf::from("src/fed"), id: "T4".into(),
             status: '.', text: "x".into(), cites: c.into() };
-        assert_eq!(cited_invariant(&mk("V2,V4")).as_deref(), Some("V2"));
-        assert_eq!(cited_invariant(&mk("I,V7")).as_deref(), Some("V7"));
+        assert_eq!(cited_invariant(&mk("V2,V4")).unwrap().1, "V2");
+        assert_eq!(cited_invariant(&mk("I,V7")).unwrap().1, "V7");
         assert_eq!(cited_invariant(&mk("-")), None);
         assert_eq!(cited_invariant(&mk("B9")), None, "a §B cite is not an invariant");
+        // bare -> this node; `.:` -> root; `path:` -> that node (B6)
+        assert_eq!(cited_invariant(&mk("V2")).unwrap().0, PathBuf::from("src/fed"));
+        let (owner, id) = cited_invariant(&mk("`.:V73`")).unwrap();
+        assert_eq!((owner, id.as_str()), (PathBuf::new(), "V73"));
+        assert_eq!(cited_invariant(&mk("`src/lens:V4`")).unwrap().0, PathBuf::from("src/lens"));
     }
 
     #[test]
@@ -476,15 +499,17 @@ pub fn apply(root: &Path, max_repair: usize) -> Result<String, String> {
     let branch = preflight(root)?;
     let p = plan(root);
     let step = p.steps.first().ok_or("nothing actionable to apply")?;
-    let inv = cited_invariant(step).ok_or_else(|| format!(
+    let (owner, inv) = cited_invariant(step).ok_or_else(|| format!(
         "{} {} cites no §V id ({}) -- apply drives an INVARIANT, not prose",
         step.node.display(), step.id, step.cites))?;
 
-    eprintln!("apply: {} {} on {branch}\n  invariant {inv}\n  task {}",
-              step.node.display(), step.id, step.text);
+    eprintln!("apply: {} {} on {branch}\n  invariant {inv} (declared in {})\n  task {}",
+              step.node.display(), step.id,
+              if owner.as_os_str().is_empty() { ".".into() } else { owner.display().to_string() },
+              step.text);
 
     let node = root.join(&step.node);
-    let log = crate::tdd::drive(root, &node, &inv, &step.text, max_repair)?;
+    let log = crate::tdd::drive_from(root, &node, &root.join(&owner), &inv, &step.text, max_repair)?;
 
     let sent: u64 = log.iter().map(|s| s.prompt_tokens).sum();
     let max = log.iter().map(|s| s.prompt_tokens).max().unwrap_or(0);

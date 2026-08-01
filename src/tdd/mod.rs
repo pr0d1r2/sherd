@@ -314,14 +314,28 @@ pub fn oneshot(root: &Path, node: &Path, invariant: &str, task: &str) -> Result<
 pub fn drive(root: &Path, node: &Path, invariant: &str, task: &str, max_repair: usize)
     -> Result<Vec<Step>, String>
 {
+    drive_from(root, node, node, invariant, task, max_repair)
+}
+
+/// As [`drive`], but the invariant is declared in `owner`, which may be an
+/// ancestor. A moved row cites the root invariant it answers to, and that
+/// invariant is not in the node's own spec (`.:plan` B6).
+///
+/// # Errors
+/// See [`drive`].
+pub fn drive_from(root: &Path, node: &Path, owner: &Path, invariant: &str,
+                  task: &str, max_repair: usize) -> Result<Vec<Step>, String>
+{
     let spec_path = node.join("SPEC.md");
+    let inv_path = owner.join("SPEC.md");
     let mod_path = node.join("mod.rs");
     let spec_txt = std::fs::read_to_string(&spec_path).map_err(|e| format!("{}: {e}", spec_path.display()))?;
     let original = std::fs::read_to_string(&mod_path).map_err(|e| format!("{}: {e}", mod_path.display()))?;
     let (impl_r, tests_r) = split_module(&original);
 
-    let inv = spec_txt.lines().find(|l| l.starts_with(&format!("{invariant}:")))
-        .ok_or_else(|| format!("{invariant} not declared in {} -- a test for an invariant that does not exist encodes an unstated rule", spec_path.display()))?
+    let inv_txt = std::fs::read_to_string(&inv_path).unwrap_or_else(|_| spec_txt.clone());
+    let inv = inv_txt.lines().find(|l| l.starts_with(&format!("{invariant}:")))
+        .ok_or_else(|| format!("{invariant} not declared in {} -- a test for an invariant that does not exist encodes an unstated rule", inv_path.display()))?
         .to_string();
     eprintln!("node {} · {}\n", node.display(), inv.trim());
 
