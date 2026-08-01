@@ -23,4 +23,3 @@ T5|.|name the child dirs a node over `budget.node` could split into|`.:V9`
 T6|.|select facets when building a pack, default `set`|`.:V78`
 T7|.|report facets that overlap or leave content in no facet|`.:V81`
 T8|.|order a pack canonically, volatile content last|`.:V89`
-T9|.|resolve `SPEC.why.md` references when `Depth::Why`|V2
