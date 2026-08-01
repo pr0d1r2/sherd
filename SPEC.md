@@ -27,7 +27,8 @@ scripts|inference harness driving the local endpoint, premise gate|Rust code, sp
 - SPEC syntax = FORMAT **4.1.0**, sections `G C I R V T B` fixed & ordered + `§F`/`§N`. `§F`/`§N` ! land in FORMAT/cavespec upstream, ⊥ invented locally (V47).
 - layout: **one crate**. module = **dir + `mod.rs`** (the `default.nix` shape — dir is the unit, entry is conventional). ⊥ 2018 `foo.rs`+`foo/`: that puts the facade OUTSIDE the dir it fronts ∴ module entry & its `SPEC.md` land in different federation nodes.
 - node = dir = Rust module. all three aligned or a flat `.rs` owns spec it cannot hold.
-- caveman encoding ∀ generated spec text.
+- repo partitions **set** \| **setting** \| **human** (`set-and-setting` vocabulary). default pack = set.
+- caveman encoding ∀ generated spec text. MEASURED 22% saving ⊥ 75% (R23) — it disciplines saying LESS, ⊥ encodes denser.
 - ⊥ global index file. discovery by walk.
 
 ## §I INTERFACES
@@ -39,7 +40,8 @@ scripts|inference harness driving the local endpoint, premise gate|Rust code, sp
 - cmd: `bbx check [dir]` → drift spec↔code + file ceilings. 0 clean / 1 violation / 2 usage
 - cmd: `bbx split <path>` → propose split of over-ceiling file|node. ⊥ write w/o `--apply`
 - cmd: `bbx sync [dir]` → regen `§N` from parent `§F`. exit 1 if wrote
-- cmd: `bbx graph [--dot|--json]` → federation DAG
+- cmd: `bbx graph [--dot|--json|--mermaid]` → federation DAG. `--mermaid` = the generated architecture diagram
+- cmd: `bbx lens <dir> [--facet set|setting|human|all]` → default `set`
 - cmd: `bbx budget [dir]` → node/chain/lens/file token table. exit 1 over
 - cmd: `bbx validate` → DAG + ids + budget + coverage + examined-count. exit 1 fail
 - file: `SPEC.md` ∀ dir any depth. `§G §C §I §R §V §T §B` + `§F` + `§N`
@@ -73,6 +75,12 @@ R14|prompt cache|identical prefix → prefill 4.60s → 0.04s (~115x). cache is 
 R15|edit locality|an edit invalidates all prefill AFTER it. same 7k pack: cached 0.04s · edit TAIL 0.49s · edit HEAD 4.61s (full cold)|measured, 3 runs
 R16|prefill dominance|workload is prefill-bound ⊥ decode-bound. 7k: 4.60s prefill vs 1.83s decode. 28k: 30.32s vs 5.74s = 83% prefill|measured @ .181
 R17|prefill superlinear|1,519 tok/s @ 7k → 1,233 @ 15k → 941 @ 28k. 4.09x tokens costs 6.59x time ∴ small packs pay off faster than linearly|measured, 3 points
+R18|facet shares|itok SET 47.4% / SETTING 49.9% / HUMAN 2.7%; nanokit 49.1 / 47.6 / 3.3 ∴ ~half a repo never loads for impl work|measured, 2 repos
+R19|tests dominate|tests 34.0% itok · 24.9% nanokit = largest single facet. 42% of it INLINE in `#[cfg(test)]` ∴ ⊥ reachable by the dir axis|measured per file
+R20|fleet duplication|guard-infra near-identical absolute size across unrelated repos: 16,058 vs 15,218 tok ∴ same scaffolding copied. × 54 repos ≈ 840k tok duplicated|measured, 2 of 54
+R21|human docs grow|`set-and-setting` human 24,965 vs itok 5,236 = 4.8x. CHANGELOG alone 13,762 — append-only, never needed to implement|measured
+R22|mermaid density|mermaid 71 tok vs 40 tok prose for the same info = 1.8x. bytes/tok: prose 4.15 · README 3.51 · mermaid 3.20 · caveman SPEC 2.95|measured
+R23|caveman saving|MEASURED 22%, ⊥ the 75% FORMAT.md claims (10 / 13 / 35% on 3 invariants vs faithful prose). symbols cost 1-3 tok for 2-3 bytes ∴ the saving is STRUCTURAL (omit rationale), ⊥ encodative. n=3, own comparators|measured
 
 ## §V INVARIANTS
 
@@ -146,6 +154,14 @@ V71: facade dir named by CAPABILITY ⊥ vendor — `src/tokens/` ⊥ `src/itok/`
 V72: ∀ external dep ! have ONE call site — its facade `mod.rs`. siblings private ∴ **compiler** enforces it (`error[E0603]`), ⊥ grep. VERIFIED cargo 1.96.1. guards the "rule never carried to a sibling path" class @ its source
 V76: lens pack ordered STABILITY-DESCENDING — root, ancestors, then node. an edit invalidates every token of prefill AFTER it (R15) ∴ volatile content LAST. `pack()` order is load-bearing, ⊥ cosmetic
 V77: federation's payoff on local hw is CACHE LOCALITY, ⊥ only fit. root+ancestor prefix byte-identical across ∀ node ∴ stays hot; only the leaf re-prefills. a monolith edited near its top pays full re-prefill EVERY turn (R15/R16)
+V78: repo partitions SET \| SETTING \| HUMAN. SET = impl + `SPEC.md` + `AGENTS.md` — loaded to WORK. SETTING = tests + guardrails — loaded only when working ON them. HUMAN = docs — loaded only for doc work
+V79: facet value = token share × P(task ⊥ needs it). tests 34% × ~0.7 ≈ 24% · human 2.7% × ~0.95 ≈ 2.6% ∴ rank by the PRODUCT, ⊥ by size
+V80: more facets help ONLY where a facet matches how tasks cluster. a facet no task selects is a manifest to maintain — R4 rejected that once already
+V81: facets ! PARTITION — exhaustive & disjoint, same rule as sibling lenses (V64/V65). else content double-loads or vanishes between facets
+V82: SETTING enters a pack as CONTRACT ⊥ implementation — one line per guard (`line cap 80`, `clippy pedantic`, `coverage floor 98`). ~200 tok replaces ~31k. a guard the agent cannot SEE is B1
+V83: structural diagram GENERATED from `§F` (`graph --mermaid`), ⊥ authored. a hand-drawn architecture diagram is a second reading of what `§F` declares — cavespec's founding defect
+V84: guard-infra encoding FLEET standard is materializable (flake input, content-addressed). repo-specific facts — tests, `.context-limits`, baselines — STAY. ⊥ materialize what encodes THIS repo
+V85: `AGENTS.md` ∈ SET, ⊥ SETTING. it says HOW to work ∴ needed while working. guardrails say what is CHECKED after ∴ ⊥ needed while working
 V74: §C claims ! have a runner. `fed::walk` contradicted §C for a whole session & no gate could see it (B1) — a constraint no check reads is a comment
 V75: format facts read from the CHECKER's own source, ⊥ a vendored `FORMAT.md`. the local copy was 6 sections while the dep shipped 7 (B2)
 V73: dir promotion has 2 triggers — (a) V50 code ceiling, (b) module owns SPEC worth its own node even under ceiling. vendor facades are (b): few hundred lines carrying V17/V24/V25. ⊥ promote every `.rs` — 30 files → 60 is ceremony
@@ -207,6 +223,12 @@ T59|.|PAY THE DEBT: record rationale for V1-V63 into `SPEC.why.md` before it acc
 T60|.|`src/tokens/mod.rs` sole `itok::` call site; `src/spec/mod.rs` sole `cavespec::`. siblings private|V71,V72
 T61|.|facade-leak test: planted `itok::` outside `src/tokens/` ! fail to compile|V72,V61
 T62|.|dir-promotion check: flat `.rs` owning node-local invariants → promote|V73,V50
+T63|.|`lens --facet`, default `set`|V78,V81
+T64|.|setting-as-contract extraction — guard files → one line each|V82
+T65|.|`graph --mermaid` generated diagram|V83
+T66|.|facet partition check — exhaustive + disjoint|V81
+T67|.|materializability audit: which guard files are fleet standard vs repo facts|V84,R20
+T68|.|report caveman 22%-⊥-75% upstream to cavekit FORMAT.md|R23
 
 ## §B BUGS
 
