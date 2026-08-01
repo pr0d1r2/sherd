@@ -1,9 +1,15 @@
 #!/usr/bin/env bash
-# T55: `bbx check` is a GATE, not a report. Committed through a red check
-# twice before this existed -- discipline was not the fix.
+# The gate. `bbx check` alone let broken Rust through (B16) -- it reads specs,
+# not compilation. Build and test first, then check.
+#
+# BBX_CARGO is exported by the dev shell; outside it, fall back to PATH. If
+# neither resolves, FAIL -- a gate that cannot verify must not pass (B17).
 set -e
-cargo build --offline -q 2>/dev/null || true   # B3: cargo test does not refresh the bin
-if ! ./target/debug/bbx check; then
-  echo "pre-commit: bbx check failed -- fix the spec or use --no-verify with a reason" >&2
+CARGO="${BBX_CARGO:-$(command -v cargo || true)}"
+if [ -z "$CARGO" ] || [ ! -x "$CARGO" ]; then
+  echo "pre-commit: no cargo (set BBX_CARGO or enter the dev shell) -- refusing to pass unverified" >&2
   exit 1
 fi
+"$CARGO" build --offline -q
+"$CARGO" test  --offline -q >/dev/null
+./target/debug/bbx check
