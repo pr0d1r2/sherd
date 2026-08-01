@@ -400,6 +400,17 @@ pub fn drive(root: &Path, node: &Path, invariant: &str, task: &str, max_repair: 
         Err("NOT mergeable -- gates red after repair budget".into())
     }
 }
+/// Classify a failure report as a compile‑time error.
+///
+/// The function returns `true` if the given report looks like a Rust compiler
+/// error (e.g., starts with `"error"` or contains an error code such as
+/// `"error[E0425]"`).  All other reports, including assertion failures,
+/// are considered non‑compile errors and return `false`.
+pub fn classify_failure(report: &str) -> bool {
+    let s = report.trim_start();
+    // Most compiler errors start with "error" or contain an error code in brackets.
+    s.starts_with("error") || s.contains("error[")
+}
 
 #[cfg(test)]
 mod tests {
@@ -471,4 +482,29 @@ mod tests {
         let out = insert_test(SRC, "    #[test]\n    fn u() {}");
         assert!(split_module(&out).1.contains("fn u()"));
     }
+
+#[test]
+fn classify_failure_works() {
+    // A typical compiler error – represents a red test that fails to build.
+    let compile_report = r#"error[E0425]: cannot find value `foo` in this scope"#;
+
+    // An assertion failure message – represents a red test that runs but panics.
+    let assert_report =
+        "thread 'main' panicked at 'assertion failed: x == y', src/main.rs:10:5";
+
+    // The new public function we expect to be written:
+    //   pub fn classify_failure(report: &str) -> bool
+    //
+    // It should return true for compile‑time failures and false otherwise.
+    assert!(
+        classify_failure(compile_report),
+        "Compile error should be classified as a compile failure"
+    );
+
+    // A red test that merely panics must NOT be treated as a compile failure.
+    assert!(
+        !classify_failure(assert_report),
+        "Assertion failure should not be classified as a compile failure"
+    );
+}
 }

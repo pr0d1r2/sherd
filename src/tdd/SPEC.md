@@ -38,7 +38,7 @@ id|status|task|cites
 T1|x|`split_module`, `insert_test`, `insert_impl` w/ structural test-region guard|V1,V7
 T2|x|red → judge → green → gate → repair loop|V2,V3,V4,V5
 T3|x|invariant-exists precondition|V6
-T4|.|assert RED fails at assertion ⊥ at compile|V2
+T4|~|`classify_failure` landed (LLM-authored). wiring it into the RED check still open|V2
 T5|.|`§T` row status flip on green (`.` → `x`)|V5
 T6|.|judge gets `signatures()` data model|V8,B2
 T7|.|`cargo build` before gate runs that exercise the bin|B3
@@ -60,3 +60,4 @@ B9|2026-08-01|adding ONE §B row to `src/fed/SPEC.md` pushed step 1 from 1,210 t
 B10|2026-08-01|judge rejections were treated as a HARD STOP ∴ I hand-tuned the prompt across 6 configurations chasing 1 success, discarding an actionable objection each time. the loop had feedback available & ⊥ used it|feed the objection back, capped at 3. GENERALLY: a reviewer's REASON is signal; throwing it away & guessing is the expensive path
 B11|2026-08-01|attributed run-to-run differences to model variance. MEASURED FALSE: 3/3 trials identical `gen 3487` ∴ deterministic @ temp 0. every difference was a prompt change I made. `.:V59` — measurement ⊥ belief, on my own methodology|isolate ONE variable per run. determinism makes that possible
 B12|2026-08-01|step 2 never told what to DEFINE ∴ test called `check_edge_depths(root,&e)` & step 2 invented another name → `E0425`, 3 repairs could ⊥ recover. also the root cause of `.:fed` B1/B2/B3: an unconstrained signature let it choose a `&Path` design & drag in walking, temp dirs & `*.md` globbing|`expected_calls()` — deterministic parse of calls absent from the surface, passed as a contract. NEXT run: judge YES first try, 3 round-trips, all 3 prior defects ABSENT. own test caught `fn x(` being read as a call
+B13|2026-08-01|`expected_calls` skipped any ident preceded by `!` — written to exclude macros, but a macro is `name!(` (already excluded by the `(` check) while `!name(` is NEGATION. `assert!(!classify(r))` ∴ contract silently EMPTY on a real run & step 2 got no name to define. run passed anyway, by luck|drop the leading-`!` skip. own unit test used `assert_eq!(a,b)` which the `(` check excludes regardless ∴ the test could ⊥ see the bug — a guard that passes for the wrong reason

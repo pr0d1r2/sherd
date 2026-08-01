@@ -86,6 +86,9 @@ R27|notation cost|NOTATION slice 182 tok vs whole `FORMAT.md` 892 ∴ slicing sa
 R28|tdd loop cost|3 round-trips · 3,707 tok · max single call 1,651 vs 157,071 monolithic = 95x. step 3 (gates) = 0 tok. +15% max-call for notation+docs turned 3 failed runs into a correct one|measured, `bbx tdd` on src/fed V2
 R29|premise gate|HEAD-TO-HEAD same node/invariants. monolith 1/2 green (V2 `E0425`, V3 green) · decomposed 2/2. TOTAL tok comparable (2,659 vs 2,712) ∴ decomposition ⊥ save total. MAX SINGLE CALL 2,659 vs 1,243 = 2.1x — that is the whole benefit, & it is the binding constraint|measured, `bbx oneshot` vs `bbx tdd`
 R30|quality parity|when the monolith SUCCEEDS its output matches the decomposed form — `missing_not_owns(&e)`, `in_f`=3, composed ⊥ duplicated ∴ decomposition's win is FITTING, ⊥ quality, at this task size|measured
+R31|scale curve|MONO call grows w/ BODIES, DECOMP max bounded by SIGNATURES. impl 375→5,218 tok: ratio 1.1x · 1.1x · 1.2x · 1.6x · 1.9x · 3.4x (predicted, no inference)|computed over 6 nodes
+R32|scale, measured|large node (impl 5,218): MONO 9,029 tok one call, FAILED `E0425` · DECOMP max 3,155, GREEN = 2.9x on max call. small node (impl 1,118): 2.1x ∴ the gap WIDENS w/ node size|measured
+R33|total ⊥ cheaper|DECOMP total varies w/ retries — 8,558 (5 trips) & 12,909 (7 trips) vs MONO 9,029 ∴ total cost is ⊥ a reliable win. MAX CALL is the consistent one|measured
 
 ## §V INVARIANTS
 
@@ -142,7 +145,7 @@ V56: guard & rule ! share a UNIT. ceiling in `itok` tokens, cap in chars, order 
 V57: CI globs by DATA DEPENDENCY ⊥ file extension. a step's glob ! name every input its tests read
 V58: grammar ⊥ ship til run over a corpus. `§F`/`§N` recognition measured over the 54-spec fleet & FP rate reported. a false positive naming the wrong rule costs more than a false negative
 V59: "X absorbs Y" ! name a MEASUREMENT ⊥ a belief. ⊥ delete|skip building Y til capability parity vs Y is written down. the deletion commit is where nobody re-checks
-V60: premise MEASURED (R29): decomposition halves the MAX CALL (2.1x) & wins 2/2 vs 1/2, but ⊥ save total tokens & ⊥ improve quality when both succeed. the claim is FITTING, ⊥ cheaper, ⊥ better
+V60: premise MEASURED (R29/R32/R33): decomposition bounds the MAX CALL — 2.1x @ impl 1,118, 2.9x @ 5,218, widening w/ node size ∴ the claim is FITTING. ⊥ cheaper in total (varies w/ retries), ⊥ better in quality when both succeed. monolith 1/3 green vs decomposed 3/3
 V61: ∀ guard proven by a PLANTED violation + a companion proving it accepts real shapes. ⊥ proven by reading it
 V62: sibling divergence report — near-duplicate invariants across sibling nodes = V13 promotion candidates. V13 w/o a detector is a comment, ⊥ a guard
 V63: registry-owned identifier checked by ASKING the registry, before it appears anywhere a user can run
