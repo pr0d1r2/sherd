@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# T55: `bbx check` is a GATE, not a report. Committed through a red check
+# twice before this existed -- discipline was not the fix.
+set -e
+cargo build --offline -q 2>/dev/null || true   # B3: cargo test does not refresh the bin
+if ! ./target/debug/bbx check; then
+  echo "pre-commit: bbx check failed -- fix the spec or use --no-verify with a reason" >&2
+  exit 1
+fi
