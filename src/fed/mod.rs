@@ -116,75 +116,15 @@ fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
         walk(&p, out);
     }
 }
-pub fn check_edge_depth(text: &str) -> Vec<String> {
-    let mut violations = Vec::new();
-    let mut in_f = false;
-
-    for line in text.lines() {
-        // Detect the start of a §F table.
-        if line.starts_with("## \u{a7}") {
-            in_f = line.starts_with("## \u{a7}F");
-            continue;
-        }
-
-        if !in_f {
-            continue;
-        }
-
-        let cells = split_row(line);
-        // Skip the header row and any malformed rows.
-        if cells.len() != 4 || cells[0] == "dir" {
-            continue;
-        }
-
-        // The invariant: a child directory must be exactly one level deeper,
-        // i.e. it should not contain a slash.
-        if cells[0].contains('/') {
-            violations.push(line.trim().to_string());
-        }
-    }
-
-    violations
-}
-/// Detect rows in a §F table where the ⊥owns cell is missing (empty).
+/// Return all edges that violate the V2 depth invariant.
 ///
-/// The function scans the supplied `text` for a section starting with
-/// `## §F`.  For each row that has exactly four cells and is not the
-/// header, it checks whether the third cell (`⊥owns`) contains any
-/// non‑whitespace characters.  If the cell is empty, the original line
-/// (trimmed of surrounding whitespace) is added to the returned vector.
-///
-/// The returned `Vec<String>` contains one entry per offending row,
-/// suitable for reporting or further inspection.
-#[must_use]
-pub fn missing_not_owns(text: &str) -> Vec<String> {
-    let mut violations = Vec::new();
-    let mut in_f = false;
-
-    for line in text.lines() {
-        // Detect the start of a §F table.
-        if line.starts_with("## \u{a7}") {
-            in_f = line.starts_with("## \u{a7}F");
-            continue;
-        }
-
-        if !in_f {
-            continue;
-        }
-
-        let cells = split_row(line);
-        // Skip the header row and any malformed rows.
-        if cells.len() != 4 || cells[0] == "dir" {
-            continue;
-        }
-
-        // The ⊥owns cell is the third column (index 2).
-        if cells[2].trim().is_empty() {
-            violations.push(line.trim().to_string());
-        }
-    }
-
-    violations
+/// An edge violates V2 if its `dir` field contains more than one path component,
+/// i.e., it is not a direct child of the node declaring it.
+pub fn depth_violations(edges: &[Edge]) -> Vec<&Edge> {
+    edges
+        .iter()
+        .filter(|e| e.dir.split('/').count() != 1)
+        .collect()
 }
 
 #[cfg(test)]
@@ -215,41 +155,27 @@ mod tests {
     }
 
 #[test]
-fn edge_depth_invariant_violated() {
-    // A federation table where the child directory is two levels deeper than its parent.
-    let text = "## \u{a7}F FEDERATION\ndir|owns|\u{22a5}owns|tokens\nsrc/subdir|code|-|-\n";
-    
-    // The new public function that validates edge depth. It should return the offending rows.
-    let violations = check_edge_depth(text);
-    
-    // We expect at least one violation because `src/subdir` is not a single level deeper.
-    assert!(!violations.is_empty(), "Expected a violation but found none");
-    
-    // The offending row should contain the problematic directory name.
-    assert!(
-        violations.iter().any(|row| row.contains("src/subdir")),
-        "The reported violation does not mention `src/subdir`"
-    );
-}
+fn depth_invariant_violated() {
+    // An edge that is two levels deep (`src/subdir`) violates V2.
+    let t = "\
+## \u{a7}F FEDERATION\
+\ndir|owns|\u{22a5}owns|tokens\
+\nsrc/subdir|code nodes|scripts, docs|1200\
+";
+    // Parse the edges from the federation table.
+    let e = edges(t);
+    assert_eq!(e.len(), 1, "Expected exactly one edge in the test data");
 
-#[test]
-fn missing_not_owns_detected() {
-    // Federation table with a row where the ⊥owns cell is empty.
-    let text = "## \u{a7}F FEDERATION\ndir|owns|\u{22a5}owns|tokens\nsrc|code||-\n";
-    
-    // The new public function that reports rows missing a ⊥owns value.
-    let violations = missing_not_owns(text);
-    
-    // We expect at least one violation because the row for `src` has an empty ⊥owns cell.
+    // The new public function that checks V2 should return the offending rows.
+    // It is expected to be implemented elsewhere in this module.
+    let violations = depth_violations(&e);
+
+    // The current implementation does not perform this check,
+    // so `violations` will be empty and the assertion below will fail.
     assert!(
         !violations.is_empty(),
-        "Expected a violation for a missing ⊥owns, but found none"
+        "Expected a violation for edge with dir 'src/subdir', but none were reported"
     );
-    
-    // The offending row should mention the problematic directory name.
-    assert!(
-        violations.iter().any(|row| row.contains("src")),
-        "The reported violation does not mention `src`"
-    );
+    assert_eq!(violations[0].dir, "src/subdir");
 }
 }

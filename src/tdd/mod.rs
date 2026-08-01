@@ -304,7 +304,7 @@ pub fn drive(root: &Path, node: &Path, invariant: &str, task: &str, max_repair: 
     };
     eprintln!("  contract: {}", if wanted.is_empty() { "(none detected)".into() } else { wanted.join(", ") });
     let code = ollama::rust_block(&run(&format!(
-        "--- implementation ---\n{impl_r}\n\n--- failing test ---\n```rust\n{test_fn}\n```\n\n\
+        "--- existing API (signatures; call these, do not reimplement) ---\n{surface}\n\n--- failing test ---\n```rust\n{test_fn}\n```\n\n\
          {contract}\
          --- failure ---\n{}\n\n\
          Write ONLY the new function(s) to ADD to the implementation so this test passes. \
@@ -323,9 +323,10 @@ pub fn drive(root: &Path, node: &Path, invariant: &str, task: &str, max_repair: 
         eprintln!("  gate: FAIL -- repair {}/{}", i + 1, max_repair);
         let cur = std::fs::read_to_string(&mod_path).map_err(|e| e.to_string())?;
         let (cur_impl, cur_tests) = split_module(&cur);
+        let cur_surface = signatures(cur_impl);
         let label: &'static str = if i == 0 { "4 repair-1" } else { "4 repair-n" };
         let fixed = ollama::rust_block(&run(&format!(
-            "--- implementation ---\n{cur_impl}\n\n--- test ---\n```rust\n{test_fn}\n```\n\n\
+            "--- existing API (signatures) ---\n{cur_surface}\n\n--- your current attempt ---\n{last_added}\n\n--- test ---\n```rust\n{test_fn}\n```\n\n\
              --- failure ---\n{}\n\n\
              Reply with ONLY the corrected version of the function(s) you previously \
              added, in one ```rust block. Do not restate unrelated code, do not remove \

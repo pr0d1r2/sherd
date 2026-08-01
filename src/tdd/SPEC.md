@@ -28,6 +28,8 @@ V14: surface keeps DOC COMMENTS. bare field names cannot distinguish `not_owns` 
 V15: prompt = RULE depth. §G §C §I §V §T in, §B §R out. §T is the PLAN (the row names the work); §B/§R are archive. MEASURED: one §B row pushed step 1 1,210→1,520 tok & flipped a correct run to rejected (B9)
 V16: judge objection FED BACK, ⊥ discarded. it is actionable signal; hand-tuning the prompt instead burned 6 configurations before I noticed (B10)
 V17: model DETERMINISTIC @ temp 0 — 3/3 identical `gen` counts on one prompt ∴ outcome differences are prompt differences, & isolation works. ⊥ blame variance
+V19: step 2 & repair see SIGNATURES ⊥ bodies. surface-by-EXAMPLE induces imitation — shown `edges()`'s scan loop the model copied it, twice, on independent tasks. shown only the interface it COMPOSES: `depth_violations(&[Edge])`, 5 lines ⊥ 30, `in_f` 6→3, 20% cheaper (`.:fed` B4)
+V20: constrain what the model SEES, ⊥ ask it for good behaviour. asking to reuse produced WORSE code (data-laundering `sanitize_first_cell`); removing the bodies fixed it w/ no instruction at all
 V18: step 2 gets the CONTRACT — the calls the test makes that ⊥ exist yet, extracted deterministically (`.:V18`). the SIGNATURE constrains the design: `check_edge_depth(text)` took no path ∴ no walking ∴ no ignore-glob violation & no temp dir. fixing a NAME mismatch removed 3 unrelated defects (B12)
 
 ## §T TASKS
