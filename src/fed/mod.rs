@@ -133,6 +133,61 @@ pub fn missing_not_owns(edges: &[Edge]) -> Vec<&Edge> {
     edges.iter().filter(|e| e.not_owns.trim().is_empty()).collect()
 }
 
+/// The federation as a mermaid flowchart, derived from `§F`.
+///
+/// GENERATED, never authored (`.:V83`). A hand-drawn architecture diagram is a
+/// second reading of what `§F` already declares, and the two drift.
+#[must_use]
+pub fn mermaid(root: &Path) -> String {
+    let mut out = String::from("flowchart TD\n");
+    for node in discover(root) {
+        let rel = node.strip_prefix(root).unwrap_or(&node);
+        let from = label(rel);
+        let Ok(text) = std::fs::read_to_string(node.join("SPEC.md")) else { continue };
+        for e in edges(&text) {
+            let child = rel.join(&e.dir);
+            out.push_str(&format!("    {}[\"{}\"] --> {}[\"{}<br/><i>{}</i>\"]\n",
+                from, disp(rel), label(&child), e.dir, trim(&e.owns, 46)));
+        }
+    }
+    out
+}
+
+/// The same graph in graphviz `dot`.
+#[must_use]
+pub fn dot(root: &Path) -> String {
+    let mut out = String::from("digraph federation {\n  rankdir=TB;\n  node [shape=box];\n");
+    for node in discover(root) {
+        let rel = node.strip_prefix(root).unwrap_or(&node);
+        let Ok(text) = std::fs::read_to_string(node.join("SPEC.md")) else { continue };
+        for e in edges(&text) {
+            out.push_str(&format!("  \"{}\" -> \"{}\";\n", disp(rel), rel.join(&e.dir).display()));
+        }
+    }
+    out.push_str("}\n");
+    out
+}
+
+fn label(p: &Path) -> String {
+    let s = p.to_string_lossy().replace(['/', '.', '-'], "_");
+    if s.is_empty() { "root".into() } else { s }
+}
+
+fn disp(p: &Path) -> String {
+    let s = p.to_string_lossy().to_string();
+    if s.is_empty() { ".".into() } else { s }
+}
+
+/// Label text safe for a mermaid node: no pipes, backticks or quotes, which
+/// break the parser inside a bracketed label.
+fn trim(s: &str, n: usize) -> String {
+    let clean: String = s.chars()
+        .map(|c| match c { '|' => '/', '`' | '"' => '\'', _ => c })
+        .collect();
+    if clean.chars().count() <= n { clean }
+    else { format!("{}…", clean.chars().take(n - 1).collect::<String>()) }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -153,6 +208,25 @@ mod tests {
     fn escaped_pipe_stays_in_the_cell() {
         let t = "## \u{a7}F FEDERATION\ndir|owns|\u{22a5}owns|tokens\na|rule\\|why|-|10\n";
         assert_eq!(edges(t)[0].owns, "rule|why");
+    }
+
+    #[test]
+    fn mermaid_is_derived_from_f_rows() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let m = mermaid(root);
+        assert!(m.starts_with("flowchart TD"), "{m}");
+        assert!(m.contains("--> src["), "root must point at src: {m}");
+        assert!(m.contains("src_tdd["), "src must point at its children: {m}");
+    }
+
+    #[test]
+    fn mermaid_labels_carry_no_parser_breaking_chars() {
+        let m = mermaid(Path::new(env!("CARGO_MANIFEST_DIR")));
+        for line in m.lines().skip(1) {
+            let label = line.split_once("<i>").map(|(_, r)| r).unwrap_or("");
+            assert!(!label.contains('|') && !label.contains('`'),
+                    "label breaks mermaid: {line}");
+        }
     }
 
     #[test]

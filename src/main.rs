@@ -11,6 +11,7 @@ bbx -- federated SPEC.md for small-context local models
   bbx lens <dir>       the context pack for one node
   bbx fed [dir]        the federation edges declared by a node
   bbx check [dir]      cavespec structural check of every node
+  bbx graph [--dot]    federation DAG, generated from §F (mermaid by default)
   bbx ask <dir> <q>    ask the endpoint from a node's lens pack
   bbx tdd <dir> <Vn> <task>   red -> judge -> green -> gate -> repair
 
@@ -26,6 +27,13 @@ fn main() -> ExitCode {
             None => usage("lens needs a dir"),
         },
         Some("fed") => fed_cmd(&arg_dir(&args, &root)),
+        Some("graph") => {
+            match args.get(1).map(String::as_str) {
+                Some("--dot") => print!("{}", fed::dot(&root)),
+                _ => print!("{}", fed::mermaid(&root)),
+            }
+            ExitCode::SUCCESS
+        }
         Some("check") => check(&root),
         #[cfg(feature = "ollama")]
         Some("ask") => match (args.get(1), args.get(2)) {
