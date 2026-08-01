@@ -19,7 +19,12 @@ T1|x|`pack` assembly, chain + children + cost|V1,V3
 T2|x|`Depth` rule\|why, `verdict`|V2,V4
 T3|.|`SPEC.why.md` resolution for `Depth::Why`|V2
 T4|.|needs `bbx.toml` — no tier is declared anywhere yet|V4
-T5|.|name the child dirs a node over `budget.node` could split into|`.:V9`
+T5|.|given a node dir and a token ceiling, return its child dirs when the pack exceeds the ceiling|`.:V9`
 T6|.|needs facets represented in data — nothing marks them today|`.:V78`
 T7|.|needs facets represented in data — see T6|`.:V81`
 T8|.|needs a computable notion of volatile — undefined today|`.:V89`
+
+## §B BUGS
+
+id|date|cause|fix
+B1|2026-08-01|row said "a node over `budget.node`" & the model read `budget.node` as a FILENAME — `fs::read_to_string(root.join("budget.node"))` — then returned `vec![root.join("hint")]`, a literal fake. 6 compile errors, discarded|name the QUANTITY ("a token ceiling"), ⊥ the config key. a dotted identifier in prose reads as a path
