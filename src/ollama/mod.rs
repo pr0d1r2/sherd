@@ -110,10 +110,40 @@ impl Eta {
 /// What this call should cost, given what the endpoint has done so far.
 #[must_use]
 pub fn predict(prompt_tokens: u64) -> Eta {
+    predict_for("", prompt_tokens)
+}
+
+/// Same, but using how much THIS KIND of step generates.
+///
+/// A judge replies in ~300 tokens; a red-test writes ~2,500 including the
+/// reasoning gpt-oss hides. One global average under-predicts the big steps
+/// badly enough to trip the 4x abort on a healthy run, which is exactly what
+/// happened (B5).
+#[must_use]
+pub fn predict_for(label: &str, prompt_tokens: u64) -> Eta {
     let pre = PREFILL_TOK_S.load(Ordering::Relaxed).max(1) as f64;
     let dec = DECODE_TOK_S.load(Ordering::Relaxed).max(1) as f64;
-    let gen = EXPECT_GEN.load(Ordering::Relaxed);
+    let gen = if label.is_empty() {
+        EXPECT_GEN.load(Ordering::Relaxed)
+    } else {
+        crate::state::State::load()
+            .get_u64("gen", label)
+            .unwrap_or_else(|| EXPECT_GEN.load(Ordering::Relaxed))
+    };
     Eta { prefill_s: prompt_tokens as f64 / pre, decode_s: gen as f64 / dec, gen_est: gen }
+}
+
+/// Record how much this kind of step actually generated.
+pub fn observe_gen(label: &str, eval_tokens: u64) {
+    if label.is_empty() || eval_tokens == 0 {
+        return;
+    }
+    let mut st = crate::state::State::load();
+    let prev = st.get_u64("gen", label).unwrap_or(eval_tokens);
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let next = (prev as f64 * 0.75 + eval_tokens as f64 * 0.25) as u64;
+    st.set("gen", label, next.to_string());
+    st.save();
 }
 
 /// Fold one real reply into the model. Exponential moving average, weight 1/4
@@ -142,6 +172,10 @@ pub fn observe(r: &Reply, prefill_ms: u128, decode_ms: u128) {
 #[derive(Debug, Clone)]
 pub struct Reply {
     pub text: String,
+    /// Reasoning the model emitted but did not return as output. Measured at
+    /// 64% of frames on gpt-oss:20b -- invisible, but it is where the latency
+    /// goes, and `-v` is the only way to see why a judge decided as it did.
+    pub thinking: String,
     /// Prompt tokens the SERVER counted -- the real number, not our estimate.
     pub prompt_tokens: u64,
     pub eval_tokens: u64,
@@ -197,6 +231,7 @@ pub fn generate_with(
         .map_err(|e| format!("{}: {e}", endpoint()))?;
 
     let mut text = String::new();
+    let mut thinking = String::new();
     let mut warned = 0u8;
     let mut first_chunk: Option<Instant> = None;
     let (mut prompt_tokens, mut eval_tokens) = (0, 0);
@@ -206,6 +241,13 @@ pub fn generate_with(
             continue;
         }
         let v: serde_json::Value = serde_json::from_str(&line).map_err(|e| e.to_string())?;
+        if let Some(th) = v["thinking"].as_str() {
+            if !th.is_empty() {
+                thinking.push_str(th);
+                if first_chunk.is_none() { first_chunk = Some(Instant::now()) }
+                on_chunk("");
+            }
+        }
         if let Some(chunk) = v["response"].as_str() {
             if first_chunk.is_none() && !chunk.is_empty() {
                 first_chunk = Some(Instant::now());
@@ -227,9 +269,9 @@ pub fn generate_with(
                 3 => eprintln!("\n  [pace] WARNING {el:.0}s: 3x the estimate. Aborting at {:.0}s.", hard.as_secs_f64()),
                 _ => return Err(format!(
                         "aborted after {el:.0}s -- 4x the {:.0}s estimate. \
-                         {} tokens generated so far. Endpoint {} may be overloaded, \
-                         or BBX_NUM_CTX too large for its memory.",
-                        budget.as_secs_f64(), text.len() / 4, endpoint())),
+                         {} output + {} reasoning tokens so far. Endpoint {} may be \
+                         overloaded, or BBX_NUM_CTX too large for its memory.",
+                        budget.as_secs_f64(), text.len() / 4, thinking.len() / 4, endpoint())),
             }
         }
         // Counts arrive only on the final frame.
@@ -238,7 +280,7 @@ pub fn generate_with(
             eval_tokens = v["eval_count"].as_u64().unwrap_or(0);
         }
     }
-    let reply = Reply { text, prompt_tokens, eval_tokens, ms: started.elapsed().as_millis() };
+    let reply = Reply { text, thinking, prompt_tokens, eval_tokens, ms: started.elapsed().as_millis() };
     // Split the observed time at the first token: everything before it is
     // prefill, everything after is decode. Two rates, learned separately,
     // because they scale differently (R16/R17).

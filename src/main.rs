@@ -89,8 +89,23 @@ fn main() -> ExitCode {
     }
 }
 
+/// The repo root, not the invocation directory.
+///
+/// `bbx` is a shim over `cargo run`, so CWD is wherever you typed it. Using
+/// CWD federated from a SUBDIRECTORY silently -- fewer nodes, a truncated
+/// chain, and no error to say so. Walk up to the git root instead.
 fn repo_root() -> PathBuf {
-    std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    let mut d = cwd.as_path();
+    loop {
+        if d.join(".git").exists() && d.join("SPEC.md").is_file() {
+            return d.to_path_buf();
+        }
+        match d.parent() {
+            Some(p) => d = p,
+            None => return cwd,
+        }
+    }
 }
 
 fn arg_dir(args: &[String], root: &Path) -> PathBuf {

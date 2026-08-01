@@ -211,7 +211,7 @@ fn run(prompt: &str, label: &'static str, log: &mut Vec<Step>) -> Result<String,
     // Say what is being sent, and what it should COST, before sending it. A
     // silent 40-90s wait is indistinguishable from a hang (V21), and a
     // prediction is what lets the escalation guards mean anything.
-    let eta = ollama::predict(local.tokens);
+    let eta = ollama::predict_for(label, local.tokens);
     eprintln!("  [{label}] -> {} tok ({:.1} KB) - eta {:.0}s cold / {:.0}s if cached (~{} gen)",
               local.tokens, prompt.len() as f64 / 1024.0,
               eta.total_s(), eta.cached_s(), eta.gen_est);
@@ -234,7 +234,11 @@ fn run(prompt: &str, label: &'static str, log: &mut Vec<Step>) -> Result<String,
         let _ = std::io::stderr().flush();
     })?;
     eprintln!();
+    ollama::observe_gen(label, r.eval_tokens);
     if ollama::verbose() {
+        if !r.thinking.is_empty() {
+            eprintln!("\n--- reasoning [{label}] ---\n{}\n--- end reasoning ---", r.thinking);
+        }
         eprintln!("--- end reply [{label}] ---");
     }
     // Prediction against telemetry -- the comparison is the point. A delta
@@ -245,6 +249,9 @@ fn run(prompt: &str, label: &'static str, log: &mut Vec<Step>) -> Result<String,
     eprintln!("  [{label}] <- {} sent · {} gen · {actual:.1}s (eta {:.0}s, {delta:+.0}%){}",
               r.prompt_tokens, r.eval_tokens, basis,
               if ollama::last_cached() { "  [prefix CACHED]" } else { "" });
+    if !r.thinking.is_empty() {
+        eprintln!("       (+{} reasoning tokens, hidden -- see -v)", r.thinking.len() / 4);
+    }
     if r.prompt_tokens.abs_diff(local.tokens) > local.tokens / 10 {
         eprintln!("  [{label}] note: local count {} vs server {} -- >10% apart",
                   local.tokens, r.prompt_tokens);
