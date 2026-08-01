@@ -34,6 +34,7 @@ T9|.|descend one edge per step, reloading only that child|`.:V19`
 T10|.|promote an invariant from a leaf to the common ancestor|`.:V13`
 T11|.|report `§N` that differs from what `§F` derives|`.:V36`
 T12|.|report a flat `.rs` owning node-local invariants — wants its own dir|`.:V73`
+T13|~|replace the hand-rolled walk with `itok::walk`/`itok::glob`|`.:V23`
 
 ## §B BUGS
 

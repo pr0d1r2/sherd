@@ -28,6 +28,7 @@ T3|.|`needs` column in `§T` so ordering is declared ⊥ guessed|V4
 T4|.|machine-actionable marker in `§T` so classify ⊥ heuristic|V5
 T5|.|concretise step 1 — run red-test + judge, put the contract in the plan|V1
 T6|.|`bbx plan \| head` panics on broken pipe. handle SIGPIPE|V6
+T7|.|propose how to split an over-ceiling file or node, kind `judgment`|`.:V54`
 
 ## §B BUGS
 

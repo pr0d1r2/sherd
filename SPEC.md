@@ -197,10 +197,8 @@ T1|x|scaffold single crate `bbx`, module=dir+`mod.rs`, explicit `[[bin]]`, deps 
 T2|x|bind `cavespec` — `check`, `fmt`, section split. ⊥ reimpl|C
 T3|.|capability-parity audit `cavespec` vs what `bbx` needs. write the comparison BEFORE relying on it|V59
 T4|x|parse `§F` table → (dir, owns, ⊥owns, tokens), escape-aware|I,V1
-T5|~|fs walk — own impl landed, VIOLATES §C (`itok::walk` ⊥ reimpl). see B1|V23,B1
 T6|.|build federation DAG, depth+1, cycle detect|V1,V2,V4
 T8|x|bind `itok::estimate`, tier floor `bpe`, method label|V17,V24
-T9|.|`.context-limits` reuse for node + file ceilings|I,V52
 T10|.|`bbx budget` + over-budget exit 1|V6,V7,V8
 T12|.|id namespacing + resolver `path:Vn`|V10,V11
 T14|x|`bbx lens` render pack, `--depth rule` default|I,V15,V45
@@ -222,15 +220,11 @@ T37|.|`bbx sync` + exit 1 when wrote|I,V36
 T40|.|vertical axis: `SPEC.why.md` format + id keying|V42,V43
 T41|.|`lens --depth rule\|why\|all`|V45
 T42|.|cross-file losslessness proof, asserted pre-write|V49,V44
-T43|.|`.rs` ceiling: code vs test counted separately|V50,R7
-T44|.|`mod.rs`/`lib.rs` tighter ceiling|V51
-T45|.|`bbx split <path>` proposal, `--apply` gated, kind `judgment`|I,V53,V54
 T46|.|coupling report after proposed split|V53
 T47|.|violation renderer `file:line: bbx/Vn:` + why + mechanical\|judgment + json `kind`|V55,V54
 T48|.|sibling-divergence detector for V13|V62
 T49|.|`§F`/`§N` upstream to FORMAT/cavespec before shipping a dialect|V47
 T50|.|corpus run over 54-spec fleet, FP rate reported|V58
-T51|.|`.spec-records` baseline + survival check across split|V44
 T52|.|planted-violation test ∀ guard + accepts-real-shapes companion|V61
 T53|.|PREMISE GATE: `gpt-oss:20b` completes from `lens` pack a task it fails from monolith. `itok` SPEC.md = pressure fixture|V60,V27
 T54|x|self-federate: root `§F` + per-node `SPEC.md`|V27,V30
