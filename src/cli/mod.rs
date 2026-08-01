@@ -4,7 +4,7 @@
 //! contracts and every §T row about them was unreachable while this file had
 //! no `SPEC.md` to hold them.
 
-use crate::{fed, lens, plan, spec, state, tokens};
+use crate::{fed, lens, plan, slice, spec, state, tokens};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
@@ -16,6 +16,7 @@ bbx -- federated SPEC.md for small-context local models
   bbx fed [dir]        the federation edges declared by a node
   bbx check [dir]      cavespec structural check of every node
   bbx review [rev]     mechanical checks on what a commit added (default HEAD)
+  bbx slice [--check|--list]  regenerate distilled slices from their sources
   bbx graph [--tree|--table|--dot]  federation DAG, generated from §F
   bbx plan             next 3 steps, with what would invalidate each
   bbx plan --triage    unmanaged rows, with a proposed home for each
@@ -57,6 +58,7 @@ pub fn run() -> ExitCode {
             ExitCode::SUCCESS
         }
         Some("check") => check(&root),
+        Some("slice") => slice_cmd(&root, args.get(1).map_or("", String::as_str)),
         Some("review") => review_cmd(&root, args.get(1).map_or("HEAD", String::as_str)),
         Some("plan") if args.get(1).map(String::as_str) == Some("--triage") => triage_cmd(&root),
         Some("plan") => plan_cmd(&root),
@@ -351,4 +353,60 @@ fn review_cmd(root: &Path, rev: &str) -> ExitCode {
             ExitCode::from(2)
         }
     }
+}
+
+fn slice_cmd(root: &Path, mode: &str) -> ExitCode {
+    let decls = match std::fs::read_to_string(root.join(".bbx-slices"))
+        .map_err(|e| e.to_string())
+        .and_then(|t| slice::parse_decls(&t))
+    {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("bbx: {e}");
+            return ExitCode::from(2);
+        }
+    };
+    let mut drift = 0;
+    for d in &decls {
+        let rendered = match slice::render(root, d) {
+            Ok(r) => r,
+            Err(e) => {
+                eprintln!("bbx: {e}");
+                return ExitCode::from(1);
+            }
+        };
+        let out = root.join(&d.output);
+        let current = std::fs::read_to_string(&out).unwrap_or_default();
+        let full: u64 = slice::sources(root, &d.source).iter()
+            .filter_map(|f| std::fs::read_to_string(f).ok())
+            .map(|s| tokens::count(&s).tokens).sum();
+        let sliced = tokens::count(&rendered).tokens;
+        match mode {
+            "--list" => println!("  {:<28} {:>7} -> {:>5} tok  ({:.0}%)  {:?}",
+                                 d.output.display(), full, sliced,
+                                 100.0 * sliced as f64 / full.max(1) as f64, d.rule),
+            "--check" => {
+                if current != rendered {
+                    println!("{}: DRIFT -- differs from what its source produces", d.output.display());
+                    drift += 1;
+                }
+            }
+            _ => {
+                if let Err(e) = std::fs::write(&out, &rendered) {
+                    eprintln!("bbx: {}: {e}", out.display());
+                    return ExitCode::from(2);
+                }
+                println!("  {:<28} {:>7} -> {:>5} tok", d.output.display(), full, sliced);
+            }
+        }
+    }
+    if mode == "--check" {
+        // V3: report what was CHECKED, not only what failed.
+        println!("\n  {} slice(s) checked · {drift} drifted", decls.len());
+        if drift > 0 {
+            println!("  regenerate with `bbx slice`, or fix the source");
+            return ExitCode::from(1);
+        }
+    }
+    ExitCode::SUCCESS
 }

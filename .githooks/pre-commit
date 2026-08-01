@@ -11,4 +11,5 @@ fi
 export RUSTFLAGS="-D warnings"
 "$CARGO" build --offline -q
 "$CARGO" test  --offline -q >/dev/null
+./target/debug/bbx slice --check
 ./target/debug/bbx check

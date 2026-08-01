@@ -1,0 +1,5 @@
+# <output>  <source>  <rule>
+# Slices are GENERATED. Editing an output is drift that `bbx slice --check`
+# catches. Sources are LOCAL: remote arrives via a pinned flake input, never
+# an HTTP fetch from here.
+src/tdd/principles.txt   vendor/principles/*.md   lead:1
