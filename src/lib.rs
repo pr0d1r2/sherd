@@ -5,5 +5,6 @@
 //! implement (V51).
 
 pub mod fed;
+pub mod lens;
 pub mod spec;
 pub mod tokens;
