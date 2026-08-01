@@ -137,20 +137,34 @@ pub fn missing_not_owns(edges: &[Edge]) -> Vec<&Edge> {
 ///
 /// GENERATED, never authored (`.:V83`). A hand-drawn architecture diagram is a
 /// second reading of what `§F` already declares, and the two drift.
+///
+/// Deliberately plain: nodes declared once, no HTML in labels, ASCII only.
+/// GitLab renders mermaid with `htmlLabels` disabled, so `<br/>` and `<i>`
+/// do not render and can wedge the parser (B6 here).
 #[must_use]
 pub fn mermaid(root: &Path) -> String {
-    let mut out = String::from("flowchart TD\n");
+    let mut defs = String::new();
+    let mut links = String::new();
+    let mut seen: Vec<String> = Vec::new();
+    let mut declare = |defs: &mut String, seen: &mut Vec<String>, id: &str, text: String| {
+        if !seen.iter().any(|s| s == id) {
+            seen.push(id.to_string());
+            defs.push_str(&format!("    {id}[\"{text}\"]\n"));
+        }
+    };
     for node in discover(root) {
         let rel = node.strip_prefix(root).unwrap_or(&node);
         let from = label(rel);
+        declare(&mut defs, &mut seen, &from, disp(rel));
         let Ok(text) = std::fs::read_to_string(node.join("SPEC.md")) else { continue };
         for e in edges(&text) {
             let child = rel.join(&e.dir);
-            out.push_str(&format!("    {}[\"{}\"] --> {}[\"{}<br/><i>{}</i>\"]\n",
-                from, disp(rel), label(&child), e.dir, trim(&e.owns, 46)));
+            let id = label(&child);
+            declare(&mut defs, &mut seen, &id, format!("{}: {}", e.dir, trim(&e.owns, 40)));
+            links.push_str(&format!("    {from} --> {id}\n"));
         }
     }
-    out
+    format!("flowchart TD\n{defs}{links}")
 }
 
 /// The same graph in graphviz `dot`.
@@ -178,14 +192,21 @@ fn disp(p: &Path) -> String {
     if s.is_empty() { ".".into() } else { s }
 }
 
-/// Label text safe for a mermaid node: no pipes, backticks or quotes, which
-/// break the parser inside a bracketed label.
+/// Label text safe for a mermaid node: ASCII only, no pipes, backticks,
+/// quotes, brackets or HTML -- each of which breaks a bracketed label.
 fn trim(s: &str, n: usize) -> String {
     let clean: String = s.chars()
-        .map(|c| match c { '|' => '/', '`' | '"' => '\'', _ => c })
+        .map(|c| match c {
+            '|' => '/', '`' | '"' | '\'' => ' ',
+            '[' | ']' | '{' | '}' | '<' | '>' | '(' | ')' => ' ',
+            '\u{a7}' => 'S', '\u{2192}' => '-', '\u{22a5}' => '!',
+            c if c.is_ascii() => c,
+            _ => ' ',
+        })
         .collect();
+    let clean = clean.split_whitespace().collect::<Vec<_>>().join(" ");
     if clean.chars().count() <= n { clean }
-    else { format!("{}…", clean.chars().take(n - 1).collect::<String>()) }
+    else { format!("{}...", clean.chars().take(n - 3).collect::<String>()) }
 }
 
 #[cfg(test)]
@@ -215,18 +236,31 @@ mod tests {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
         let m = mermaid(root);
         assert!(m.starts_with("flowchart TD"), "{m}");
-        assert!(m.contains("--> src["), "root must point at src: {m}");
-        assert!(m.contains("src_tdd["), "src must point at its children: {m}");
+        assert!(m.contains("root --> src\n"), "root must point at src: {m}");
+        assert!(m.contains("src --> src_tdd"), "src must point at its children: {m}");
     }
 
     #[test]
-    fn mermaid_labels_carry_no_parser_breaking_chars() {
+    fn mermaid_is_plain_and_ascii() {
         let m = mermaid(Path::new(env!("CARGO_MANIFEST_DIR")));
-        for line in m.lines().skip(1) {
-            let label = line.split_once("<i>").map(|(_, r)| r).unwrap_or("");
-            assert!(!label.contains('|') && !label.contains('`'),
-                    "label breaks mermaid: {line}");
+        assert!(!m.contains("<br"), "no HTML: GitLab disables htmlLabels");
+        assert!(!m.contains("<i>"), "no HTML: GitLab disables htmlLabels");
+        assert!(m.is_ascii(), "non-ascii in diagram: {m}");
+        for l in m.lines().filter(|l| l.contains('[')) {
+            let inner = l.split_once('[').unwrap().1;
+            assert_eq!(inner.matches('[').count(), 0, "nested bracket: {l}");
         }
+    }
+
+    #[test]
+    fn mermaid_declares_each_node_once() {
+        let m = mermaid(Path::new(env!("CARGO_MANIFEST_DIR")));
+        let mut ids: Vec<&str> = m.lines().filter(|l| l.contains('['))
+            .filter_map(|l| l.trim().split_once('[')).map(|(i, _)| i).collect();
+        let n = ids.len();
+        ids.sort_unstable();
+        ids.dedup();
+        assert_eq!(ids.len(), n, "a node is declared more than once");
     }
 
     #[test]
