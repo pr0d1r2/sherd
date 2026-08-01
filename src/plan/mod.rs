@@ -255,6 +255,44 @@ mod tests {
     }
 
     #[test]
+    fn propose_moves_a_single_node_row() {
+        assert_eq!(propose("orphan check: SPEC w/o parent §F row"), Proposal::Move("fed"));
+        assert_eq!(propose("tier select from bbx.toml"), Proposal::Move("tokens"));
+    }
+
+    #[test]
+    fn propose_decomposes_a_multi_node_row() {
+        match propose("`§F`.tokens staleness, tier-tagged") {
+            Proposal::Decompose(ns) => assert!(ns.len() > 1, "{ns:?}"),
+            other => panic!("expected Decompose, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn propose_keeps_a_row_with_no_node_vocabulary() {
+        assert_eq!(propose("report the caveman finding upstream"), Proposal::Keep);
+    }
+
+    #[test]
+    fn triage_never_proposes_moving_a_row_to_where_it_already_is() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        for (t, _, p) in triage(root) {
+            if let Proposal::Move(n) = p {
+                assert!(!t.node.file_name().is_some_and(|f| f == n),
+                        "{} {} proposed to move to its own node", t.node.display(), t.id);
+            }
+        }
+    }
+
+    #[test]
+    fn triage_returns_only_unmanaged_rows() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        for (t, k, _) in triage(root) {
+            assert!(!k.actionable(), "{} {} is actionable, should not be triaged", t.node.display(), t.id);
+        }
+    }
+
+    #[test]
     fn cited_invariant_takes_the_first_v_id() {
         let mk = |c: &str| Task { node: PathBuf::from("src/fed"), id: "T4".into(),
             status: '.', text: "x".into(), cites: c.into() };
@@ -286,6 +324,68 @@ mod tests {
         assert!(p.steps.len() <= HORIZON, "{} steps", p.steps.len());
         assert!(p.total_open >= p.steps.len());
     }
+}
+
+// ---- triage: where does an unmanaged row belong? ----
+
+/// Node keywords. A row naming exactly one node's vocabulary probably belongs
+/// to that node. ADVISORY -- prose classification is wrong-by-default (V4,
+/// B1), so this proposes and a reader decides.
+const VOCAB: [(&str, &[&str]); 9] = [
+    ("fed",    &["§f", "§n", "edge", "dag", "cycle", "chain", "discover", "graph", "orphan", "promotion"]),
+    ("lens",   &["lens", "pack", "budget", "depth", "why", "facet"]),
+    ("tokens", &["token", "tier", "itok", "count", "ceiling"]),
+    ("spec",   &["cavespec", "section", "record", "format", "fmt"]),
+    ("ollama", &["ollama", "endpoint", "retry", "model"]),
+    ("tdd",    &["tdd", "judge", "red", "green", "repair"]),
+    ("plan",   &["plan", "apply", "horizon", "needs", "actionable"]),
+    ("review", &["review", "unwired", "negative"]),
+    ("state",  &["state", "cache", "idempot"]),
+];
+
+/// What triage proposes for one row.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Proposal {
+    /// Work lands in exactly one node: move the row there.
+    Move(&'static str),
+    /// Names several nodes' work: split into one row per node.
+    Decompose(Vec<&'static str>),
+    /// No node vocabulary -- root, CLI, or research. Read it.
+    Keep,
+}
+
+/// Propose where a row belongs, from the vocabulary it uses.
+#[must_use]
+pub fn propose(text: &str) -> Proposal {
+    let t = text.to_lowercase();
+    let hits: Vec<&'static str> = VOCAB.iter()
+        .filter(|(_, ks)| ks.iter().any(|k| t.contains(k)))
+        .map(|(n, _)| *n)
+        .collect();
+    match hits.len() {
+        1 => Proposal::Move(hits[0]),
+        0 => Proposal::Keep,
+        _ => Proposal::Decompose(hits),
+    }
+}
+
+/// Every unmanaged row with a proposal and the reason it is unmanaged.
+#[must_use]
+pub fn triage(root: &Path) -> Vec<(Task, Kind, Proposal)> {
+    open_tasks(root).into_iter()
+        .map(|t| {
+            let k = classify(&root.join(&t.node), &t.text);
+            let mut p = propose(&t.text);
+            // A row already living in the node it names is not a move.
+            if let Proposal::Move(n) = p {
+                if t.node.file_name().is_some_and(|f| f == n) {
+                    p = Proposal::Keep;
+                }
+            }
+            (t, k, p)
+        })
+        .filter(|(_, k, _)| !k.actionable())
+        .collect()
 }
 
 // ---- apply: execute exactly one step, then stop ----

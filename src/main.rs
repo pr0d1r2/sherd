@@ -13,6 +13,7 @@ bbx -- federated SPEC.md for small-context local models
   bbx check [dir]      cavespec structural check of every node
   bbx graph [--tree|--table|--dot]  federation DAG, generated from §F
   bbx plan             next 3 steps, with what would invalidate each
+  bbx plan --triage    unmanaged rows, with a proposed home for each
   bbx apply            execute step 1 only, commit it, then stop
   bbx ask <dir> <q>    ask the endpoint from a node's lens pack
   bbx tdd <dir> <Vn> <task>   red -> judge -> green -> gate -> repair
@@ -49,6 +50,7 @@ fn main() -> ExitCode {
             ExitCode::SUCCESS
         }
         Some("check") => check(&root),
+        Some("plan") if args.get(1).map(String::as_str) == Some("--triage") => triage_cmd(&root),
         Some("plan") => plan_cmd(&root),
         #[cfg(feature = "ollama")]
         Some("apply") => match plan::apply(&root, 3) {
@@ -285,5 +287,39 @@ fn plan_cmd(root: &Path) -> ExitCode {
     }
     println!("\nRun `bbx plan` again after each apply -- applying a task edits\nthe spec that plans the next one, so this list goes stale.");
     st.save();
+    ExitCode::SUCCESS
+}
+
+fn triage_cmd(root: &Path) -> ExitCode {
+    let rows = plan::triage(root);
+    let mut moves: std::collections::BTreeMap<&str, Vec<(String, String)>> =
+        std::collections::BTreeMap::new();
+    let (mut decompose, mut keep) = (Vec::new(), Vec::new());
+    for (t, k, p) in &rows {
+        let id = format!("{} {}", t.node.display(), t.id);
+        match p {
+            plan::Proposal::Move(n) => moves.entry(n).or_default().push((id, t.text.clone())),
+            plan::Proposal::Decompose(ns) => decompose.push((id, t.text.clone(), ns.join(" + "))),
+            plan::Proposal::Keep => keep.push((id, t.text.clone(), k.why())),
+        }
+    }
+    println!("TRIAGE of {} unmanaged rows -- ADVISORY, prose classification is\n\
+              wrong-by-default (plan V4). Confirm each before moving.\n", rows.len());
+    let total: usize = moves.values().map(Vec::len).sum();
+    println!("MOVE to a node ({total}):");
+    for (node, rs) in &moves {
+        println!("  -> src/{node}");
+        for (id, text) in rs {
+            println!("       {id:14} {}", text.chars().take(66).collect::<String>());
+        }
+    }
+    println!("\nDECOMPOSE, spans several nodes ({}):", decompose.len());
+    for (id, text, ns) in &decompose {
+        println!("  {id:14} [{ns}]  {}", text.chars().take(50).collect::<String>());
+    }
+    println!("\nKEEP at root ({}):", keep.len());
+    for (id, text, why) in &keep {
+        println!("  {id:14} {:<48} ({why})", text.chars().take(48).collect::<String>());
+    }
     ExitCode::SUCCESS
 }
