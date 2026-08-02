@@ -26,6 +26,7 @@ V12: an ABORT still teaches — record what it managed as a FLOOR for that step 
 V13: telemetry RETAINED raw, ⊥ folded away. an average cannot be re-derived into a median, a percentile or a per-size fit; samples can become all three
 V14: prefill rate is a fn of SIZE — 1,519 @ 7k · 1,233 @ 15k · 941 @ 28k (`.:R17`) ∴ bucketed, ⊥ one scalar wrong at both ends
 V15: `load_duration` > 500ms = COLD endpoint. disk time, ⊥ prefill ∴ subtracted before learning & reported
+V18: a FAILING post is retried, BOUNDED — attempts capped & the delay between them grows. 0 retries turns one dropped packet into a failed run; unbounded retries turn a dead endpoint into a hang, which is the silence `.:V21` exists to end. the cap is the invariant, ⊥ the retrying
 V17: sampling is EXPLICIT (`Sampling`), ⊥ hardcoded — it changes what a call MEANS. @ temp 0 model deterministic (`.:V17`) ∴ 2 calls on 1 prompt = 1 call run twice. any temp > 0 ! carry a SEED — diversity w/o reproducibility makes a failure impossible to re-examine & "it was different that time" is the explanation `.:V17` refuses
 V16: IO goes through `Transport` ∴ a caller can substitute one that fails on demand. w/o a seam there is nothing to wrap & the model faked the transport instead (B7). `Http` is the real one; the core stays networkless w/o the feature
 
@@ -34,7 +35,7 @@ V16: IO goes through `Transport` ∴ a caller can substitute one that fails on d
 id|status|task|cites
 T1|x|`generate` + `Reply` w/ server-counted tokens|V1,V2,V3
 T2|x|`rust_block` fence extraction + unterminated-fence guard|V4
-T3|.|`post_with_retry(&dyn Transport, url, body, timeout, attempts)` — a NEW fn that retries a failing post w/ bounded backoff. ⊥ touch `generate_via`|V16
+T3|.|`post_with_retry(&dyn Transport, url, body, timeout, attempts)` — a NEW fn that retries a failing post w/ bounded backoff. ⊥ touch `generate_via`|V18,V16
 T4|x|streaming + pace model + escalation guards|V5,V7
 T5|x|learned rates persisted, cache-hit detection|V8,V9,V10
 T6|x|raw telemetry retained, deduped, bounded; per-size derived rates|V13,V14

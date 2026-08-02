@@ -444,6 +444,29 @@ pub fn candidate_count() -> usize {
         .clamp(1, 5)
 }
 
+/// The function a task NAMES, when it names one.
+///
+/// A backticked identifier followed by `(` -- so "`post_with_retry(&dyn
+/// Transport, ...)`" yields `post_with_retry`, while a bare "`generate_via`"
+/// mentioned in passing yields nothing. Naming a function with an argument
+/// list is how a row says "write THIS"; naming one without is how it refers
+/// to something that already exists.
+#[must_use]
+pub fn named_fn(task: &str) -> Option<String> {
+    task.split('`').skip(1).step_by(2).find_map(|seg| {
+        let name = seg.split('(').next()?.trim();
+        if seg.contains('(')
+            && !name.is_empty()
+            && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+            && !name.starts_with(|c: char| c.is_ascii_digit())
+        {
+            Some(name.to_string())
+        } else {
+            None
+        }
+    })
+}
+
 /// A judge's verdict. YES on the first line, or it is not a yes.
 ///
 /// One reading of one rule: both judges parse verdicts the same way, so a
@@ -535,6 +558,22 @@ pub fn drive_from(root: &Path, node: &Path, owner: &Path, invariant: &str,
         };
         let label: &'static str = if attempt == 0 { "1 red-test" } else { "1 red-retry" };
         test_fn = ollama::rust_block(&run(&prompt, label, &mut log)?);
+
+        // Deterministic, before the judge, at zero tokens: if the row names
+        // the function to write, the test has to CALL it. Measured -- the row
+        // named `post_with_retry`, the test drove `generate_via` instead, the
+        // judge said YES, and step 2 then had no new function to write so it
+        // rewrote the old one. 10 round-trips, 25,991 tokens, 4 compile errors
+        // including a redefinition (B23).
+        if let Some(name) = named_fn(task) {
+            if !test_fn.contains(&format!("{name}(")) {
+                objection = format!(
+                    "the task names `{name}` and this test never calls it. \
+                     Write a test that calls `{name}` directly.");
+                eprintln!("  contract: test does not call `{name}` -- rejected locally");
+                continue;
+            }
+        }
 
         let verdict = run(&format!(
             "{NOTATION}\n--- data model ---\n{surface}\n\nInvariant:\n  {inv}\n\n\
@@ -703,6 +742,22 @@ pub fn classify_failure(report: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_task_that_names_a_function_names_it_with_parens() {
+        // The row that cost 25,991 tokens: it named the function to write and
+        // the test drove a different one.
+        assert_eq!(named_fn("`post_with_retry(&dyn Transport, url, body)` -- a NEW fn"),
+                   Some("post_with_retry".into()));
+        // A function mentioned WITHOUT an argument list is a reference to
+        // something that exists, not an instruction to write it. The same row
+        // said "do not touch `generate_via`" and that must not become the
+        // contract.
+        assert_eq!(named_fn("wire `generate_via` to the retry path"), None);
+        assert_eq!(named_fn("record per-request template overhead"), None);
+        // First named wins, and prose in backticks is not a function.
+        assert_eq!(named_fn("`§F` rows, then `depth(edges)`"), Some("depth".into()));
+    }
 
     #[test]
     fn an_unkept_run_restores_the_module() {
