@@ -34,7 +34,7 @@ V16: IO goes through `Transport` ∴ a caller can substitute one that fails on d
 id|status|task|cites
 T1|x|`generate` + `Reply` w/ server-counted tokens|V1,V2,V3
 T2|x|`rust_block` fence extraction + unterminated-fence guard|V4
-T3|.|retry w/ bounded backoff around `Transport::post`|V16
+T3|.|`post_with_retry(&dyn Transport, url, body, timeout, attempts)` — a NEW fn that retries a failing post w/ bounded backoff. ⊥ touch `generate_via`|V16
 T4|x|streaming + pace model + escalation guards|V5,V7
 T5|x|learned rates persisted, cache-hit detection|V8,V9,V10
 T6|x|raw telemetry retained, deduped, bounded; per-size derived rates|V13,V14
@@ -42,6 +42,7 @@ T7|x|cold-endpoint detection, excluded from rate learning|V15
 T8|.|probe the endpoint's tier and warn when falling back|V3
 T9|x|`Transport` seam + `generate_via`|V16
 T10|x|`Sampling` threaded to the request body, verified via a spy transport|V17,V16
+T12|.|wire `generate_via` → `post_with_retry`. REPLACES a call site ∴ ⊥ drivable by the loop (`plan:V13`)|V16,T3
 
 ## §B BUGS
 

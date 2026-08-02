@@ -85,7 +85,13 @@ pub fn classify(node: &Path, text: &str) -> Kind {
     // function", not merely when it fails to match known-bad shapes. The
     // blacklist marked "replace the hand-rolled walk" actionable, and the loop
     // cannot replace anything (B4).
-    if word(&["replace", "remove", "port", "migrate", "rewrite", "delete", "supersede"]) {
+    // POSITION words name where new code goes RELATIVE to existing code, and
+    // every such position requires editing an existing call site. The loop
+    // only appends, so these are replacements however the row is phrased --
+    // "retry with bounded backoff AROUND `Transport::post`" reads as adding
+    // one function and cannot be done by adding one function (B9).
+    if word(&["replace", "remove", "port", "migrate", "rewrite", "delete", "supersede",
+              "around", "wrap", "inside"]) {
         Kind::Replaces
     } else if word(&["blocked", "needs", "promote", "wire", "move", "record", "flip", "plant"]) {
         Kind::NotAFunction
@@ -311,6 +317,23 @@ mod tests {
         let n = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/fed");
         assert_eq!(classify(&n, "replace the hand-rolled walk with `itok::walk`"), Kind::Replaces);
         assert!(!Kind::Replaces.actionable());
+    }
+
+    #[test]
+    fn a_row_that_names_a_position_is_a_replacement() {
+        // The row that cost two runs and 17,551 tokens. It reads as "add one
+        // function" and every verb-based check passed it, but "AROUND an
+        // existing function" means editing that function's call site, which
+        // the loop cannot do (B9).
+        let n = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/ollama");
+        for row in ["retry w/ bounded backoff around `Transport::post`",
+                    "wrap the transport in a retrying decorator",
+                    "cache lookups inside `generate_via`"] {
+            assert_eq!(classify(&n, row), Kind::Replaces, "should not be drivable: {row}");
+        }
+        // Still whitelist, not blacklist: adding a free function stays actionable.
+        assert_eq!(classify(&n, "`backoff_delay(attempt)` returns the delay before one retry"),
+                   Kind::NodeFn);
     }
 
     #[test]
