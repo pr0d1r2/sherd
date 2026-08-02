@@ -354,6 +354,45 @@ pub fn best(cands: &[Candidate]) -> Option<usize> {
         .next()
 }
 
+/// What a field of candidates earned.
+#[derive(Debug, PartialEq, Eq)]
+pub enum Pick {
+    /// One candidate is green and clean. Keep it.
+    Merit(usize),
+    /// Nobody finished -- every candidate is red. Not a bad field, an
+    /// UNFINISHED one, so it goes to repair like a single attempt would.
+    Unfinished(usize),
+    /// Something compiled and passed, and still carries a finding. Revert.
+    NoWinner,
+}
+
+/// Judge the field.
+///
+/// Measured (T13, N=3): all three candidates came back red with one finding
+/// each, and the first cut of this rule disqualified all three and reverted --
+/// so asking for MORE candidates removed repair entirely and made the loop
+/// strictly worse than N=1. A red gate is not a verdict, it is an unfinished
+/// attempt; repair is the step that exists to answer it.
+///
+/// Green AND carrying a finding is different, and stays fatal. That is the
+/// stub signature -- `Vec::new()` compiles, passes, and reads as coverage --
+/// and repair does not fix a stub, it polishes one.
+#[must_use]
+pub fn select(cands: &[Candidate]) -> Pick {
+    if let Some(i) = best(cands) {
+        return Pick::Merit(i);
+    }
+    if cands.is_empty() {
+        return Pick::NoWinner;
+    }
+    if cands.iter().any(|c| c.green) {
+        return Pick::NoWinner;
+    }
+    // All red. Candidate 0 is the deterministic call -- repair the same thing
+    // a single-candidate run would have repaired, so N>1 can never do worse.
+    Pick::Unfinished(0)
+}
+
 /// How many implementations compete at step 2. `BBX_CANDIDATES`, default 1.
 ///
 /// Default 1 costs exactly what today costs: candidate 0 IS the deterministic
@@ -516,28 +555,36 @@ pub fn drive_from(root: &Path, node: &Path, owner: &Path, invariant: &str,
         let added = crate::review::public_fns(&code);
         let cur = std::fs::read_to_string(&mod_path).map_err(|e| e.to_string())?;
         let (ci, ct) = split_module(&cur);
-        let findings = crate::review::unwired(ci, ct, &added).len()
-            + crate::review::negative_only(ct, &added).len()
-            + crate::review::ignored_input(&code, &added).len();
+        let mut found = crate::review::unwired(ci, ct, &added);
+        found.extend(crate::review::negative_only(ct, &added));
+        found.extend(crate::review::ignored_input(&code, &added));
         if n > 1 {
-            eprintln!("  candidate {k}: {} · {findings} finding(s)",
-                      if g { "gate GREEN" } else { "gate red" });
+            // Name them. Three candidates scoring "1 finding" told me nothing
+            // about whether it was one shared defect or three different ones.
+            eprintln!("  candidate {k}: {} · {}",
+                      if g { "gate GREEN" } else { "gate red" },
+                      if found.is_empty() { "clean".to_string() }
+                      else { found.iter().map(|f| f.rule.to_string())
+                                  .collect::<Vec<_>>().join(", ") });
         }
-        cands.push(Candidate { code, green: g, findings });
+        cands.push(Candidate { code, green: g, findings: found.len() });
         results.push((g, o));
     }
 
-    // A red gate is not disqualifying when there is nothing to compete with:
-    // repair exists precisely to fix one. It disqualifies only in a field.
-    let pick = if n == 1 { 0 } else {
-        match best(&cands) {
-            Some(i) => { eprintln!("  merit: candidate {i} of {n} kept"); i }
-            None => {
-                std::fs::write(&mod_path, &original).map_err(|e| e.to_string())?;
-                return Err(format!(
-                    "{n} candidates, none earned it -- reverted. keeping the least bad \
-                     of a bad field is how a stub wins by default"));
-            }
+    let pick = match select(&cands) {
+        Pick::Merit(i) => {
+            if n > 1 { eprintln!("  merit: candidate {i} of {n} kept"); }
+            i
+        }
+        Pick::Unfinished(i) => {
+            if n > 1 { eprintln!("  merit: all {n} red -- repairing candidate {i}"); }
+            i
+        }
+        Pick::NoWinner => {
+            std::fs::write(&mod_path, &original).map_err(|e| e.to_string())?;
+            return Err(format!(
+                "{n} candidate(s) green but carrying findings -- reverted. repair \
+                 polishes a stub, it does not fix one"));
         }
     };
     std::fs::write(&mod_path, insert_impl(&with_test, &cands[pick].code)).map_err(|e| e.to_string())?;
@@ -631,6 +678,26 @@ mod tests {
         // does not.
         assert_eq!(best(&[cand(false, 0), cand(true, 2), cand(false, 9)]), None);
         assert_eq!(best(&[]), None);
+    }
+
+    #[test]
+    fn an_all_red_field_is_unfinished_not_bad() {
+        // MEASURED, N=3: all three candidates came back red, the first rule
+        // disqualified all three, and asking for more candidates therefore
+        // removed repair. More competition made the loop strictly worse.
+        assert_eq!(select(&[cand(false, 1), cand(false, 1), cand(false, 1)]),
+                   Pick::Unfinished(0), "repair is what answers a red gate");
+        // and it repairs candidate 0, so N>1 can never do worse than N=1
+        assert_eq!(select(&[cand(false, 9)]), Pick::Unfinished(0));
+    }
+
+    #[test]
+    fn green_with_a_finding_stays_fatal() {
+        // The stub signature: compiles, passes, reads as coverage. Repair
+        // polishes one, it does not fix one.
+        assert_eq!(select(&[cand(true, 1), cand(false, 0)]), Pick::NoWinner);
+        assert_eq!(select(&[cand(true, 0), cand(true, 1)]), Pick::Merit(0));
+        assert_eq!(select(&[]), Pick::NoWinner);
     }
 
     #[test]
