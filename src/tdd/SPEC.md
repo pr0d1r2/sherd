@@ -32,6 +32,7 @@ V19: step 2 & repair see SIGNATURES ⊥ bodies. surface-by-EXAMPLE induces imita
 V21: a step that takes >10s ! report BEFORE it starts & stream while it runs. silence is indistinguishable from a hang — `.:V48` applied to a live process, ⊥ only to a report (B19)
 V20: constrain what the model SEES, ⊥ ask it for good behaviour. asking to reuse produced WORSE code (data-laundering `sanitize_first_cell`); removing the bodies fixed it w/ no instruction at all
 V22: the impl judge sees invariant + impl, NEVER the test — the MIRROR of V3, ⊥ a second opinion. every stub in §B passed because test & impl AGREED; agreement is invisible to a reviewer holding both & obvious to two each holding one. giving either judge the other side restores the blind spot it exists to cover
+V23: step 2 is a FIELD, ⊥ a first draft. N candidates compete on the SAME evidence (gate + mechanical review) & a red gate | any finding DISQUALIFIES, ⊥ merely ranks — ranking always returns something ∴ least-bad stub wins by default. no survivor → revert & fail, ⊥ keep the least bad. tie → candidate 0 (the temp-0 call): merit ! be DEMONSTRATED to displace determinism
 V18: step 2 gets the CONTRACT — the calls the test makes that ⊥ exist yet, extracted deterministically (`.:V18`). the SIGNATURE constrains the design: `check_edge_depth(text)` took no path ∴ no walking ∴ no ignore-glob violation & no temp dir. fixing a NAME mismatch removed 3 unrelated defects (B12)
 
 ## §T TASKS
@@ -48,6 +49,8 @@ T8|.|record per-request template overhead (~67 tok, measured) in entry-cost acco
 T9|x|step 2 ! define exactly the fn the test calls — pass the expected signature|V18
 T10|x|blind impl judge after green — `blind_prompt`, `is_yes`|V22,V11
 T11|.|MEASURE V22 — runner `blind_lens_vs_the_recorded_stubs` (`#[ignore]`, 5 real stubs) EXISTS but is UNRUN: both endpoints down 2026-08-02. V22 is BELIEF until it prints a number|V22
+T12|x|`Candidate`, `best`, `candidate_count` + N-candidate step 2|V23
+T13|.|MEASURE V23: @ N=3, how often does a non-0 candidate win, & does it survive review? UNRUN — needs the endpoint. cost is N round-trips + N full gate runs, unmeasured|V23
 
 ## §B BUGS
 

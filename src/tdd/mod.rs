@@ -204,6 +204,11 @@ fn tail(s: &str, n: usize) -> &str {
 }
 
 fn run(prompt: &str, label: &'static str, log: &mut Vec<Step>) -> Result<String, String> {
+    run_sampled(prompt, label, ollama::Sampling::DETERMINISTIC, log)
+}
+
+fn run_sampled(prompt: &str, label: &'static str, sampling: ollama::Sampling,
+               log: &mut Vec<Step>) -> Result<String, String> {
     use std::io::Write;
     // Count locally too: the server's number and ours must agree, and a
     // silent divergence means the prompt is not what this code thinks it is.
@@ -221,7 +226,7 @@ fn run(prompt: &str, label: &'static str, log: &mut Vec<Step>) -> Result<String,
         eprintln!("\n--- prompt [{label}] ---\n{prompt}\n--- end prompt ---");
     }
     let mut n = 0usize;
-    let r = ollama::generate_labelled(prompt, label, eta, &mut |chunk| {
+    let r = ollama::generate_sampled(prompt, label, sampling, eta, &mut |chunk| {
         if ollama::verbose() {
             eprint!("{chunk}");
         } else {
@@ -320,6 +325,48 @@ pub fn drive(root: &Path, node: &Path, invariant: &str, task: &str, max_repair: 
 /// As [`drive`], but the invariant is declared in `owner`, which may be an
 /// ancestor. A moved row cites the root invariant it answers to, and that
 /// invariant is not in the node's own spec (`.:plan` B6).
+/// One competing implementation, with the evidence about it.
+#[derive(Debug, Clone)]
+pub struct Candidate {
+    pub code: String,
+    /// `cargo build` + `cargo test` + `bbx check`, all green.
+    pub green: bool,
+    /// Mechanical review findings against what this candidate added.
+    pub findings: usize,
+}
+
+/// The winning candidate, or `None` when none of them earned it.
+///
+/// An idea meritocracy is not "rank them and take the top one". A red gate or
+/// a review finding DISQUALIFIES: those are the two signals that caught real
+/// stubs, so a candidate carrying one does not compete on the rest of its
+/// merits. If every candidate is disqualified the answer is `None` -- keeping
+/// the least-bad of a bad field is how a stub wins by default, and a wrong
+/// function is worse than none because it reads as coverage.
+///
+/// Ties go to the lowest index, which is candidate 0, which is the
+/// deterministic call. Merit has to be demonstrated to displace it.
+#[must_use]
+pub fn best(cands: &[Candidate]) -> Option<usize> {
+    cands.iter().enumerate()
+        .filter(|(_, c)| c.green && c.findings == 0)
+        .map(|(i, _)| i)
+        .next()
+}
+
+/// How many implementations compete at step 2. `BBX_CANDIDATES`, default 1.
+///
+/// Default 1 costs exactly what today costs: candidate 0 IS the deterministic
+/// call, so the selection path runs on every step rather than lying dormant
+/// until someone opts in.
+#[must_use]
+pub fn candidate_count() -> usize {
+    std::env::var("BBX_CANDIDATES").ok()
+        .and_then(|v| v.parse::<usize>().ok())
+        .unwrap_or(1)
+        .clamp(1, 5)
+}
+
 /// A judge's verdict. YES on the first line, or it is not a yes.
 ///
 /// One reading of one rule: both judges parse verdicts the same way, so a
@@ -445,20 +492,60 @@ pub fn drive_from(root: &Path, node: &Path, owner: &Path, invariant: &str,
                 wanted.join("\n"))
     };
     eprintln!("  contract: {}", if wanted.is_empty() { "(none detected)".into() } else { wanted.join(", ") });
-    let code = ollama::rust_block(&run(&format!(
+    let green_prompt = format!(
         "--- existing API (signatures; call these, do not reimplement) ---\n{surface}\n\n--- failing test ---\n```rust\n{test_fn}\n```\n\n\
          {contract}\
          --- failure ---\n{}\n\n\
          Write ONLY the new function(s) to ADD to the implementation so this test passes. \
          Do not restate existing code. \
-         Do not modify the test. Reply with a single ```rust fenced block.", tail(&red_out, 1500)), "2 green", &mut log)?);
-    let cur = std::fs::read_to_string(&mod_path).map_err(|e| e.to_string())?;
-    std::fs::write(&mod_path, insert_impl(&cur, &code)).map_err(|e| e.to_string())?;
+         Do not modify the test. Reply with a single ```rust fenced block.", tail(&red_out, 1500));
+
+    // 3 -- the competition. N candidates, each judged on the same evidence,
+    // best kept. At N=1 this is exactly the old single call: candidate 0 is
+    // the deterministic one, so nothing here is dormant until opted into.
+    let n = candidate_count();
+    let mut cands: Vec<Candidate> = Vec::new();
+    let mut results: Vec<(bool, String)> = Vec::new();
+    let with_test = std::fs::read_to_string(&mod_path).map_err(|e| e.to_string())?;
+    for k in 0..n {
+        let label: &'static str = if k == 0 { "2 green" } else { "2 green-alt" };
+        let code = ollama::rust_block(&run_sampled(&green_prompt, label,
+                                                   ollama::Sampling::candidate(k), &mut log)?);
+        std::fs::write(&mod_path, insert_impl(&with_test, &code)).map_err(|e| e.to_string())?;
+        let (g, o) = gate(root);
+        let added = crate::review::public_fns(&code);
+        let cur = std::fs::read_to_string(&mod_path).map_err(|e| e.to_string())?;
+        let (ci, ct) = split_module(&cur);
+        let findings = crate::review::unwired(ci, ct, &added).len()
+            + crate::review::negative_only(ct, &added).len()
+            + crate::review::ignored_input(&code, &added).len();
+        if n > 1 {
+            eprintln!("  candidate {k}: {} · {findings} finding(s)",
+                      if g { "gate GREEN" } else { "gate red" });
+        }
+        cands.push(Candidate { code, green: g, findings });
+        results.push((g, o));
+    }
+
+    // A red gate is not disqualifying when there is nothing to compete with:
+    // repair exists precisely to fix one. It disqualifies only in a field.
+    let pick = if n == 1 { 0 } else {
+        match best(&cands) {
+            Some(i) => { eprintln!("  merit: candidate {i} of {n} kept"); i }
+            None => {
+                std::fs::write(&mod_path, &original).map_err(|e| e.to_string())?;
+                return Err(format!(
+                    "{n} candidates, none earned it -- reverted. keeping the least bad \
+                     of a bad field is how a stub wins by default"));
+            }
+        }
+    };
+    std::fs::write(&mod_path, insert_impl(&with_test, &cands[pick].code)).map_err(|e| e.to_string())?;
     // Track exactly what we added, so repair REPLACES it rather than guessing
     // at a name prefix or rewriting the whole region (B5).
-    let mut last_added = code.clone();
+    let mut last_added = cands[pick].code.clone();
 
-    let (mut ok, mut out) = gate(root);
+    let (mut ok, mut out) = (results[pick].0, results[pick].1.clone());
     // 4 -- repair, capped. On exhaustion, report what was tried.
     for i in 0..max_repair {
         if ok { break }
@@ -532,6 +619,35 @@ pub fn classify_failure(report: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn cand(green: bool, findings: usize) -> Candidate {
+        Candidate { code: format!("fn c{findings}() {{}}"), green, findings }
+    }
+
+    #[test]
+    fn a_bad_field_has_no_winner() {
+        // The failure this rule exists to stop: ranking always returns
+        // something, so the least-bad stub wins by default. Disqualification
+        // does not.
+        assert_eq!(best(&[cand(false, 0), cand(true, 2), cand(false, 9)]), None);
+        assert_eq!(best(&[]), None);
+    }
+
+    #[test]
+    fn merit_must_be_demonstrated_to_displace_the_deterministic_call() {
+        // Candidate 0 is the temperature-0 call. A tie leaves it in place.
+        assert_eq!(best(&[cand(true, 0), cand(true, 0)]), Some(0));
+        // But it does not win by seniority: disqualified is disqualified.
+        assert_eq!(best(&[cand(true, 1), cand(true, 0)]), Some(1));
+        assert_eq!(best(&[cand(false, 0), cand(true, 0)]), Some(1));
+    }
+
+    #[test]
+    fn candidate_count_is_bounded_at_both_ends() {
+        // Not a correctness rule -- a cost rule. Each candidate is a
+        // round-trip plus a full gate run.
+        assert_eq!(candidate_count().clamp(1, 5), candidate_count());
+    }
 
     #[test]
     fn the_second_lens_is_never_shown_the_test() {

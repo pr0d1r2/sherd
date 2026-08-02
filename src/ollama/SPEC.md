@@ -26,6 +26,7 @@ V12: an ABORT still teaches — record what it managed as a FLOOR for that step 
 V13: telemetry RETAINED raw, ⊥ folded away. an average cannot be re-derived into a median, a percentile or a per-size fit; samples can become all three
 V14: prefill rate is a fn of SIZE — 1,519 @ 7k · 1,233 @ 15k · 941 @ 28k (`.:R17`) ∴ bucketed, ⊥ one scalar wrong at both ends
 V15: `load_duration` > 500ms = COLD endpoint. disk time, ⊥ prefill ∴ subtracted before learning & reported
+V17: sampling is EXPLICIT (`Sampling`), ⊥ hardcoded — it changes what a call MEANS. @ temp 0 model deterministic (`.:V17`) ∴ 2 calls on 1 prompt = 1 call run twice. any temp > 0 ! carry a SEED — diversity w/o reproducibility makes a failure impossible to re-examine & "it was different that time" is the explanation `.:V17` refuses
 V16: IO goes through `Transport` ∴ a caller can substitute one that fails on demand. w/o a seam there is nothing to wrap & the model faked the transport instead (B7). `Http` is the real one; the core stays networkless w/o the feature
 
 ## §T TASKS
@@ -40,6 +41,7 @@ T6|x|raw telemetry retained, deduped, bounded; per-size derived rates|V13,V14
 T7|x|cold-endpoint detection, excluded from rate learning|V15
 T8|.|probe the endpoint's tier and warn when falling back|V3
 T9|x|`Transport` seam + `generate_via`|V16
+T10|x|`Sampling` threaded to the request body, verified via a spy transport|V17,V16
 
 ## §B BUGS
 

@@ -311,6 +311,32 @@ fn num_ctx() -> u64 {
     std::env::var("BBX_NUM_CTX").ok().and_then(|v| v.parse().ok()).unwrap_or(131_072)
 }
 
+/// How to sample. Carried explicitly because it changes what a call MEANS:
+/// at temperature 0 this model is deterministic (V17, 3/3 identical), so two
+/// calls with the same prompt are one call run twice.
+///
+/// A seed is always sent, so a diverse candidate is still REPRODUCIBLE.
+/// Diversity without a seed would make a failure impossible to re-examine,
+/// and "it was different that time" is the explanation V17 exists to refuse.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Sampling {
+    pub temperature: f64,
+    pub seed: u64,
+}
+
+impl Sampling {
+    /// Temperature 0. Every step of the loop uses this unless asked otherwise.
+    pub const DETERMINISTIC: Self = Self { temperature: 0.0, seed: 0 };
+
+    /// The `k`th competing candidate. Candidate 0 IS the deterministic call --
+    /// so asking for one candidate is exactly today's behaviour, not a
+    /// differently-sampled approximation of it.
+    #[must_use]
+    pub fn candidate(k: usize) -> Self {
+        if k == 0 { Self::DETERMINISTIC } else { Self { temperature: 0.6, seed: k as u64 } }
+    }
+}
+
 /// Generate, STREAMING. Progress is reported as it arrives, because a
 /// 90-second silent wait is indistinguishable from a hang -- V48 applied to
 /// a running process rather than to a report.
@@ -351,7 +377,21 @@ pub fn generate_labelled(
     eta: Eta,
     on_chunk: &mut dyn FnMut(&str),
 ) -> Result<Reply, String> {
-    generate_via(&Http, prompt, label, eta, on_chunk)
+    generate_via(&Http, prompt, label, Sampling::DETERMINISTIC, eta, on_chunk)
+}
+
+/// As [`generate_labelled`], with explicit sampling.
+///
+/// # Errors
+/// See [`generate_labelled`].
+pub fn generate_sampled(
+    prompt: &str,
+    label: &str,
+    sampling: Sampling,
+    eta: Eta,
+    on_chunk: &mut dyn FnMut(&str),
+) -> Result<Reply, String> {
+    generate_via(&Http, prompt, label, sampling, eta, on_chunk)
 }
 
 /// As [`generate_labelled`], but posting through `transport`.
@@ -362,6 +402,7 @@ pub fn generate_via(
     transport: &dyn Transport,
     prompt: &str,
     label: &str,
+    sampling: Sampling,
     eta: Eta,
     on_chunk: &mut dyn FnMut(&str),
 ) -> Result<Reply, String> {
@@ -375,7 +416,8 @@ pub fn generate_via(
         "model": model(),
         "prompt": prompt,
         "stream": true,
-        "options": { "num_ctx": num_ctx(), "temperature": 0 },
+        "options": { "num_ctx": num_ctx(), "temperature": sampling.temperature,
+                     "seed": sampling.seed },
     });
     let started = Instant::now();
     let stream = transport.post(&format!("{}/api/generate", endpoint()),
@@ -517,9 +559,43 @@ mod tests {
         let body = "{\"response\":\"hi\",\"done\":false}\n\
                     {\"response\":\"\",\"done\":true,\"prompt_eval_count\":7,\"eval_count\":2}\n";
         let t = Flaky { fail_times: std::cell::Cell::new(0), body: body.into() };
-        let r = generate_via(&t, "p", "test", predict(10), &mut |_| {}).unwrap();
+        let r = generate_via(&t, "p", "test", Sampling::DETERMINISTIC, predict(10),
+                             &mut |_| {}).unwrap();
         assert_eq!(r.text, "hi");
         assert_eq!((r.prompt_tokens, r.eval_tokens), (7, 2));
+    }
+
+    /// Records what was actually POSTed. The seam exists so a claim about the
+    /// request can be checked without an endpoint.
+    struct Spy(std::cell::RefCell<String>);
+    impl Transport for Spy {
+        fn post(&self, _u: &str, b: &str, _t: Duration)
+            -> Result<Box<dyn BufRead + Send>, String> {
+            self.0.replace(b.to_string());
+            Ok(Box::new(std::io::Cursor::new(
+                "{\"response\":\"x\",\"done\":true}\n".as_bytes().to_vec())))
+        }
+    }
+
+    fn posted(s: Sampling) -> serde_json::Value {
+        let spy = Spy(std::cell::RefCell::new(String::new()));
+        generate_via(&spy, "p", "test", s, predict(10), &mut |_| {}).unwrap();
+        let body = spy.0.borrow().clone();
+        serde_json::from_str(&body).unwrap()
+    }
+
+    #[test]
+    fn sampling_reaches_the_request_and_candidates_differ() {
+        let zero = posted(Sampling::candidate(0));
+        assert_eq!(zero["options"]["temperature"], 0.0,
+                   "candidate 0 must be today's deterministic call, unchanged");
+
+        let two = posted(Sampling::candidate(2));
+        assert!(two["options"]["temperature"].as_f64().unwrap() > 0.0,
+                "a competing candidate at temperature 0 is the same call twice (V17)");
+        assert_eq!(two["options"]["seed"], 2,
+                   "diverse but REPRODUCIBLE -- an unseeded failure cannot be re-examined");
+        assert_ne!(zero["options"]["seed"], two["options"]["seed"]);
     }
 
     #[test]
