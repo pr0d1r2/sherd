@@ -176,15 +176,30 @@ fn insert_impl(src: &str, code: &str) -> String {
 
 /// Step 3. Local, deterministic, zero tokens. Reports what RAN, not only what
 /// failed (root V48).
-pub fn gate(root: &Path) -> (bool, String) {
+/// # Errors
+/// The toolchain could not be RUN. That is not a red gate: a gate that did
+/// not execute has said nothing, and returning `false` for it made a missing
+/// `cargo` indistinguishable from a failing test. In `drive_from` that
+/// mattered -- step 1 requires the gate to be RED, so an absent toolchain
+/// read as "red as required" and the loop would have written code against a
+/// gate that never ran. `.:V48` for a subprocess (B24, tdd B17 recurring).
+pub fn gate(root: &Path) -> Result<(bool, String), String> {
     let cargo = std::env::var("BBX_CARGO").unwrap_or_else(|_| "cargo".into());
-    let out = Command::new(&cargo).args(["test", "--offline"]).current_dir(root).output();
+    // Same strictness as `.githooks/pre-commit`, deliberately: the loop's gate
+    // and the commit's gate must be ONE rule. `-D warnings` in BOTH, because
+    // `cargo build` does not compile `#[cfg(test)]` code and an unused import
+    // in a test module shipped through a gate that never saw it (fed B8).
+    let out = Command::new(&cargo).args(["test", "--offline"])
+        .env("RUSTFLAGS", "-D warnings").current_dir(root).output();
     let (tests_ok, mut report) = match out {
         Ok(o) => {
             let s = format!("{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr));
             (o.status.success(), format!("=== cargo test: {} ===\n{}", if o.status.success() { "PASS" } else { "FAIL" }, tail(&s, 2500)))
         }
-        Err(e) => (false, format!("=== cargo test: COULD NOT RUN ===\n{e}")),
+        Err(e) => return Err(format!(
+            "the gate could not RUN: `{cargo}` -- {e}. set BBX_CARGO or enter the \
+             dev shell. a gate that did not execute is not a gate that passed \
+             or failed")),
     };
     // spec::check runs in-process -- no subprocess, no stdout scraping.
     let mut viol = 0;
@@ -196,7 +211,11 @@ pub fn gate(root: &Path) -> (bool, String) {
     }
     report.push_str(&format!("\n=== bbx check: {} === {} nodes examined, {viol} violations\n",
         if viol == 0 { "PASS" } else { "FAIL" }, nodes.len()));
-    (tests_ok && viol == 0, report)
+    // Slice drift, by the same function `bbx slice --check` calls.
+    let drift = crate::slice::drifted(root)?;
+    report.push_str(&format!("=== slice: {} === {} drifted\n",
+        if drift.is_empty() { "PASS" } else { "FAIL" }, drift.len()));
+    Ok((tests_ok && viol == 0 && drift.is_empty(), report))
 }
 
 fn tail(s: &str, n: usize) -> &str {
@@ -303,7 +322,7 @@ pub fn oneshot(root: &Path, node: &Path, invariant: &str, task: &str) -> Result<
     }
     std::fs::write(&mod_path, insert_impl(&insert_test(&original, blocks[0]), blocks[1]))
         .map_err(|e| e.to_string())?;
-    let (ok, out) = gate(root);
+    let (ok, out) = gate(root)?;
     let sent: u64 = log.iter().map(|s| s.prompt_tokens).sum();
     eprintln!("\n  1 round-trip · {sent} tok sent · max single call {sent}");
     if ok { eprintln!("  VERDICT: MERGEABLE -- gates green"); Ok(log) }
@@ -597,7 +616,7 @@ pub fn drive_from(root: &Path, node: &Path, owner: &Path, invariant: &str,
     }
 
     std::fs::write(&mod_path, insert_test(&original, &test_fn)).map_err(|e| e.to_string())?;
-    let (red_ok, red_out) = gate(root);
+    let (red_ok, red_out) = gate(root)?;
     if red_ok {
         return Err("test passes already -- not a red test, nothing to drive".into());
     }
@@ -630,7 +649,7 @@ pub fn drive_from(root: &Path, node: &Path, owner: &Path, invariant: &str,
         let code = ollama::rust_block(&run_sampled(&green_prompt, label,
                                                    ollama::Sampling::candidate(k), &mut log)?);
         std::fs::write(&mod_path, insert_impl(&with_test, &code)).map_err(|e| e.to_string())?;
-        let (g, o) = gate(root);
+        let (g, o) = gate(root)?;
         let added = crate::review::public_fns(&code);
         let cur = std::fs::read_to_string(&mod_path).map_err(|e| e.to_string())?;
         let (ci, ct) = split_module(&cur);
@@ -697,7 +716,7 @@ pub fn drive_from(root: &Path, node: &Path, owner: &Path, invariant: &str,
         last_added = fixed.clone();
         std::fs::write(&mod_path, format!("{}\n\n{}", replaced.trim_end(), cur_tests))
             .map_err(|e| e.to_string())?;
-        let g = gate(root);
+        let g = gate(root)?;
         ok = g.0;
         out = g.1;
     }

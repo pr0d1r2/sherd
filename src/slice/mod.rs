@@ -112,6 +112,28 @@ pub fn parse_decls(text: &str) -> Result<Vec<Decl>, String> {
 /// Expand a source pattern to files. Supports one trailing `*` segment; a
 /// path with no glob is itself.
 #[must_use]
+/// Every declared slice whose file on disk differs from what its source
+/// renders to now.
+///
+/// One definition, called by `bbx slice --check` AND by the gate. The hook
+/// and the loop must apply the same rule; two implementations of one check is
+/// the defect this project exists to end (`.:V50`).
+///
+/// # Errors
+/// A missing or malformed `.bbx-slices`, or a source that cannot be rendered.
+pub fn drifted(root: &Path) -> Result<Vec<PathBuf>, String> {
+    let text = std::fs::read_to_string(root.join(".bbx-slices"))
+        .map_err(|e| format!(".bbx-slices: {e}"))?;
+    let mut out = Vec::new();
+    for d in parse_decls(&text)? {
+        let rendered = render(root, &d)?;
+        if std::fs::read_to_string(root.join(&d.output)).unwrap_or_default() != rendered {
+            out.push(d.output.clone());
+        }
+    }
+    Ok(out)
+}
+
 pub fn sources(root: &Path, pattern: &str) -> Vec<PathBuf> {
     let p = if Path::new(pattern).is_absolute() { PathBuf::from(pattern) } else { root.join(pattern) };
     let s = p.to_string_lossy().to_string();
