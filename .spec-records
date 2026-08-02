@@ -1,5 +1,5 @@
 # Closed decisions that must SURVIVE an edit: REJECTED, or DEFERRED under a
-# stated trigger. Baseline for `cavespec check --records .spec-records SPEC.md`.
+# stated trigger. Baseline for `microlith check --records .spec-records SPEC.md`.
 #
 # These live here and not in §R because §R is RESEARCH (external findings with
 # sources, FORMAT 4.1.0). A closed OPTION is a claim about a decision over

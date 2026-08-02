@@ -40,7 +40,7 @@ Sections: `§G` goal · `§C` constraints · `§I` interfaces · `§R` research 
 every measurement carries its source.
 
 Ids are node-scoped. Cite across nodes with the namespaced, backticked form
-`` `src/fed:V9` `` or cavespec reads it as dangling.
+`` `src/fed:V9` `` or microlith reads it as dangling.
 
 ## Writing a SPEC.md
 

@@ -78,7 +78,7 @@ knows when to stop looking. Also generated, by `bbx graph --table`:
 |---|---|---|
 | `src` | code nodes — tokens, spec, fed, lens facades & logic | inference harness, endpoint config |
 | `src/tokens` | `itok` facade, counts w/ method label, entry cost, working budget | spec structure, federation edges |
-| `src/spec` | `cavespec` facade, §-section split, structural check, fmt | token counts, `§F`/`§N` |
+| `src/spec` | `microlith` facade, §-section split, structural check, fmt | token counts, `§F`/`§N` |
 | `src/fed` | `§F` parse, edges, chain root→node, `SPEC.md` discovery | counting, rendering |
 | `src/lens` | pack assembly, depth `rule`\|`why`, budget verdict | parsing, counting internals |
 | `src/ollama` | local endpoint client, `num_ctx`, fence extraction | prompt construction, loop control |
@@ -115,14 +115,14 @@ decode. Federation is worth *more* on the slower machine.
 ## Use
 
 ```sh
-cargo build                      # deps: ../itok, ../cavespec (path deps)
+cargo build                      # deps: ../itok, ../microlith (path deps)
 export BBX_ENDPOINT=http://your-box:11434
 export BBX_MODEL=gpt-oss:20b
 
 bbx budget                       # token cost of every node
 bbx lens src/fed                 # the context pack for one node
 bbx graph                        # this diagram
-bbx check                        # cavespec structural check, every node
+bbx check                        # microlith structural check, every node
 bbx tdd src/fed V2 "<task>"      # red → judge → green → gate → repair
 bbx oneshot src/fed V2 "<task>"  # the monolith arm, for comparison
 ```
@@ -156,7 +156,7 @@ violation would disappear.
 
 Early. `budget`, `lens`, `fed`, `graph`, `check`, `ask`, `tdd` and `oneshot`
 work. `route`, `split`, `sync`, `validate`, `SPEC.why.md` and the file ceilings
-are specced and unbuilt. `§F`/`§N` are extensions cavespec cannot yet parse —
+are specced and unbuilt. `§F`/`§N` are extensions microlith cannot yet parse —
 they need to go upstream rather than fork the format.
 
 Two LLM-authored functions live in `src/fed/`, written by gpt-oss:20b through

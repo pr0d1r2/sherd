@@ -50,4 +50,4 @@ export RUSTFLAGS="-D warnings"
        \`tail -1\` as the next free id, it returns the HIGHEST EXISTING one:
          grep -oE '^V[0-9]+' src/<node>/SPEC.md | cut -c2- | sort -n | tail -1
        Rows sort by id within a section, so append IN ORDER -- inserting a
-       row above a lower id fails cavespec/V14."
+       row above a lower id fails microlith/V14."

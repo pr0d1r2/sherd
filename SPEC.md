@@ -13,17 +13,17 @@ src|code nodes — tokens, spec, fed, lens facades & logic|inference harness, en
 
 ## §C CONSTRAINTS
 
-- lang: Rust. stable. MSRV 1.82 (matches `itok`/`cavespec`).
+- lang: Rust. stable. MSRV 1.82 (matches `itok`/`microlith`).
 - target model: `gpt-oss:20b`, 131,072 ctx, local. ⊥ cloud fallback.
 - inference: local HTTP (Ollama) only. ⊥ network otherwise.
 - deterministic core: parse/DAG/budget/ceiling = pure Rust, ⊥ model. model ? prose gen & drift judgement only.
 - separator = **directory**. dir tree ! source of truth. ⊥ manifest, ⊥ name-encoded grouping (`core-parse` ⊥ imply parent).
 - federation edge = parent dir → child dir, depth **+1 exactly**. ⊥ skip.
 - graph ! DAG. cycle ⊥. re-parent (2+ parents) OK.
-- intra-file spec ops = `cavespec` lib dep (`../cavespec`, 0.4.0, zero-dep, pure fn over `&str`). ⊥ reimpl parse/fmt/check/anchors.
+- intra-file spec ops = `microlith` lib dep (`../microlith`, 0.4.0, zero-dep, pure fn over `&str`). ⊥ reimpl parse/fmt/check/anchors.
 - token counting = `itok` lib dep (`../itok`, 0.2.0). ⊥ own tokenizer, ⊥ own bytes/4.
 - fs walk + ignore globs = `itok::walk`/`itok::glob`. ⊥ reimpl.
-- SPEC syntax = FORMAT **4.1.0**, sections `G C I R V T B` fixed & ordered + `§F`/`§N`. `§F`/`§N` ! land in FORMAT/cavespec upstream, ⊥ invented locally (V47).
+- SPEC syntax = FORMAT **4.1.0**, sections `G C I R V T B` fixed & ordered + `§F`/`§N`. `§F`/`§N` ! land in FORMAT/microlith upstream, ⊥ invented locally (V47).
 - layout: **one crate**. module = **dir + `mod.rs`** (the `default.nix` shape — dir is the unit, entry is conventional). ⊥ 2018 `foo.rs`+`foo/`: that puts the facade OUTSIDE the dir it fronts ∴ module entry & its `SPEC.md` land in different federation nodes.
 - node = dir = Rust module. all three aligned or a flat `.rs` owns spec it cannot hold.
 - repo partitions **set** \| **setting** \| **human** (`set-and-setting` vocabulary). default pack = set.
@@ -48,11 +48,11 @@ src|code nodes — tokens, spec, fed, lens facades & logic|inference harness, en
 - file: `§N NAV` pipe table `rel|path|lens`, `rel` ∈ `up`|`self`|`sib`. generated, ⊥ hand-edit
 - file: `SPEC.why.md` ∀ dir w/ rationale — `<id>|<rationale>`, addressed by `§V`/`§B` id
 - file: `.context-limits` — per-path ceilings, `itok` format, reused ⊥ reinvented
-- file: `.spec-records` — closed-option baseline, `cavespec --records`
+- file: `.spec-records` — closed-option baseline, `microlith --records`
 - file: `.claude/commands/introspect.md` — `/introspect`, ONE oversight cycle. loop-safe, halts w/ a recorded reason
 - file: `AGENTS.md` — supervisor class. auto-loaded by Codex & Claude, ⊥ reachable by a worker prompt (V97)
 - env: `BBX_MODEL` (`gpt-oss:20b`), `BBX_ENDPOINT` (`http://localhost:11434`)
-- lib: `cavespec::check_spec(&text,&records)`, `cavespec::fmt`, `::anchors`
+- lib: `microlith::check_spec(&text,&records)`, `microlith::fmt`, `::anchors`
 - lib: `itok::estimate`, `itok::walk`, `itok::glob`
 - violation: `<file>:<line>: bbx/<Vn>: <msg>` + `why` + `mechanical`|`judgment`. `--format json` carries `kind` as data
 
@@ -63,20 +63,20 @@ R1|crates.io name|`bbx` taken (BBCode parser, lib-only, `bin_names: []`). BIN na
 R2|cargo workspace|`members=["crates/*"]` ERRORS on a hub dir w/o `Cargo.toml`. per-depth globs + cross-nested path deps build clean|cargo 1.96.1, tested
 R3|rust module form|`mod.rs` = the `default.nix` shape. private sibling → `error[E0603]` ∴ COMPILER enforces the facade, ⊥ grep|cargo 1.96.1, tested
 R4|itok size|`SPEC.md` 28,462 tok + code 106,634 = 135,096 ∴ 103% of a 128k window. an 11,291-line CLI ⊥ fit|itok 0.2.0 `--bpe`
-R5|spec fatness|itok 656B/rule × 103 rules. rationale = 80% of §V (cavespec 73%) ∴ per-row FATNESS is the multiplier, ⊥ rule count|measured over both §V
+R5|spec fatness|itok 656B/rule × 103 rules. rationale = 80% of §V (microlith 73%) ∴ per-row FATNESS is the multiplier, ⊥ rule count|measured over both §V
 R6|federation yield|dir federation moves 41% of itok §V bytes; intermediate hubs absorb 9.5%; bbx own §V 64% stays root|classified 103 + 55 rules
-R7|inline tests|42% of itok+cavespec `src/` is `#[cfg(test)]`; `tracecmd.rs` 65% ∴ whole-file ceiling ranks a SMALL module worst|measured per file
+R7|inline tests|42% of itok+microlith `src/` is `#[cfg(test)]`; `tracecmd.rs` 65% ∴ whole-file ceiling ranks a SMALL module worst|measured per file
 R8|tokenizer drift|bytes/4 measured 48% LOW on caveman-encoded `SPEC.md` (5,761 real vs 3,890 est) ∴ ⊥ ever a gate|itok `--bpe` vs bytes/4
 R9|gpt-oss:20b arch|24 layers, 8 KV heads, k/v len 64, sliding_window 128, ctx 131,072, 32 experts/4 used, MXFP4, 20.9B|ollama `/api/show` @ 192.168.0.181
 R10|target box|24GB M5 Pro: ctx 131,072 ALLOCATED, 11.98G of 24G resident, 100% GPU, ⊥ CPU spill, ollama 0.32.3|ollama `/api/ps`, measured
 R11|KV cost|KV/tok = 2 × layers × kv_heads × head_dim × bytes. sliding-window halves it (12 of 24 layers full) ∴ 24GB needs NO KV quant|derived from R9 + R10
 R12|32k models|any 32k-ctx model leaves 4,225 working after 28,543 entry cost ∴ unusable for SDD at EVERY hw tier, incl M64|derived from R9/R11
-R13|cavespec §R|FORMAT 4.1.0 §R = RESEARCH (`id|topic|finding|src`), ⊥ records. closed options live in `.spec-records`|cavespec 0.4.0 `check.rs`, FORMAT.md
+R13|microlith §R|FORMAT 4.1.0 §R = RESEARCH (`id|topic|finding|src`), ⊥ records. closed options live in `.spec-records`|microlith 0.4.0 `check.rs`, FORMAT.md
 R14|prompt cache|identical prefix → prefill 4.60s → 0.04s (~115x). cache is per-PREFIX & survives across requests|ollama 0.32.3 @ .181, measured
 R15|edit locality|an edit invalidates all prefill AFTER it. same 7k pack: cached 0.04s · edit TAIL 0.49s · edit HEAD 4.61s (full cold)|measured, 3 runs
 R16|prefill dominance|workload is prefill-bound ⊥ decode-bound. 7k: 4.60s prefill vs 1.83s decode. 28k: 30.32s vs 5.74s = 83% prefill|measured @ .181
 R17|prefill superlinear|1,519 tok/s @ 7k → 1,233 @ 15k → 941 @ 28k. 4.09x tokens costs 6.59x time ∴ small packs pay off faster than linearly|measured, 3 points
-R18|facet shares|itok SET 47.4% / SETTING 49.9% / HUMAN 2.7%; nanokit 49.1 / 47.6 / 3.3 ∴ ~half a repo never loads for impl work|measured, 2 repos (`nanokit` = `cavespec`, renamed 2026-08-01)
+R18|facet shares|itok SET 47.4% / SETTING 49.9% / HUMAN 2.7%; nanokit 49.1 / 47.6 / 3.3 ∴ ~half a repo never loads for impl work|measured, 2 repos (`nanokit` = `microlith`, renamed 2026-08-01)
 R19|tests dominate|tests 34.0% itok · 24.9% nanokit = largest single facet. 42% of it INLINE in `#[cfg(test)]` ∴ ⊥ reachable by the dir axis|measured per file
 R20|fleet duplication|guard-infra near-identical absolute size across unrelated repos: 16,058 vs 15,218 tok ∴ same scaffolding copied. × 54 repos ≈ 840k tok duplicated|measured, 2 of 54
 R21|human docs grow|`set-and-setting` human 24,965 vs itok 5,236 = 4.8x. CHANGELOG alone 13,762 — append-only, never needed to implement|measured
@@ -129,12 +129,12 @@ V39: multi-parent → `up` 2+ rows. `sib` = union ∀ parent, deduped
 V40: `§N` alone ! answer "where am I, what is beside me" ⊥ opening another file
 — two axes —
 V42: federation has 2 axes. **horizontal** = dir depth. **vertical** = detail (`rule` → `why` → evidence). node over budget → vertical FIRST, horizontal only if rule-only still over. MEASURED 3x that horizontal ⊥ the lever: itok 59% of §V bytes stay @ root · itok 66% of stmts · bbx own 64%
-V43: `§V`/`§B` statement = rule + rationale. rule inline @ `SPEC.md`, rationale @ `SPEC.why.md` keyed by id. MEASURED: rationale = 80% of `itok` §V, 73% of `cavespec` ∴ vertical buys 5x vs horizontal 1.7x
+V43: `§V`/`§B` statement = rule + rationale. rule inline @ `SPEC.md`, rationale @ `SPEC.why.md` keyed by id. MEASURED: rationale = 80% of `itok` §V, 73% of `microlith` ∴ vertical buys 5x vs horizontal 1.7x
 V44: vertical split lossless **by reference ⊥ by deletion**. ∀ id ∈ `SPEC.md` → row ∈ `SPEC.why.md` | explicit `-`. rationale is where closed-option records live ∴ dropping it is the failure both sibling repos already guard
 V45: `lens --depth rule` default. `why` pulled on demand, ⊥ resident. entry cost is re-billed EVERY turn
 V46: budget sized against MEASURED entry cost, ⊥ raw window. measured: harness overhead ~28,543 tok before any file ∴ `budget.lens` + entry ≤ 40% of 131,072
-— guards learned from `itok`/`cavespec` §B —
-V47: `§F`/`§N` are FORMAT extensions. cavespec `check` fixes section set `G C I R V T B` ∴ unknown section ! be negotiated upstream. ⊥ ship a dialect cavespec cannot read
+— guards learned from `itok`/`microlith` §B —
+V47: `§F`/`§N` are FORMAT extensions. microlith `check` fixes section set `G C I R V T B` ∴ unknown section ! be negotiated upstream. ⊥ ship a dialect microlith cannot read
 V48: ∀ report ! state what was EXAMINED, ⊥ only what failed. node discovered & ⊥ parsed = FAIL, ⊥ skip. a pass on a section the parser cannot see is indistinguishable from a real pass
 V49: split (either axis) ! PROVE item-set preserved before write — ids(parent) ⊆ ⋃ ids(children ∪ parent′), asserted pre-write. per-file losslessness is blind to content vanishing BETWEEN files
 V50: `.rs` file **code** > `ceiling.file` (default 4000 tok) → `check` violation, kind `judgment`. tests counted separately vs `ceiling.test` (2000). ⊥ one ceiling over both
@@ -169,7 +169,7 @@ V79: facet value = token share × P(task ⊥ needs it). tests 34% × ~0.7 ≈ 24
 V80: more facets help ONLY where a facet matches how tasks cluster. a facet no task selects is a manifest to maintain — R4 rejected that once already
 V81: facets ! PARTITION — exhaustive & disjoint, same rule as sibling lenses (V64/V65). else content double-loads or vanishes between facets
 V82: SETTING enters a pack as CONTRACT ⊥ implementation — one line per guard (`line cap 80`, `clippy pedantic`, `coverage floor 98`). ~200 tok replaces ~31k. a guard the agent cannot SEE is B1
-V83: structural diagram GENERATED from `§F` (`graph --mermaid`), ⊥ authored. a hand-drawn architecture diagram is a second reading of what `§F` declares — cavespec's founding defect
+V83: structural diagram GENERATED from `§F` (`graph --mermaid`), ⊥ authored. a hand-drawn architecture diagram is a second reading of what `§F` declares — microlith's founding defect
 V84: guard-infra encoding FLEET standard is materializable (flake input, content-addressed). repo-specific facts — tests, `.context-limits`, baselines — STAY. ⊥ materialize what encodes THIS repo
 V86: PROFILE = task-dependent SELECTION over facets. `set`/`setting` is the DEFAULT profile (`implement`), ⊥ a partition of the repo. `tests` ∈ setting under `implement` & ∈ set under `tdd` — the file ⊥ change, the TASK does
 V87: axes COMPOSE multiplicatively. facet alone fails TDD — MEASURED 81.4% of itok still loads (B3). facet × horizontal @ one node = 6.1%, 13x smaller ∴ neither axis alone is sufficient
@@ -194,9 +194,9 @@ V73: dir promotion has 2 triggers — (a) V50 code ceiling, (b) module owns SPEC
 ## §T TASKS
 
 id|status|task|cites
-T1|x|scaffold single crate `bbx`, module=dir+`mod.rs`, explicit `[[bin]]`, deps `itok`+`cavespec` by path|C,R1,R3
-T2|x|bind `cavespec` — `check`, `fmt`, section split. ⊥ reimpl|C
-T3|.|capability-parity audit `cavespec` vs what `bbx` needs. write the comparison BEFORE relying on it|V59
+T1|x|scaffold single crate `bbx`, module=dir+`mod.rs`, explicit `[[bin]]`, deps `itok`+`microlith` by path|C,R1,R3
+T2|x|bind `microlith` — `check`, `fmt`, section split. ⊥ reimpl|C
+T3|.|capability-parity audit `microlith` vs what `bbx` needs. write the comparison BEFORE relying on it|V59
 T4|x|parse `§F` table → (dir, owns, ⊥owns, tokens), escape-aware|I,V1
 T6|x|superseded — edges/chain/discover land; depth & cycle are `src/fed:T4`|V1,V2,V4
 T8|x|bind `itok::estimate`, tier floor `bpe`, method label|V17,V24
@@ -219,7 +219,7 @@ T42|.|cross-file losslessness proof, asserted pre-write|V49,V44
 T46|.|coupling report after proposed split|V53
 T47|.|violation renderer `file:line: bbx/Vn:` + why + mechanical\|judgment + json `kind`|V55,V54
 T48|.|sibling-divergence detector for V13|V62
-T49|.|`§F`/`§N` upstream to FORMAT/cavespec before shipping a dialect|V47
+T49|.|`§F`/`§N` upstream to FORMAT/microlith before shipping a dialect|V47
 T50|.|corpus run over 54-spec fleet, FP rate reported|V58
 T52|.|planted-violation test ∀ guard + accepts-real-shapes companion|V61
 T53|x|PREMISE GATE run — `bbx oneshot` vs `bbx tdd`, R29/R32/R33. bounds MAX CALL 2.1x→2.9x, ⊥ total, ⊥ quality|V60,V27
@@ -229,7 +229,7 @@ T56|x|`§F` gains `⊥owns` column — parse & emit|I,V66
 T57|x|superseded — `src/fed:T5`/`T7`: duplicate rows fail, missing rows advisory|V64,V65
 T58|.|`cap.row` gate — inline `§V`/`§R`/`§B` text over 200B|V69,V70
 T59|.|PAY THE DEBT: record rationale for V1-V63 into `SPEC.why.md` before it accretes inline. rationale currently lives only in the design conversation|V69,V70,V44
-T60|x|facades land — `itok::` only in `src/tokens`, `cavespec::` only in `src/spec`|V71,V72
+T60|x|facades land — `itok::` only in `src/tokens`, `microlith::` only in `src/spec`|V71,V72
 T64|.|setting-as-contract extraction — guard files → one line each|V82
 T65|x|`graph --mermaid` generated diagram|V83
 T67|.|materializability audit: which guard files are fleet standard vs repo facts|V84,R20

@@ -14,7 +14,7 @@ bbx -- federated SPEC.md for small-context local models
   bbx budget [dir]     token cost of every node, against the working budget
   bbx lens <dir>       the context pack for one node
   bbx fed [dir]        the federation edges declared by a node
-  bbx check [dir]      cavespec structural check of every node
+  bbx check [dir]      microlith structural check of every node
   bbx review [rev]     mechanical checks on what a commit added (default HEAD)
   bbx slice [--check|--list]  regenerate distilled slices from their sources
   bbx outcome <node> <kept|reverted>  record whether a node's work survived review
@@ -232,7 +232,8 @@ fn check(root: &Path) -> ExitCode {
         let path = node.join("SPEC.md");
         let Ok(text) = std::fs::read_to_string(&path) else { continue };
         for v in spec::check(&text) {
-            println!("{}:{}: cavespec/{}: {}", path.display(), v.line, v.rule, v.msg);
+            println!("{}:{}: {}/{}: {}", path.display(),
+                     v.line, spec::NAMESPACE, v.rule, v.msg);
             bad += 1;
         }
         // progress: a bug with no invariant will recur (spec V4). Advisory --

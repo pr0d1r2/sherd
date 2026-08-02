@@ -8,7 +8,7 @@
 
 dir|owns|⊥owns|tokens
 tokens|`itok` facade, counts w/ method label, entry cost, working budget|spec structure, federation edges|-
-spec|`cavespec` facade, §-section split, structural check, fmt|token counts, `§F`/`§N`|-
+spec|`microlith` facade, §-section split, structural check, fmt|token counts, `§F`/`§N`|-
 fed|`§F` parse, edges, chain root→node, `SPEC.md` discovery|counting, rendering|-
 lens|pack assembly, depth `rule`\|`why`, budget verdict|parsing, counting internals|-
 ollama|local endpoint client, `num_ctx`, fence extraction|prompt construction, loop control|-

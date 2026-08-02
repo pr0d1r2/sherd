@@ -80,7 +80,7 @@ function is worse than none, because it reads as coverage.
 - **§T** — remaining work as remaining work, **never history**. "`X` landed,
   `Y` still open" makes a machine test `X`, which already passes.
 
-Cross-node citations need the namespaced form (`` `src/fed:V9` ``) or cavespec
+Cross-node citations need the namespaced form (`` `src/fed:V9` ``) or microlith
 reads them as dangling. `bbx check` must be clean before you commit.
 
 **6. Commit** the reasoning, not just the change. Git is the memory: what was

@@ -1,6 +1,6 @@
 //! Federation: the `§F` table, the parent/child edges, the chain to a node.
 //!
-//! This is what blackbox adds on top of cavespec. `§F` rows are
+//! This is what blackbox adds on top of microlith. `§F` rows are
 //! `dir|owns|⊥owns|tokens` and an edge is **exactly one dir deeper** (V2).
 
 use std::path::{Path, PathBuf};

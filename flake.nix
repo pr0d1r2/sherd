@@ -4,7 +4,7 @@
   # what you are editing -- which is why §C says it enters a lens pack as a
   # CONTRACT (one line per guard) rather than as this file.
   #
-  # Same nixpkgs pin as ../itok and ../cavespec. Three sibling crates polished
+  # Same nixpkgs pin as ../itok and ../microlith. Three sibling crates polished
   # together should not disagree about their compiler.
   description = "blackbox -- federated SPEC.md for small-context local models";
 
@@ -50,7 +50,7 @@
         '';
     in
     {
-      # No `packages.default`. blackbox depends on ../itok and ../cavespec by
+      # No `packages.default`. blackbox depends on ../itok and ../microlith by
       # PATH, and a path dep outside the flake root is not visible to a pure
       # build -- the same reason `git worktree` could not resolve ../itok, and
       # the same fragility a sibling rename exposed on 2026-08-01. It becomes

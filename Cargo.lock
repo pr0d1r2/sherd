@@ -33,8 +33,8 @@ checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
 name = "bbx-cli"
 version = "0.1.0"
 dependencies = [
- "cavespec",
  "itok",
+ "microlith",
  "serde_json",
  "ureq",
 ]
@@ -70,10 +70,6 @@ dependencies = [
  "regex-automata",
  "serde_core",
 ]
-
-[[package]]
-name = "cavespec"
-version = "0.4.0"
 
 [[package]]
 name = "cfg-if"
@@ -266,6 +262,10 @@ name = "memchr"
 version = "2.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
+
+[[package]]
+name = "microlith"
+version = "0.4.0"
 
 [[package]]
 name = "once_cell"

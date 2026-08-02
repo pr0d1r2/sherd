@@ -1,25 +1,33 @@
-//! `SPEC.md` structure. **Sole call site for `cavespec`** (V72).
+//! `SPEC.md` structure. **Sole call site for `microlith`** (V72).
 //!
-//! R3: cavespec owns intra-file spec ops as zero-dep pure functions. This
+//! R3: microlith owns intra-file spec ops as zero-dep pure functions. This
 //! module does not reimplement parse, fmt, id or citation checking -- it
 //! adapts them. What blackbox adds (`§F`, `§N`) lives in [`crate::fed`].
 
-pub use cavespec::violation::Violation;
+pub use microlith::violation::Violation;
+
+/// The namespace `microlith` qualifies its own rule ids with.
+///
+/// Re-exported rather than spelled as a literal: `bbx check` printed a
+/// hardcoded `"cavespec/"` prefix, so renaming the crate to `microlith`
+/// left every violation line naming a crate that no longer exists. One
+/// reading of the name (V72 applied to a string, not just an import).
+pub use microlith::violation::NAMESPACE;
 
 /// Structural check of one spec file: sections ordered, ids unique,
 /// citations resolve, rows sorted, statuses valid.
 #[must_use]
 pub fn check(text: &str) -> Vec<Violation> {
-    cavespec::check_spec(text, &[])
+    microlith::check_spec(text, &[])
 }
 
 /// Lossless, idempotent reformat -- one line per statement.
 ///
 /// # Errors
-/// Returns the cavespec diagnostic when the text cannot be formatted
+/// Returns the microlith diagnostic when the text cannot be formatted
 /// losslessly (e.g. a line over the cap).
 pub fn fmt(text: &str) -> Result<String, String> {
-    cavespec::format_spec(text)
+    microlith::format_spec(text)
 }
 
 /// Split a spec into `(header, body)` pairs, one per `## §X` section.
@@ -113,9 +121,9 @@ mod tests {
     }
 
     #[test]
-    fn check_runs_against_cavespec() {
+    fn check_runs_against_microlith() {
         // Not asserting a specific verdict -- asserting the binding works and
-        // returns cavespec's own Violation type.
+        // returns microlith's own Violation type.
         let _: Vec<Violation> = check(SAMPLE);
     }
 }

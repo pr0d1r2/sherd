@@ -14,7 +14,7 @@
 //!
 //! IDEMPOTENT: writing unchanged state twice yields a byte-identical file, and
 //! reading it back yields the same map. Asserted, because a cache that drifts
-//! on rewrite is worse than no cache -- the same guarantee cavespec asserts
+//! on rewrite is worse than no cache -- the same guarantee microlith asserts
 //! for `fmt`.
 
 use std::collections::BTreeMap;

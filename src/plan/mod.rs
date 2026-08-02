@@ -255,7 +255,7 @@ pub fn plan(root: &Path) -> Plan {
 ///
 /// A cite may be bare (`V3`, this node) or namespaced (`` `.:V73` ``, root;
 /// `` `src/fed:V9` ``, that node). Moving rows down rewrote every cite to the
-/// namespaced form, which is correct for cavespec and was invisible to this
+/// namespaced form, which is correct for microlith and was invisible to this
 /// parser -- so every moved row became undrivable (B6).
 #[must_use]
 pub fn cited_invariant(t: &Task) -> Option<(std::path::PathBuf, String)> {
@@ -513,7 +513,7 @@ const VOCAB: [(&str, &[&str]); 9] = [
     ("fed",    &["§f", "§n", "edge", "dag", "cycle", "chain", "discover", "graph", "orphan", "promotion"]),
     ("lens",   &["lens", "pack", "budget", "depth", "why", "facet"]),
     ("tokens", &["token", "tier", "itok", "count", "ceiling"]),
-    ("spec",   &["cavespec", "section", "record", "format", "fmt"]),
+    ("spec",   &["microlith", "section", "record", "format", "fmt"]),
     ("ollama", &["ollama", "endpoint", "retry", "model"]),
     ("tdd",    &["tdd", "judge", "red", "green", "repair"]),
     ("plan",   &["plan", "apply", "horizon", "needs", "actionable"]),
