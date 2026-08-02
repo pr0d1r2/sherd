@@ -212,6 +212,13 @@ fn check(root: &Path) -> ExitCode {
             println!("{}:{}: cavespec/{}: {}", path.display(), v.line, v.rule, v.msg);
             bad += 1;
         }
+        // progress: a bug with no invariant will recur (spec V4). Advisory --
+        // some bugs genuinely warrant no new rule, and forcing one would
+        // manufacture invariants to silence a gate.
+        for (id, cause) in spec::unreflected_bugs(&text) {
+            println!("{}: bbx/spec:V4: {id} names no invariant -- `{cause}` \
+                      will recur (advisory)", path.display());
+        }
         // §F structure: duplicate rows (fed V12) and child dirs with no row
         // (fed V11). Advisory -- a missing row is often a dir that is simply
         // not a node yet, so it reports rather than fails.
