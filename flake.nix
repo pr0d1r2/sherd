@@ -50,12 +50,13 @@
         '';
     in
     {
-      # No `packages.default`. blackbox depends on ../itok and ../microlith by
-      # PATH, and a path dep outside the flake root is not visible to a pure
-      # build -- the same reason `git worktree` could not resolve ../itok, and
-      # the same fragility a sibling rename exposed on 2026-08-01. It becomes
-      # buildable when those two are flake inputs pinned to public revs, which
-      # is the fleet packaging work (§R R20), not a local workaround.
+      # No `packages.default`. blackbox depends on ../itok by PATH, and a path
+      # dep outside the flake root is not visible to a pure build -- the same
+      # reason `git worktree` could not resolve it, and the same fragility a
+      # sibling rename exposed on 2026-08-01. microlith was the other half of
+      # this and is no longer: it is published, so it resolves from the
+      # registry like any dep. itok alone is what remains of the fleet
+      # packaging work (§R R20).
 
       devShells = forAll (pkgs: {
         default = pkgs.mkShell {

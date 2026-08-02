@@ -232,8 +232,9 @@ fn check(root: &Path) -> ExitCode {
         let path = node.join("SPEC.md");
         let Ok(text) = std::fs::read_to_string(&path) else { continue };
         for v in spec::check(&text) {
-            println!("{}:{}: {}/{}: {}", path.display(),
-                     v.line, spec::NAMESPACE, v.rule, v.msg);
+            // `v` prints itself already namespaced -- these are the caller's
+            // coordinates prefixed to it, which is all bbx owns here.
+            println!("{}:{}: {v}", path.display(), v.line);
             bad += 1;
         }
         // progress: a bug with no invariant will recur (spec V4). Advisory --

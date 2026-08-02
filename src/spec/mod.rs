@@ -4,15 +4,15 @@
 //! module does not reimplement parse, fmt, id or citation checking -- it
 //! adapts them. What blackbox adds (`§F`, `§N`) lives in [`crate::fed`].
 
-pub use microlith::violation::Violation;
-
-/// The namespace `microlith` qualifies its own rule ids with.
+/// A microlith rule violation. Its `Display` is `microlith/V13: msg` -- the
+/// namespace ALREADY QUALIFIED.
 ///
-/// Re-exported rather than spelled as a literal: `bbx check` printed a
-/// hardcoded `"cavespec/"` prefix, so renaming the crate to `microlith`
-/// left every violation line naming a crate that no longer exists. One
-/// reading of the name (V72 applied to a string, not just an import).
-pub use microlith::violation::NAMESPACE;
+/// `bbx check` once spelled that prefix as a literal `"cavespec/"`, so renaming
+/// the crate left every violation line naming a crate that no longer exists.
+/// The name is not re-exported to fix that: the published crate keeps
+/// `violation` private, and printing the `Violation` itself is the reading that
+/// cannot drift -- one owner of the qualified id, not two.
+pub use microlith::Violation;
 
 /// Structural check of one spec file: sections ordered, ids unique,
 /// citations resolve, rows sorted, statuses valid.
@@ -118,6 +118,41 @@ mod tests {
     fn only_the_bugs_section_is_read() {
         let s = "## \u{a7}T TASKS\nid|status|task|cites\nB1|.|not a bug row|-\n";
         assert!(unreflected_bugs(s).is_empty(), "a §T row is not a §B row");
+    }
+
+    /// V5. B1 imported through microlith's inner `violation` module -- which
+    /// the dep later made `pub(crate)`, turning a green HEAD red with no commit
+    /// here. Only the root re-exports are the contract, so the shape to forbid
+    /// is any path BELOW the crate, not the one symbol that happened to move.
+    /// The check reads text, so it fails on a mention in prose too: write the
+    /// module name, not a path a reader could copy.
+    #[test]
+    fn microlith_is_reached_only_through_its_root() {
+        // Built at runtime: a literal here would match itself.
+        let deep = "microlith".to_string() + "::";
+        let mut offenders = Vec::new();
+        let mut stack = vec![std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src")];
+        while let Some(dir) = stack.pop() {
+            let Ok(entries) = std::fs::read_dir(&dir) else { continue };
+            for e in entries.flatten() {
+                let p = e.path();
+                if p.is_dir() {
+                    stack.push(p);
+                } else if p.extension().is_some_and(|x| x == "rs") {
+                    let Ok(text) = std::fs::read_to_string(&p) else { continue };
+                    for (n, line) in text.lines().enumerate() {
+                        let Some(rest) = line.split_once(&deep).map(|(_, r)| r) else { continue };
+                        let ident: String = rest.chars()
+                            .take_while(|c| c.is_alphanumeric() || *c == '_').collect();
+                        if rest[ident.len()..].starts_with("::") {
+                            offenders.push(format!("{}:{}: {ident}", p.display(), n + 1));
+                        }
+                    }
+                }
+            }
+        }
+        assert!(offenders.is_empty(),
+                "V5: reach microlith through its root re-exports, not {offenders:?}");
     }
 
     #[test]
