@@ -699,6 +699,42 @@ mod tests {
                                 do not weaken the corpus");
     }
 
+    /// The control half. A judge that answers NO to everything scores 5/5 on
+    /// the stub corpus, which is exactly the vacuous pass `negative_only`
+    /// exists to catch -- so the stub number means nothing without this one.
+    ///
+    /// Corpus: real functions from this repo, each with the invariant it was
+    /// actually written against.
+    #[test]
+    #[ignore]
+    fn blind_lens_vs_working_code() {
+        let corpus: [(&str, &str); 5] = [
+            ("V46: a budget subtracts entry cost; a negative budget is `does not fit`, not a huge one",
+             "pub const fn working(window: u64) -> u64 {\n    window.saturating_sub(ENTRY_COST)\n}"),
+            ("V6: the ceiling for a path is the longest matching prefix, else the default",
+             "pub fn for_path(&self, path: &str) -> u64 {\n    self.rows.iter()\n        .filter(|(p, _)| path.starts_with(p.as_str()))\n        .max_by_key(|(p, _)| p.len())\n        .map_or(self.default, |(_, v)| *v)\n}"),
+            ("V14: prefill rate is a function of SIZE, so it is bucketed, not one scalar",
+             "pub fn bucket(prompt_tokens: u64) -> &'static str {\n    match prompt_tokens {\n        0..=1_999 => \"b0\",\n        2_000..=7_999 => \"b2\",\n        8_000..=31_999 => \"b8\",\n        _ => \"b32\",\n    }\n}"),
+            ("V4: a verdict states DIRECTION and DISTANCE, never a bare bool",
+             "pub fn verdict(cost: u64, budget: u64) -> Verdict {\n    if cost <= budget {\n        Verdict::Fits { slack: budget - cost }\n    } else {\n        Verdict::Over { by: cost - budget }\n    }\n}"),
+            ("V22: a judge's verdict is YES on the first line, or it is not a yes",
+             "pub fn is_yes(verdict: &str) -> bool {\n    verdict.trim().lines().next().unwrap_or(\"\").trim().to_uppercase().starts_with(\"YES\")\n}"),
+        ];
+        let mut accepted = 0;
+        for (inv, code) in &corpus {
+            let r = crate::ollama::generate(&blind_prompt(inv, code))
+                .expect("endpoint unreachable -- BBX_ENDPOINT");
+            let yes = is_yes(&r.text);
+            accepted += usize::from(yes);
+            println!("{} {} tok · {}", if yes { "ACCEPT" } else { "REJECT" },
+                     r.prompt_tokens, r.text.trim().lines().next().unwrap_or(""));
+        }
+        println!("blind lens accepted {accepted}/5 working functions");
+        assert!(accepted >= 4, "measured {accepted}/5 -- a lens that rejects working code \
+                                is a lens that rejects everything, and its 5/5 on the stub \
+                                corpus proves nothing");
+    }
+
     #[test]
     fn a_verdict_is_yes_only_on_the_first_line() {
         assert!(is_yes("YES\nit reads its input"));
