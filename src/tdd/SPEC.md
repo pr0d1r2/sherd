@@ -31,6 +31,7 @@ V17: model DETERMINISTIC @ temp 0 — 3/3 identical `gen` counts on one prompt �
 V19: step 2 & repair see SIGNATURES ⊥ bodies. surface-by-EXAMPLE induces imitation — shown `edges()`'s scan loop the model copied it, twice, on independent tasks. shown only the interface it COMPOSES: `depth_violations(&[Edge])`, 5 lines ⊥ 30, `in_f` 6→3, 20% cheaper (`.:fed` B4)
 V21: a step that takes >10s ! report BEFORE it starts & stream while it runs. silence is indistinguishable from a hang — `.:V48` applied to a live process, ⊥ only to a report (B19)
 V20: constrain what the model SEES, ⊥ ask it for good behaviour. asking to reuse produced WORSE code (data-laundering `sanitize_first_cell`); removing the bodies fixed it w/ no instruction at all
+V22: the impl judge sees invariant + impl, NEVER the test — the MIRROR of V3, ⊥ a second opinion. every stub in §B passed because test & impl AGREED; agreement is invisible to a reviewer holding both & obvious to two each holding one. giving either judge the other side restores the blind spot it exists to cover
 V18: step 2 gets the CONTRACT — the calls the test makes that ⊥ exist yet, extracted deterministically (`.:V18`). the SIGNATURE constrains the design: `check_edge_depth(text)` took no path ∴ no walking ∴ no ignore-glob violation & no temp dir. fixing a NAME mismatch removed 3 unrelated defects (B12)
 
 ## §T TASKS
@@ -45,6 +46,8 @@ T6|x|judge gets `signatures()` data model|V8,B2
 T7|.|needs a hook change, ⊥ a function|B3
 T8|.|record per-request template overhead (~67 tok, measured) in entry-cost accounting|V2
 T9|x|step 2 ! define exactly the fn the test calls — pass the expected signature|V18
+T10|x|blind impl judge after green — `blind_prompt`, `is_yes`|V22,V11
+T11|.|MEASURE V22 — runner `blind_lens_vs_the_recorded_stubs` (`#[ignore]`, 5 real stubs) EXISTS but is UNRUN: both endpoints down 2026-08-02. V22 is BELIEF until it prints a number|V22
 
 ## §B BUGS
 
