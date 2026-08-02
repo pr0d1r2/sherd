@@ -222,17 +222,26 @@ pub fn plan(root: &Path) -> Plan {
     let mut steps = Vec::new();
     let mut unmanaged = Vec::new();
     let st = crate::state::State::load();
+    let mut candidates = Vec::new();
     for t in all {
         let k = classify(&root.join(&t.node), &t.text);
         if k.actionable() && already_applied(&st, &t) {
             continue; // idempotent: same row, same text, already done
         }
-        if k.actionable() && steps.len() < HORIZON {
-            steps.push(t);
-        } else if !k.actionable() {
+        if k.actionable() {
+            candidates.push(t);
+        } else {
             unmanaged.push((t, k));
         }
     }
+    // Most-believable node first. A node that has failed three times running
+    // should not keep supplying step 1, which is what depth-ordering did.
+    candidates.sort_by(|a, b| {
+        believability(&b.node).total_cmp(&believability(&a.node))
+            .then_with(|| a.node.components().count().cmp(&b.node.components().count()))
+            .then_with(|| a.id.cmp(&b.id))
+    });
+    steps.extend(candidates.into_iter().take(HORIZON));
     Plan { steps, unmanaged, total_open }
 }
 
@@ -334,6 +343,21 @@ mod tests {
     }
 
     #[test]
+    fn an_untried_node_outranks_one_that_has_failed() {
+        // Laplace: untried 0.5, one failure 1/3, three failures 1/5.
+        let untried = 1.0 / 2.0;
+        let failed_once = 1.0 / 3.0;
+        let failed_thrice = 1.0 / 5.0;
+        assert!(untried > failed_once && failed_once > failed_thrice);
+    }
+
+    #[test]
+    fn believability_of_an_unknown_node_is_neutral() {
+        let b = believability(Path::new("src/never-seen-before"));
+        assert!((b - 0.5).abs() < 1e-9, "untried must be neutral, got {b}");
+    }
+
+    #[test]
     fn propose_moves_a_single_node_row() {
         assert_eq!(propose("orphan check: SPEC w/o parent §F row"), Proposal::Move("fed"));
         assert_eq!(propose("tier select from bbx.toml"), Proposal::Move("tokens"));
@@ -408,6 +432,53 @@ mod tests {
         assert!(p.steps.len() <= HORIZON, "{} steps", p.steps.len());
         assert!(p.total_open >= p.steps.len());
     }
+}
+
+// ---- believability: weight a node by its track record ----
+
+/// Record an attempt against a node, and how it turned out.
+///
+/// `kept` counts only what survived REVIEW, not what passed the gate -- the
+/// gate has gone green on three stubs, so counting commits would measure the
+/// wrong thing.
+pub fn record_outcome(node: &Path, kept: bool) {
+    let mut st = crate::state::State::load();
+    let key = node.to_string_lossy().to_string();
+    let bump = |st: &mut crate::state::State, k: &str| {
+        let n = st.get_u64("score", &format!("{key}.{k}")).unwrap_or(0) + 1;
+        st.set("score", &format!("{key}.{k}"), n.to_string());
+    };
+    bump(&mut st, "tried");
+    if kept {
+        bump(&mut st, "kept");
+    }
+    st.save();
+}
+
+/// How much to believe a node's next row will survive review.
+///
+/// Laplace-smoothed: `(kept + 1) / (tried + 2)`. An untried node scores 0.5,
+/// so it outranks one that has failed three times without pretending to know
+/// it is good. Dalio's claim, mechanised: opinions are not equal, weight them
+/// by track record -- and `plan` was treating every row as equally likely to
+/// work, which is exactly what he argues against.
+#[must_use]
+pub fn believability(node: &Path) -> f64 {
+    let st = crate::state::State::load();
+    let key = node.to_string_lossy().to_string();
+    let tried = st.get_u64("score", &format!("{key}.tried")).unwrap_or(0);
+    let kept = st.get_u64("score", &format!("{key}.kept")).unwrap_or(0);
+    #[allow(clippy::cast_precision_loss)]
+    { (kept as f64 + 1.0) / (tried as f64 + 2.0) }
+}
+
+/// `(tried, kept)` for a node, for reporting.
+#[must_use]
+pub fn record(node: &Path) -> (u64, u64) {
+    let st = crate::state::State::load();
+    let key = node.to_string_lossy().to_string();
+    (st.get_u64("score", &format!("{key}.tried")).unwrap_or(0),
+     st.get_u64("score", &format!("{key}.kept")).unwrap_or(0))
 }
 
 // ---- triage: where does an unmanaged row belong? ----
@@ -519,7 +590,13 @@ pub fn apply(root: &Path, max_repair: usize) -> Result<String, String> {
               step.text);
 
     let node = root.join(&step.node);
-    let log = crate::tdd::drive_from(root, &node, &root.join(&owner), &inv, &step.text, max_repair)?;
+    let log = match crate::tdd::drive_from(root, &node, &root.join(&owner), &inv, &step.text, max_repair) {
+        Ok(l) => l,
+        Err(e) => {
+            record_outcome(&step.node, false);
+            return Err(e);
+        }
+    };
 
     let sent: u64 = log.iter().map(|s| s.prompt_tokens).sum();
     let max = log.iter().map(|s| s.prompt_tokens).max().unwrap_or(0);
@@ -553,6 +630,9 @@ pub fn apply(root: &Path, max_repair: usize) -> Result<String, String> {
 
     // Record it applied, keyed by the row's TEXT -- edit the row and it
     // becomes plannable again.
+    // Counted as an ATTEMPT here; `kept` is claimed only after review, via
+    // `bbx outcome`. A commit is not survival -- three stubs have committed.
+    record_outcome(&step.node, false);
     let mut state = crate::state::State::load();
     state.set("applied", &row_key(step), format!("{} {sha}", row_hash(step)));
     state.clear_kind("plan"); // the plan that produced this is now stale

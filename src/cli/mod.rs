@@ -17,6 +17,7 @@ bbx -- federated SPEC.md for small-context local models
   bbx check [dir]      cavespec structural check of every node
   bbx review [rev]     mechanical checks on what a commit added (default HEAD)
   bbx slice [--check|--list]  regenerate distilled slices from their sources
+  bbx outcome <node> <kept|reverted>  record whether a node's work survived review
   bbx graph [--tree|--table|--dot]  federation DAG, generated from §F
   bbx plan             next 3 steps, with what would invalidate each
   bbx plan --triage    unmanaged rows, with a proposed home for each
@@ -58,6 +59,21 @@ pub fn run() -> ExitCode {
             ExitCode::SUCCESS
         }
         Some("check") => check(&root),
+        Some("outcome") => match (args.get(1), args.get(2)) {
+            (Some(node), Some(verdict)) => {
+                let kept = match verdict.as_str() {
+                    "kept" => true,
+                    "reverted" | "failed" => false,
+                    _ => return usage("outcome verdict is `kept`, `reverted` or `failed`"),
+                };
+                plan::record_outcome(Path::new(node), kept);
+                let (tried, k) = plan::record(Path::new(node));
+                eprintln!("{node}: {k}/{tried} kept · believability {:.2}",
+                          plan::believability(Path::new(node)));
+                ExitCode::SUCCESS
+            }
+            _ => usage("outcome needs <node> <kept|reverted|failed>"),
+        },
         Some("slice") => slice_cmd(&root, args.get(1).map_or("", String::as_str)),
         Some("review") => review_cmd(&root, args.get(1).map_or("HEAD", String::as_str)),
         Some("plan") if args.get(1).map(String::as_str) == Some("--triage") => triage_cmd(&root),
@@ -278,7 +294,11 @@ fn plan_cmd(root: &Path) -> ExitCode {
         let c = plan::Confidence::of(i);
         let est = lens::pack(root, &root.join(&t.node), lens::Depth::Rule)
             .map_or(0, |k| k.cost.tokens);
+        let (tried, kept) = plan::record(&t.node);
+        let score = if tried == 0 { "untried".to_string() }
+                    else { format!("{kept}/{tried} kept") };
         println!("{}. {} {:<11} {} {}", i + 1, c.label(), t.node.display(), t.id, t.text);
+        println!("      believability {:.2} ({score})", plan::believability(&t.node));
         println!("      ~{est} tok context · invalidated by: {}\n", c.invalidated_by());
         st.set("plan", &(i + 1).to_string(),
                format!("{} {} {}", t.node.display(), t.id, c.label().trim()));

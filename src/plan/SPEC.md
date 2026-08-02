@@ -17,6 +17,10 @@ V3: unmanaged rows LISTED, ⊥ hidden. 58 of 72 open rows are ⊥ machine-action
 V4: ordering signal is node DEPTH only. `§T`.cites points at `§V`, ⊥ at another `§T` ∴ stated as weak, ⊥ dressed up
 V5: root row ⊥ actionable — no `mod.rs` to add to
 V6: plan ⊥ mutate source. it reads & reports; `apply` is the only writer
+V8: steps ordered by BELIEVABILITY — a node's measured keep-rate — then depth. `src/fed` failed 3x & kept supplying step 1 because depth was the only signal
+V9: Laplace-smoothed `(kept+1)/(tried+2)` ∴ an untried node scores 0.50 & outranks 3 failures (0.20) w/o pretending to be known-good
+V10: `kept` counts what survived REVIEW, ⊥ what passed the gate. the gate has gone green on 3 stubs ∴ counting commits measures the wrong thing
+V11: a principle a machine can CHECK belongs in a gate, ⊥ a prompt. MEASURED strengths: structure (`insert_impl` cannot touch the test — never violated) > gate (`-D warnings` — evaded twice w/ `_`) > prompt ("reuse existing functions" — ignored, produced worse code)
 V7: output names commands that EXIST. `plan` IS replan — it is stateless & re-derives every run ∴ saying "REPLAN" invents a second name for one operation, which is the two-readings defect (B3)
 
 ## §T TASKS
