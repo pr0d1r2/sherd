@@ -17,6 +17,7 @@ V3: unmanaged rows LISTED, ⊥ hidden. 58 of 72 open rows are ⊥ machine-action
 V4: ordering signal is node DEPTH only. `§T`.cites points at `§V`, ⊥ at another `§T` ∴ stated as weak, ⊥ dressed up
 V5: root row ⊥ actionable — no `mod.rs` to add to
 V6: plan ⊥ mutate source. it reads & reports; `apply` is the only writer
+V12: `apply` runs `review` on what it just committed & surfaces any disagreement w/ the gate. a check nobody invokes is a check that ⊥ run — `review` existed for hours & caught nothing because it was typed by hand
 V8: steps ordered by BELIEVABILITY — a node's measured keep-rate — then depth. `src/fed` failed 3x & kept supplying step 1 because depth was the only signal
 V9: Laplace-smoothed `(kept+1)/(tried+2)` ∴ an untried node scores 0.50 & outranks 3 failures (0.20) w/o pretending to be known-good
 V10: `kept` counts what survived REVIEW, ⊥ what passed the gate. the gate has gone green on 3 stubs ∴ counting commits measures the wrong thing

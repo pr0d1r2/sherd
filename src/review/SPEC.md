@@ -24,7 +24,7 @@ id|status|task|cites
 T1|x|`unwired` + `negative-only` + `public_fns`|V1,V2
 T2|x|`bbx review [rev]` over a commit's diff|V5
 T3|.|duplication check — new fn re-parsing what an existing fn parses|V1
-T4|.|wire into `apply` so a finding blocks the commit until acknowledged|V3
+T4|x|wired into `apply` — findings surfaced, advisory (`.:plan:V12`)|V3
 T5|x|`ignored-input` rule|V4
 
 ## §B BUGS

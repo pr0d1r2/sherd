@@ -628,6 +628,22 @@ pub fn apply(root: &Path, max_repair: usize) -> Result<String, String> {
         .map_err(|e| e.to_string())?;
     let sha = String::from_utf8_lossy(&sha.stdout).trim().to_string();
 
+    // SYNC: the gate said green; review may not agree. Surface the
+    // disagreement at the moment it happens rather than waiting for someone
+    // to type `bbx review` -- which is how an unwired function and an ignored
+    // input both landed unnoticed.
+    match crate::review::commit(root, &sha) {
+        Ok(f) if f.is_empty() => eprintln!("  review: no findings"),
+        Ok(f) => {
+            eprintln!("\n  REVIEW DISAGREES WITH THE GATE -- {} finding(s):", f.len());
+            for (file, x) in &f {
+                eprintln!("    {}: {}: {}", file.display(), x.rule, x.detail);
+            }
+            eprintln!("  advisory (review V3). Read the diff before `bbx outcome ... kept`.");
+        }
+        Err(e) => eprintln!("  review: could not run -- {e}"),
+    }
+
     // Record it applied, keyed by the row's TEXT -- edit the row and it
     // becomes plannable again.
     // Counted as an ATTEMPT here; `kept` is claimed only after review, via
