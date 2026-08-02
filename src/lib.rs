@@ -6,6 +6,7 @@
 
 pub mod cli;
 pub mod fed;
+pub mod land;
 pub mod lens;
 pub mod plan;
 pub mod review;

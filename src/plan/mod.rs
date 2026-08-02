@@ -581,12 +581,22 @@ fn preflight(root: &Path) -> Result<String, String> {
     if branch.is_empty() {
         return Err("not a git repo -- apply commits, so it needs one".into());
     }
-    if branch == "main" || branch == "master" {
-        return Err(format!("on {branch} -- apply commits generated code; branch first"));
-    }
     if !git(&["status", "--porcelain"]).unwrap_or_default().is_empty() {
         return Err("working tree dirty -- commit or stash first, so the \
                     generated diff is the only thing in the commit".into());
+    }
+    // Generated code never lands on the trunk directly. This used to REFUSE
+    // on main; refusing is the right requirement expressed as an obstacle, so
+    // it now satisfies the requirement instead -- the run gets a branch. What
+    // moves that branch onto main is `bbx land`, which asks for evidence.
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH).map_err(|e| e.to_string())?.as_secs();
+    let want = crate::land::run_branch(&branch, secs);
+    if want != branch {
+        std::process::Command::new("git").args(["checkout", "-q", "-b", &want])
+            .current_dir(root).status().map_err(|e| e.to_string())?;
+        eprintln!("apply: on {branch} -- generated code goes to {want}");
+        return Ok(want);
     }
     Ok(branch)
 }
@@ -666,6 +676,11 @@ pub fn apply(root: &Path, max_repair: usize) -> Result<String, String> {
         }
         Err(e) => eprintln!("  review: could not run -- {e}"),
     }
+
+    // Every commit goes to the remote so CI runs on it -- an independent
+    // check on a machine that did not write the code. The run BRANCH, never
+    // main; the trunk moves only through `bbx land`.
+    crate::land::push_branch(root, &branch);
 
     // Record it applied, keyed by the row's TEXT -- edit the row and it
     // becomes plannable again.

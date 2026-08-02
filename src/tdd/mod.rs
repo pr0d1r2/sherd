@@ -176,7 +176,7 @@ fn insert_impl(src: &str, code: &str) -> String {
 
 /// Step 3. Local, deterministic, zero tokens. Reports what RAN, not only what
 /// failed (root V48).
-fn gate(root: &Path) -> (bool, String) {
+pub fn gate(root: &Path) -> (bool, String) {
     let cargo = std::env::var("BBX_CARGO").unwrap_or_else(|_| "cargo".into());
     let out = Command::new(&cargo).args(["test", "--offline"]).current_dir(root).output();
     let (tests_ok, mut report) = match out {

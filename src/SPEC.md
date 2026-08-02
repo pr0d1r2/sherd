@@ -17,6 +17,7 @@ plan|open `§T` rows, horizon, confidence, `apply` one step|writing code, judgin
 review|mechanical checks on what `apply` committed|reading the diff, judging intent|-
 state|one idempotent cached store — pace, telemetry, applied rows|everything else|-
 slice|distil a document to the part needed to ACT, generated|judging what the slice says|-
+land|run branch → `main` when believability earns it|writing code, judging it, reading the diff|-
 cli|arg dispatch, usage, exit codes|every verb's logic|-
 
 ## §C CONSTRAINTS

@@ -21,7 +21,8 @@ bbx -- federated SPEC.md for small-context local models
   bbx graph [--tree|--table|--dot]  federation DAG, generated from §F
   bbx plan             next 3 steps, with what would invalidate each
   bbx plan --triage    unmanaged rows, with a proposed home for each
-  bbx apply            execute step 1 only, commit it, then stop
+  bbx apply [--land]   execute step 1 only, commit it to a run branch, stop
+  bbx land [--push]    fast-forward main to this run branch, if it earned it
   bbx ask <dir> <q>    ask the endpoint from a node's lens pack
   bbx tdd <dir> <Vn> <task>   red -> judge -> green -> gate -> repair
 
@@ -83,10 +84,16 @@ pub fn run() -> ExitCode {
             Ok(sha) => {
                 eprintln!("\napplied as {sha}. Run `bbx plan` again before the next step -- \
                            this commit changed the specs that plan it.");
-                ExitCode::SUCCESS
+                // --land asks to land it now; the evidence still decides.
+                if args.iter().any(|a| a == "--land") {
+                    land_verb(&root, args.iter().any(|a| a == "--push"))
+                } else {
+                    ExitCode::SUCCESS
+                }
             }
             Err(e) => { eprintln!("bbx: {e}"); ExitCode::from(1) }
         },
+        Some("land") => land_verb(&root, args.iter().any(|a| a == "--push")),
         #[cfg(feature = "ollama")]
         Some("ask") => match (args.get(1), args.get(2)) {
             (Some(d), Some(q)) => ask(&root, &PathBuf::from(d), q),
@@ -138,6 +145,22 @@ fn repo_root() -> PathBuf {
 
 fn arg_dir(args: &[String], root: &Path) -> PathBuf {
     args.get(1).map_or_else(|| root.to_path_buf(), PathBuf::from)
+}
+
+/// `land`, shared by the verb and by `apply --land`.
+///
+/// Local by default. Pushing is the outward-facing act, and an unattended run
+/// that pushes at 3am publishes unreviewed generated code; `--push` opts in.
+/// The local branches are the record of every try -- git as the memory.
+fn land_verb(root: &Path, push: bool) -> ExitCode {
+    match crate::land::land(root, push) {
+        Ok(msg) => { eprintln!("{msg}"); ExitCode::SUCCESS }
+        Err(e) => {
+            eprintln!("bbx: not landing -- {e}");
+            eprintln!("     the branch is untouched; it is the record of the try");
+            ExitCode::from(1)
+        }
+    }
 }
 
 fn usage(msg: &str) -> ExitCode {
