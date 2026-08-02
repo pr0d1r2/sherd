@@ -325,6 +325,44 @@ pub fn drive(root: &Path, node: &Path, invariant: &str, task: &str, max_repair: 
 /// As [`drive`], but the invariant is declared in `owner`, which may be an
 /// ancestor. A moved row cites the root invariant it answers to, and that
 /// invariant is not in the node's own spec (`.:plan` B6).
+/// Restores a module unless the run earns the right to keep it.
+///
+/// Written after `bbx tdd` exhausted its repair budget and left code that did
+/// not COMPILE in the tree (B22). Three other exit paths restored by hand and
+/// that one did not -- and a non-compiling module fails every later command in
+/// the repo, not just its own node.
+///
+/// A guard rather than a fourth hand-written restore, because "remember to
+/// restore on every error path" is a prompt to my future self, and `?` can
+/// return from paths nobody enumerated. Structure over gate over prompt, which
+/// is the one encoding rule this repo has actually measured.
+///
+/// Ten lines rather than `scopeguard`: repair once reached for that crate and
+/// this project does not take a dependency to own a `Drop` impl (fed B7).
+struct Restore {
+    path: std::path::PathBuf,
+    original: String,
+    armed: bool,
+}
+
+impl Restore {
+    fn arm(path: &Path, original: &str) -> Self {
+        Self { path: path.to_path_buf(), original: original.to_string(), armed: true }
+    }
+    /// The run earned it. Nothing is restored when this guard drops.
+    fn keep(&mut self) {
+        self.armed = false;
+    }
+}
+
+impl Drop for Restore {
+    fn drop(&mut self) {
+        if self.armed {
+            let _ = std::fs::write(&self.path, &self.original);
+        }
+    }
+}
+
 /// One competing implementation, with the evidence about it.
 #[derive(Debug, Clone)]
 pub struct Candidate {
@@ -455,6 +493,9 @@ pub fn drive_from(root: &Path, node: &Path, owner: &Path, invariant: &str,
     let spec_txt = std::fs::read_to_string(&spec_path).map_err(|e| format!("{}: {e}", spec_path.display()))?;
     let original = std::fs::read_to_string(&mod_path).map_err(|e| format!("{}: {e}", mod_path.display()))?;
     let (impl_r, tests_r) = split_module(&original);
+    // Armed from here on: every exit below this line restores unless the run
+    // ends by earning `keep()`.
+    let mut guard = Restore::arm(&mod_path, &original);
 
     let inv_txt = std::fs::read_to_string(&inv_path).unwrap_or_else(|_| spec_txt.clone());
     let inv = inv_txt.lines().find(|l| l.starts_with(&format!("{invariant}:")))
@@ -519,7 +560,6 @@ pub fn drive_from(root: &Path, node: &Path, owner: &Path, invariant: &str,
     std::fs::write(&mod_path, insert_test(&original, &test_fn)).map_err(|e| e.to_string())?;
     let (red_ok, red_out) = gate(root);
     if red_ok {
-        std::fs::write(&mod_path, &original).map_err(|e| e.to_string())?;
         return Err("test passes already -- not a red test, nothing to drive".into());
     }
     eprintln!("  gate: RED as required");
@@ -581,7 +621,6 @@ pub fn drive_from(root: &Path, node: &Path, owner: &Path, invariant: &str,
             i
         }
         Pick::NoWinner => {
-            std::fs::write(&mod_path, &original).map_err(|e| e.to_string())?;
             return Err(format!(
                 "{n} candidate(s) green but carrying findings -- reverted. repair \
                  polishes a stub, it does not fix one"));
@@ -631,9 +670,6 @@ pub fn drive_from(root: &Path, node: &Path, owner: &Path, invariant: &str,
         let first = verdict.trim().lines().next().unwrap_or("").to_string();
         eprintln!("  blind: {}", first.chars().take(78).collect::<String>());
         if !is_yes(&verdict) {
-            // Restore. A run that leaves rejected code in the tree is how
-            // `scopeguard::guard` reached `src/fed` unattended.
-            std::fs::write(&mod_path, &original).map_err(|e| e.to_string())?;
             return Err(format!(
                 "gates green, second lens says NO -- reverted. objection: {}",
                 verdict.trim()));
@@ -645,10 +681,11 @@ pub fn drive_from(root: &Path, node: &Path, owner: &Path, invariant: &str,
     eprintln!("\n  {} round-trips · {sent} tok sent · max single call {max}", log.len());
     if ok {
         eprintln!("  VERDICT: MERGEABLE -- gates green + second lens");
+        guard.keep();
         Ok(log)
     } else {
         eprintln!("{}", tail(&out, 2000));
-        Err("NOT mergeable -- gates red after repair budget".into())
+        Err("NOT mergeable -- gates red after repair budget, module restored".into())
     }
 }
 /// Classify a failure report as a compile‑time error.
@@ -666,6 +703,31 @@ pub fn classify_failure(report: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_unkept_run_restores_the_module() {
+        let dir = std::env::temp_dir().join("bbx-restore-test");
+        std::fs::create_dir_all(&dir).unwrap();
+        let f = dir.join("mod.rs");
+        std::fs::write(&f, "fn original() {}\n").unwrap();
+
+        // The exhausted-repair path: generated code written, run gives up.
+        {
+            let _g = Restore::arm(&f, "fn original() {}\n");
+            std::fs::write(&f, "fn generated( {  // does not compile\n").unwrap();
+        }
+        assert_eq!(std::fs::read_to_string(&f).unwrap(), "fn original() {}\n",
+                   "a run that keeps nothing must leave nothing behind");
+
+        // And a run that earns it keeps what it wrote.
+        {
+            let mut g = Restore::arm(&f, "fn original() {}\n");
+            std::fs::write(&f, "fn kept() {}\n").unwrap();
+            g.keep();
+        }
+        assert_eq!(std::fs::read_to_string(&f).unwrap(), "fn kept() {}\n");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     fn cand(green: bool, findings: usize) -> Candidate {
         Candidate { code: format!("fn c{findings}() {{}}"), green, findings }
