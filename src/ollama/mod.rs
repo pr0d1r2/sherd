@@ -265,7 +265,14 @@ pub trait Transport {
         -> Result<Box<dyn BufRead + Send>, String>;
 }
 
-/// The real one: plain HTTP over `ureq`, no TLS.
+/// The real one: `ureq` with TLS compiled in, so `BBX_ENDPOINT` may name an
+/// `https://` host.
+///
+/// TLS is not decoration here. What this posts is the PROMPT -- which for
+/// this tool means slices of your spec and your source, since feeding a
+/// repository to a model is the entire job. Over `http://` that crosses the
+/// network in cleartext, and `ollama` is on by DEFAULT, so it is the default
+/// path rather than an opt-in one.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Http;
 
@@ -273,12 +280,15 @@ impl Transport for Http {
     fn post(&self, url: &str, body: &str, timeout: Duration)
         -> Result<Box<dyn BufRead + Send>, String>
     {
-        let agent = ureq::AgentBuilder::new().timeout_read(timeout).build();
+        let agent: ureq::Agent = ureq::Agent::config_builder()
+            .timeout_recv_response(Some(timeout))
+            .build()
+            .into();
         let resp = agent.post(url)
-            .set("Content-Type", "application/json")
-            .send_string(body)
+            .content_type("application/json")
+            .send(body)
             .map_err(|e| format!("{url}: {e}"))?;
-        Ok(Box::new(std::io::BufReader::new(resp.into_reader())))
+        Ok(Box::new(std::io::BufReader::new(resp.into_body().into_reader())))
     }
 }
 

@@ -6,6 +6,24 @@ edition = "2021"
 rust-version = "1.96"
 license = "MIT"
 description = "two-axis federation of SPEC.md and source over a dir DAG, for small-context local models"
+repository = "https://github.com/pr0d1r2/blackbox"
+homepage = "https://github.com/pr0d1r2/blackbox"
+documentation = "https://docs.rs/bbx-cli"
+readme = "README.md"
+keywords = ["spec", "llm", "context", "codegen", "local"]
+categories = ["command-line-utilities", "development-tools"]
+# Dev-only machinery, meaningless to a consumer of the crate.
+exclude = [
+  "flake.nix",
+  "flake.lock",
+  ".envrc",
+  ".githooks",
+  ".context-limits",
+  ".bbx-state",
+  ".bbx-slices",
+  # Agent tooling for THIS repo; a consumer has no use for our commands.
+  ".claude",
+]
 
 # R8: crates.io `bbx` is taken (BBCode parser, lib-only). The BIN name is
 # verified free on brew, debian and PATH, so the package is renamed and the
@@ -34,9 +52,16 @@ itok = { path = "../itok", default-features = false, features = ["bpe"] }
 # registry dep -- no sibling checkout required. itok is not published, and that
 # is now the only reason this crate cannot be built from a clean clone.
 microlith = "0.5"
-# ureq with default-features off = no TLS stack. ollama is plain http on the
-# LAN: no cloud, no cert chain, no ring/openssl. Same choice itok made.
-ureq = { version = "2.12", default-features = false, optional = true }
+# ureq 3 with `rustls`, so `BBX_ENDPOINT` may be an `https://` host. What
+# gets POSTed is the PROMPT -- slices of your spec and your source, because
+# feeding a repository to a model is the whole job -- and `ollama` is a
+# DEFAULT feature, so plaintext would be the default path rather than an
+# opt-in one. Same fix itok took, for the same reason and with the same
+# surprise: moving 2 -> 3 to gain TLS made the tree smaller, since ureq 2
+# dragged in url -> idna -> the ICU stack.
+ureq = { version = "3", default-features = false, features = [
+  "rustls",
+], optional = true }
 serde_json = { version = "1", optional = true }
 
 [lints.rust]

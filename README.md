@@ -3,8 +3,8 @@
 Federated `SPEC.md` for spec-driven development on **local** models — a 20B
 running on your own hardware, not a frontier API.
 
-The problem in one number: **itok**, a sibling project, is an 11,291-line
-single-crate CLI. Its spec plus its code is **135,096 tokens**. The best
+The problem in one number: **itok**, a sibling project, is an 11,332-line
+single-crate CLI. Its spec plus its code is **136,811 tokens**. The best
 consumer setup measured here — gpt-oss:20b on a 24GB M-series box, full
 131,072-token window — leaves **102,529 working tokens** after harness
 overhead. A small, disciplined tool already does not fit its own best-case
@@ -115,7 +115,7 @@ decode. Federation is worth *more* on the slower machine.
 ## Use
 
 ```sh
-cargo build                      # deps: ../itok, ../microlith (path deps)
+cargo build                      # microlith from crates.io; itok is a path dep
 export BBX_ENDPOINT=http://your-box:11434
 export BBX_MODEL=gpt-oss:20b
 
@@ -177,6 +177,28 @@ Sections run `§G` goal · `§C` constraints · `§I` interfaces · `§R` resear
 `§V` invariants · `§T` tasks · `§B` bugs. `§R` and `§B` are where the evidence
 lives.
 
+## Contributing
+
+- [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) — setup, the loop, and the one
+  hard rule
+- [docs/CODE_OF_CONDUCT.md](docs/CODE_OF_CONDUCT.md)
+- [AGENTS.md](AGENTS.md) — the working guide, for agents and humans alike
+
+## Security
+
+`blackbox` runs `git` and `cargo test` under model direction, and sends slices
+of your repository to the endpoint you name. Report privately rather than in a
+public issue — see [docs/SECURITY.md](docs/SECURITY.md), which states the
+surface plainly.
+
+Set `BBX_ENDPOINT` to an `https://` URL when the endpoint is not a machine you
+own; TLS is compiled in.
+
 ## License
 
-MIT.
+MIT — see [LICENSE](LICENSE).
+
+Two documents are vendored rather than written here, and both are
+acknowledged in
+[docs/THIRD-PARTY-NOTICES.md](docs/THIRD-PARTY-NOTICES.md): `FORMAT.md` from
+cavekit, and `vendor/principles/` from set-and-setting.
