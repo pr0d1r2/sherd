@@ -195,7 +195,7 @@ pub fn land(root: &Path, push: bool) -> Result<String, String> {
     }
     let gate_ok = crate::tdd::gate(root)?.0;
     let e = evidence(root, &branch, gate_ok)?;
-    eprintln!("land: {} commit(s) on {branch} · gate {} · {} finding(s) ·                {} node(s) · believability {:.2}",
+    eprintln!("land: {} commit(s) on {branch} · gate {} · {} finding(s) · {} node(s) · believability {:.2}",
               e.commits, if e.gate_ok { "green" } else { "RED" }, e.findings,
               e.nodes, e.believability);
     landable(&e)?;
