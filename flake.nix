@@ -4,14 +4,25 @@
   # what you are editing -- which is why §C says it enters a lens pack as a
   # CONTRACT (one line per guard) rather than as this file.
   #
-  # Same nixpkgs pin as ../itok and ../microlith. Three sibling crates polished
-  # together should not disagree about their compiler.
+  # The nixpkgs rev is FOLLOWED, not spelled. A literal rev here is a fourth
+  # opinion about the fleet's compiler that nobody refreshes -- and it was
+  # already wrong: this file pinned 241313f4 (rustc 1.96.1) while the fleet
+  # standard was nixos-25.11. nixpkgs-lock is the one place that rev is
+  # decided, for ~80 repos, and it moved to nixos-26.05 (rustc 1.95.0) in
+  # pr0d1r2/nixpkgs-lock#19.
   description = "blackbox -- federated SPEC.md for small-context local models";
 
-  inputs.nixpkgs.url = "github:NixOS/nixpkgs/241313f4e8e508cb9b13278c2b0fa25b9ca27163";
+  inputs = {
+    nixpkgs-lock.url = "github:pr0d1r2/nixpkgs-lock";
+    nixpkgs.follows = "nixpkgs-lock/nixpkgs";
+  };
 
   outputs =
-    { self, nixpkgs }:
+    {
+      self,
+      nixpkgs,
+      ...
+    }:
     let
       systems = [
         "aarch64-darwin"

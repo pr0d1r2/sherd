@@ -13,7 +13,8 @@ src|code nodes — tokens, spec, fed, lens facades & logic|inference harness, en
 
 ## §C CONSTRAINTS
 
-- lang: Rust. stable. MSRV 1.96 (matches `itok`/`microlith`).
+- lang: Rust **edition 2024**. stable. MSRV **1.95** = the FLEET PIN (`nixpkgs-lock` → nixos-26.05). ⊥ a number copied from a sibling: `itok`/`microlith` declare 1.96 & MEASURED compile clean on 1.95 ∴ their floor is a mirror of an old pin, ⊥ a minimum.
+- nixpkgs rev FOLLOWED from `nixpkgs-lock`, ⊥ spelled here. one rev, ~80 repos.
 - target model: `gpt-oss:20b`, 131,072 ctx, local. ⊥ cloud fallback.
 - inference: local HTTP (Ollama) only. ⊥ network otherwise.
 - deterministic core: parse/DAG/budget/ceiling = pure Rust, ⊥ model. model ? prose gen & drift judgement only.

@@ -181,14 +181,19 @@ pub fn predict_for(label: &str, prompt_tokens: u64) -> Eta {
     let pre = derived_prefill(prompt_tokens)
         .unwrap_or_else(|| PREFILL_TOK_S.load(Ordering::Relaxed).max(1) as f64);
     let dec = DECODE_TOK_S.load(Ordering::Relaxed).max(1) as f64;
-    let gen = if label.is_empty() {
+    // `gen` is a reserved keyword from edition 2024; the state KEY stays "gen".
+    let gen_tokens = if label.is_empty() {
         EXPECT_GEN.load(Ordering::Relaxed)
     } else {
         crate::state::State::load()
             .get_u64("gen", label)
             .unwrap_or_else(|| EXPECT_GEN.load(Ordering::Relaxed))
     };
-    Eta { prefill_s: prompt_tokens as f64 / pre, decode_s: gen as f64 / dec, gen_est: gen }
+    Eta {
+        prefill_s: prompt_tokens as f64 / pre,
+        decode_s: gen_tokens as f64 / dec,
+        gen_est: gen_tokens,
+    }
 }
 
 /// Raise a step kind's expected generation to at least `seen`.
