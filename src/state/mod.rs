@@ -26,9 +26,26 @@ use std::path::PathBuf;
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct State {
     map: BTreeMap<(String, String), String>,
+    /// Where this state was read from, and where [`Self::save`] writes.
+    ///
+    /// Carried rather than re-resolved, so a `State` is a value and not a
+    /// handle on one ambient file. Reading `BBX_STATE` inside `save` meant
+    /// every test in the process shared one file: they wrote `obs` rows,
+    /// `derived_prefill` branched on how many existed, and which lines
+    /// executed depended on what a previous run left behind (`src/ollama:B8`).
+    ///
+    /// `std::env::set_var` is unsafe under edition 2024 and this crate
+    /// FORBIDS unsafe, so a per-test env var was never available -- the path
+    /// had to become a parameter (`src/ollama:V19`).
+    path: PathBuf,
 }
 
-fn path() -> PathBuf {
+/// The default state file: `BBX_STATE`, else `.bbx-state` beside the repo.
+///
+/// Read at the EDGE only. Everything below takes the path as a value, the
+/// same split `tdd::cargo_bin`/`gate_with` uses for the toolchain.
+#[must_use]
+pub fn default_path() -> PathBuf {
     PathBuf::from(
         std::env::var("BBX_STATE").unwrap_or_else(|_| ".bbx-state".into()),
     )
@@ -40,8 +57,21 @@ impl State {
     /// unparseable file would otherwise read as "nothing cached" forever.
     #[must_use]
     pub fn load() -> Self {
-        let mut s = Self::default();
-        let Ok(text) = std::fs::read_to_string(path()) else {
+        Self::at(default_path())
+    }
+
+    /// Read state from an EXPLICIT path.
+    ///
+    /// What makes the suite hermetic: a test hands its own temp file and
+    /// shares nothing with the tests running beside it.
+    #[must_use]
+    pub fn at(path: impl Into<PathBuf>) -> Self {
+        let path = path.into();
+        let mut s = Self {
+            path: path.clone(),
+            ..Self::default()
+        };
+        let Ok(text) = std::fs::read_to_string(&path) else {
             return s;
         };
         for (n, line) in text.lines().enumerate() {
@@ -69,7 +99,7 @@ impl State {
         for ((kind, key), v) in &self.map {
             out.push_str(&format!("{kind} {key} {v}\n"));
         }
-        let _ = std::fs::write(path(), out);
+        let _ = std::fs::write(&self.path, out);
     }
 
     #[must_use]
@@ -245,5 +275,63 @@ mod tests {
     fn content_hash_tracks_content_only() {
         assert_eq!(content_hash(b"abc"), content_hash(b"abc"));
         assert_ne!(content_hash(b"abc"), content_hash(b"abd"));
+    }
+}
+
+#[cfg(test)]
+mod path_tests {
+    use super::*;
+
+    fn tmp(tag: &str) -> PathBuf {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static N: AtomicUsize = AtomicUsize::new(0);
+        let n = N.fetch_add(1, Ordering::Relaxed);
+        // Unique per INSTANCE, not per process -- `src/review:V6`, learned
+        // when two fixtures sharing a tag deleted each other's directory.
+        std::env::temp_dir()
+            .join(format!("bbx-state-{tag}-{}-{n}", std::process::id()))
+    }
+
+    #[test]
+    fn a_state_remembers_where_it_came_from() {
+        let p = tmp("roundtrip");
+        let mut a = State::at(&p);
+        a.set("obs", "k", "v");
+        a.save();
+        let b = State::at(&p);
+        assert_eq!(b.get("obs", "k"), Some("v"), "save must write to `path`");
+        let _ = std::fs::remove_file(&p);
+    }
+
+    #[test]
+    fn two_states_at_different_paths_share_nothing() {
+        // THE POINT of T13. Before this, every test in the process wrote the
+        // same `.bbx-state`, so `derived_prefill` branched on what a previous
+        // test had left and coverage measured 75.26-75.35% for one unchanged
+        // tree (`src/ollama:B8`).
+        let (p, q) = (tmp("iso-a"), tmp("iso-b"));
+        let mut a = State::at(&p);
+        a.set("gen", "1 red", "2500");
+        a.save();
+        let b = State::at(&q);
+        assert_eq!(b.get("gen", "1 red"), None, "a fresh path is a cold start");
+        let _ = std::fs::remove_file(&p);
+        let _ = std::fs::remove_file(&q);
+    }
+
+    #[test]
+    fn a_missing_file_is_a_cold_start_not_an_error() {
+        let s = State::at(tmp("absent"));
+        assert_eq!(s.all("obs").len(), 0);
+    }
+
+    #[test]
+    fn the_default_path_is_read_from_the_environment_at_the_edge() {
+        // `BBX_STATE`, else `.bbx-state`. Read HERE and nowhere below, which
+        // is what let the path become a parameter -- `std::env::set_var` is
+        // unsafe under edition 2024 and this crate forbids unsafe, so a
+        // per-test env var was never an option (`src/ollama:V19`).
+        let p = default_path();
+        assert!(p.to_string_lossy().contains("bbx-state"), "{p:?}");
     }
 }

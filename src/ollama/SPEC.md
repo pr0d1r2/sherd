@@ -45,7 +45,7 @@ T8|.|probe the endpoint's tier and warn when falling back|V3
 T9|x|`Transport` seam + `generate_via`|V16
 T10|x|`Sampling` threaded to the request body, verified via a spy transport|V17,V16
 T12|.|wire `generate_via` → `post_with_retry`. REPLACES a call site ∴ ⊥ drivable by the loop (`plan:V13`)|V16,T3
-T13|.|point `BBX_STATE` at a temp file per test so the suite stops sharing `.bbx-state`. the 0.3 coverage margin in `hk.pkl` is a WORKAROUND for this & should be removed w/ it|V19
+T13|~|point `BBX_STATE` at a temp file per test so the suite stops sharing `.bbx-state`. the 0.3 coverage margin in `hk.pkl` is a WORKAROUND for this & should be removed w/ it|V19
 
 ## §B BUGS
 
