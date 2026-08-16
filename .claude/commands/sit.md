@@ -1,11 +1,19 @@
 ---
-description: Oversight cycles over bbx for a given duration -- plan, apply, review the diff, plant anchors, commit. Halts with a recorded reason. Ends with a summary commit.
+description: Sit with the local 20B while it works -- plan, apply, review the diff, plant anchors, commit -- at one fixed granularity. Halts with a recorded reason. Ends with a summary commit.
 argument-hint: [duration, e.g. 1h or 30m -- omit for a single cycle]
 ---
 
-# /introspect $ARGUMENTS
+# /sit $ARGUMENTS
 
-A local 20B writes code; **you** do the judgement it cannot.
+A local 20B writes code; **you** do the judgement it cannot. You are the
+sitter: sober, present, not doing the work, intervening only when it goes
+wrong — and the one who remembers afterwards what happened.
+
+Everything here runs at **one fixed granularity** — a `§T` row becomes one
+function in one node's `mod.rs`. Nothing varies. That is the point: when an
+attempt fails here, something external moved, and the failure is a signal
+rather than an experiment. `/titrate` is the loop that varies granularity on
+purpose; this one exploits what that loop already found.
 
 Designed to run with **nobody watching**. So: every halt is recorded as a
 commit, never only printed, and nothing is ever merged or pushed to `main`.
@@ -99,7 +107,7 @@ On any of these, **stop the cycle and record why**:
 Record it where a human will find it later, because nobody is watching now:
 
 ```sh
-git commit --allow-empty -m "halt(introspect): <one line>
+git commit --allow-empty -m "halt(sit): <one line>
 
 <what was attempted, what the gate or review said, what you tried,
  and what a human should decide>"
@@ -113,7 +121,7 @@ At the end -- deadline reached or halted -- write one commit so the run is
 auditable by someone who was not watching:
 
 ```sh
-git commit --allow-empty -m "introspect: <n> cycles over <duration>
+git commit --allow-empty -m "sit: <n> cycles over <duration>
 
 applied:   <node> <id> -- kept | fixed | reverted, one line each
 anchors:   <§B/§V/§T rows planted, and where>

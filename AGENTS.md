@@ -86,4 +86,4 @@ Endpoint: `BBX_ENDPOINT` (default `http://localhost:11434`), `BBX_MODEL`
 
 ## Claude Code
 
-`/introspect` runs one oversight cycle and halts with a recorded reason.
+`/sit` runs one oversight cycle and halts with a recorded reason.

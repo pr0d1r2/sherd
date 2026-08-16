@@ -52,7 +52,7 @@ src|code nodes — tokens, spec, fed, lens facades & logic|inference harness, en
 - file: `SPEC.why.md` ∀ dir w/ rationale — `<id>|<rationale>`, addressed by `§V`/`§B` id
 - file: `.context-limits` — per-path ceilings, `itok` format, reused ⊥ reinvented
 - file: `.spec-records` — closed-option baseline, `microlith --records`
-- file: `.claude/commands/introspect.md` — `/introspect`, ONE oversight cycle. loop-safe, halts w/ a recorded reason
+- file: `.claude/commands/sit.md` — `/sit`, ONE oversight cycle. loop-safe, halts w/ a recorded reason
 - file: `.claude/commands/titrate.md` — `/titrate`, granularity descent. attempt → enrich pack | split task. floor = VERIFIABILITY ⊥ size
 - file: `.bbx-frontier` — `shape rung= kind= pack= sig= tests= tried= kept=`. TRACKED, ⊥ `.bbx-state`: learning that dies at the clone boundary ⊥ learning
 - file: `AGENTS.md` — supervisor class. auto-loaded by Codex & Claude, ⊥ reachable by a worker prompt (V97)

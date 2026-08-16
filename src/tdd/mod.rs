@@ -1316,12 +1316,7 @@ mod tests {
             signatures(impl_r),
             tests_r
         );
-        for marker in [
-            "/introspect",
-            "git revert",
-            "halt(introspect)",
-            "maintenance mode",
-        ] {
+        for marker in ["/sit", "git revert", "halt(sit)", "maintenance mode"] {
             assert!(
                 !prompt.contains(marker),
                 "supervisor instruction `{marker}` reached a worker prompt"
