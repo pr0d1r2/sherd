@@ -1223,6 +1223,22 @@ mod tests {
 #[cfg(test)]
 mod loop_tests {
     use super::*;
+
+    #[test]
+    fn a_gate_that_could_not_run_is_an_error_not_a_verdict() {
+        // V26, and it is the distinction the whole harness rests on: a
+        // missing toolchain scoring RED is indistinguishable from code that
+        // failed its tests, and every titration would read as a located
+        // boundary rather than as a broken bench.
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let Err(msg) = gate_with(root, "definitely-not-a-cargo-binary") else {
+            return;
+        };
+        assert!(
+            msg.contains("could not RUN"),
+            "say the gate did not EXECUTE, not that it failed: {msg}"
+        );
+    }
     use std::cell::Cell;
     use std::io::BufRead;
     use std::time::Duration;

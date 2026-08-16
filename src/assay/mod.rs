@@ -1749,3 +1749,74 @@ mod bound {
         );
     }
 }
+
+#[cfg(test)]
+mod reports {
+    use super::*;
+
+    #[test]
+    fn a_condition_with_errors_says_it_is_incomplete() {
+        // `.:B4`: `p/total` reads as a SCORE, and every call that produced no
+        // verdict silently shrinks it. A run where a third of the calls never
+        // happened is not a 2/3 result, it is a 2/2 result over an incomplete
+        // run, and the report has to say so where a reader will see it.
+        let out = titration_report(
+            "bare",
+            &[Outcome::Pass, Outcome::Pass, Outcome::Error],
+        );
+        assert!(out.contains("pass 2/3"), "{out}");
+        assert!(out.contains("1 of 3 produced NO verdict"), "{out}");
+        assert!(out.contains("incomplete, not measured"), "{out}");
+    }
+
+    #[test]
+    fn a_hung_call_counts_as_incomplete_alongside_an_error() {
+        // V6 and V1 share the line: neither produced a verdict, and folding
+        // either into `fail` would score the model for a call that never
+        // answered.
+        let out = titration_report("ctx", &[Outcome::Hung, Outcome::Error]);
+        assert!(out.contains("2 of 2 produced NO verdict"), "{out}");
+    }
+
+    #[test]
+    fn a_complete_condition_adds_no_incomplete_line() {
+        // The control: the warning must not appear when nothing was lost, or
+        // it becomes noise nobody reads.
+        let out = titration_report("bare", &[Outcome::Pass, Outcome::Fail]);
+        assert!(out.contains("pass 1/2"), "{out}");
+        assert!(!out.contains("NO verdict"), "{out}");
+    }
+
+    #[test]
+    fn the_four_outcomes_are_named_distinctly() {
+        assert_eq!(Outcome::Pass.word(), "PASS");
+        assert_eq!(Outcome::Fail.word(), "fail");
+        assert_eq!(Outcome::Error.word(), "ERROR");
+        assert_eq!(Outcome::Hung.word(), "HUNG");
+    }
+
+    #[test]
+    fn a_channel_predicts_before_the_scores_are_seen() {
+        // `assay:V5`: a class assigned AFTER seeing the scores fits any
+        // result. R43 pre-registered these three and scored 8 of 11 (R45),
+        // which is only a meaningful number because the predictions were
+        // written down first.
+        assert_eq!(Channel::Type.predicts(), (true, true));
+        assert_eq!(Channel::Prose.predicts(), (true, false));
+        assert_eq!(Channel::Beyond.predicts(), (false, false));
+    }
+
+    #[test]
+    fn a_pack_is_prepended_and_the_request_survives_verbatim() {
+        // `.:V108`: the pack must be the ONLY variable between the two arms
+        // of T82, so everything after it is byte-identical to the bare
+        // prompt. R25 is why it goes at the END of the prefix rather than
+        // being woven in -- a prepend costs 2.1x an append.
+        let Some(it) = GEN_CORPUS.first() else { return };
+        let bare = gen_prompt(it.sharp, it.sig, it.preamble);
+        let ctx =
+            gen_prompt_in_context("PACK BODY", it.sharp, it.sig, it.preamble);
+        assert!(ctx.ends_with(&bare), "the request survives verbatim");
+        assert!(ctx.contains("PACK BODY"), "the pack is carried");
+    }
+}
