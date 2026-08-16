@@ -18,7 +18,7 @@
 #   code 98.3 · lens 94.5 · spec 92.5 · tokens 88.9 · state 88.0 · fed 87.1
 #   ollama 70.9 · tdd 69.0 · plan 66.5 · slice 63.6 · review 63.0
 #   land 55.2 · assay 54.0 · cli 0.0
-lines 90.11
+lines 90.03
 #
 # MEASUREMENT VARIANCE, observed rather than assumed: two runs of the same
 # tree reported 71.27% and 71.17%. Three later runs all reported 71.17%. The
@@ -26,14 +26,28 @@ lines 90.11
 # margin in the comparison -- not a quietly lowered floor, which would hide
 # the drift this file exists to catch.
 #
-# THE MARGIN IS 0.3, and it is stated in `hk.pkl` rather than hidden by
-# lowering this number. CAUSE, found 2026-08-19: the suite is not hermetic.
-# `.bbx-state` lives in the repo, tests both READ and WRITE it, and
-# `derived_prefill` branches on its contents -- so which lines execute depends
-# on what previous runs left behind. Measured spread 75.26-75.35.
+# THE MARGIN WAS 0.3, and it is GONE as of 2026-08-21. Its cause was named
+# here on 2026-08-19: the suite was not hermetic. `.bbx-state` lives in the
+# repo, tests both READ and WROTE it, and `derived_prefill` branches on its
+# contents -- so which lines executed depended on what previous runs left
+# behind. Measured spread 75.26-75.35.
 #
-# The margin is a WORKAROUND. `src/ollama:T13` carries the fix: point BBX_STATE
-# at a temp file per test, so coverage stops depending on run order.
+# `src/ollama:T13` is CLOSED and the margin came out with it. The fix is not
+# T13's original `BBX_STATE` plan -- an env var is process-global, so parallel
+# tests would still share it, and `set_var` is unsafe under edition 2024 while
+# this crate forbids unsafe. What landed instead:
+#
+#   * every store-touching fn has a `*_in(&mut State, ..)` core, so a test
+#     brings its own store (`src/plan`, `src/ollama`);
+#   * `generate_via` SPLIT into `stream` (measures) and `learn_from`
+#     (persists), because a fn that ends by writing what it observed cannot be
+#     exercised without mutating shared state (`src/ollama:V20`, `B9`);
+#   * a `Transport` declares whether its timings are REAL, and a double says
+#     no -- so a scripted reply never teaches the pace model that calls take
+#     no time.
+#
+# VERIFIED: `cargo test` leaves `.bbx-state` byte-identical, and two
+# consecutive `cargo llvm-cov` runs report the same number to the digit.
 #
 # DROP RECORDED 2026-08-19, 75.50% -> 75.11%, with the reason this file asks
 # for rather than a silent edit.

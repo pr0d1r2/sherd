@@ -60,6 +60,12 @@ pub fn load_pace() {
 /// shares. Best-effort: a read-only tree must not fail a run over a cache.
 pub fn save_pace() {
     let mut st = crate::state::State::load();
+    save_pace_in(&mut st);
+    st.save();
+}
+
+/// Persist the learned rates INTO a given store.
+pub fn save_pace_in(st: &mut crate::state::State) {
     st.set(
         "pace",
         "prefill",
@@ -75,7 +81,6 @@ pub fn save_pace() {
         "gen",
         EXPECT_GEN.load(Ordering::Relaxed).to_string(),
     );
-    st.save();
 }
 
 /// Observed prefill rate, and whether it implies the prefix was CACHED.
@@ -147,26 +152,59 @@ pub fn bucket(prompt_tokens: u64) -> &'static str {
 ///
 /// Retained raw rather than folded away: an average cannot be re-derived into
 /// a median, a percentile, or a per-size fit, but samples can become all three.
-pub fn record_obs(
+pub fn record_obs_in(
+    st: &mut crate::state::State,
     label: &str,
-    prompt_tok: u64,
-    prefill_ms: u128,
-    eval_tok: u64,
-    decode_ms: u128,
-    cold: bool,
+    row: &Telemetry,
 ) {
     const KEEP: usize = 200;
-    let row = format!(
-        "{label} {prompt_tok} {prefill_ms} {eval_tok} {decode_ms} {}",
-        u8::from(cold)
-    );
-    let mut st = crate::state::State::load();
-    let key = crate::state::content_hash(row.as_bytes());
+    let line = row.line(label);
+    let key = crate::state::content_hash(line.as_bytes());
     if st.get("obs", &key).is_some() {
         return; // idempotent: this exact observation is already recorded
     }
-    st.set("obs", &key, row);
+    st.set("obs", &key, line);
     st.trim_kind("obs", KEEP);
+}
+
+/// One call's raw telemetry.
+///
+/// A struct because six positional arguments past `clippy.toml`'s limit of
+/// four is where `prefill_ms` and `decode_ms` get swapped at a call site and
+/// nothing complains -- both are `u128` and both are plausible.
+#[derive(Debug, Clone, Copy)]
+pub struct Telemetry {
+    /// Prompt tokens the server counted.
+    pub prompt_tok: u64,
+    /// Milliseconds before the first token.
+    pub prefill_ms: u128,
+    /// Tokens generated.
+    pub eval_tok: u64,
+    /// Milliseconds generating them.
+    pub decode_ms: u128,
+    /// The model was loaded from disk for this call.
+    pub cold: bool,
+}
+
+impl Telemetry {
+    /// The retained row, as stored.
+    #[must_use]
+    pub fn line(&self, label: &str) -> String {
+        format!(
+            "{label} {} {} {} {} {}",
+            self.prompt_tok,
+            self.prefill_ms,
+            self.eval_tok,
+            self.decode_ms,
+            u8::from(self.cold)
+        )
+    }
+}
+
+/// Retain one call's telemetry in the ambient store.
+pub fn record_obs(label: &str, row: &Telemetry) {
+    let mut st = crate::state::State::load();
+    record_obs_in(&mut st, label, row);
     st.save();
 }
 
@@ -348,6 +386,20 @@ pub trait Transport {
         body: &str,
         timeout: Duration,
     ) -> Result<Box<dyn BufRead + Send>, String>;
+    /// Whether this transport's TIMINGS are real.
+    ///
+    /// A scripted double answers from memory in microseconds. Folding that
+    /// into the pace model teaches it that calls take no time, and every
+    /// later ETA and abort ceiling is computed from those rates -- so a
+    /// suite full of doubles would leave the model predicting instant
+    /// replies and aborting real ones early.
+    ///
+    /// Defaults to true, because a real endpoint is the normal case and a
+    /// double is the thing that has to declare itself. `B9` is what the
+    /// absence of this cost: every parser test was also a writer.
+    fn timings_are_real(&self) -> bool {
+        true
+    }
 }
 
 /// The real one: `ureq` with TLS compiled in, so `BBX_ENDPOINT` may name an
@@ -513,14 +565,14 @@ pub fn generate_sampled(
 ///
 /// # Errors
 /// See [`generate_labelled`].
-pub fn generate_via(
+pub fn stream(
     transport: &dyn Transport,
     prompt: &str,
     label: &str,
     sampling: Sampling,
     eta: Eta,
     on_chunk: &mut dyn FnMut(&str),
-) -> Result<Reply, String> {
+) -> Result<Streamed, String> {
     let budget = eta.total();
     // Hard ceiling: 4x the prediction. Also the socket read timeout, so a
     // server that accepts and then says nothing fails here rather than hanging
@@ -633,27 +685,109 @@ pub fn generate_via(
         eval_tokens,
         ms: started.elapsed().as_millis(),
     };
-    // Split the observed time at the first token: everything before it is
-    // prefill, everything after is decode. Two rates, learned separately,
-    // because they scale differently (R16/R17).
-    // Subtract model load: it is disk time, not prefill.
+    Ok(Streamed {
+        reply,
+        started,
+        first_chunk,
+    })
+}
+
+/// One reply, with the timing needed to learn from it.
+pub struct Streamed {
+    /// What the model said.
+    pub reply: Reply,
+    /// When the request went out.
+    pub started: Instant,
+    /// When the first token came back, if one did.
+    pub first_chunk: Option<Instant>,
+}
+
+/// Stream a reply AND fold it into the pace model.
+///
+/// The production path: [`stream`] measures, [`learn_from`] persists, and
+/// only this does both. A test that wants the parser calls `stream` and
+/// writes nothing (`V20`, and `B9` is what it cost not to have the split).
+///
+/// # Errors
+/// Transport failure, a malformed frame, or an abort past the ceiling.
+pub fn generate_via(
+    transport: &dyn Transport,
+    prompt: &str,
+    label: &str,
+    sampling: Sampling,
+    eta: Eta,
+    on_chunk: &mut dyn FnMut(&str),
+) -> Result<Reply, String> {
+    let s = stream(transport, prompt, label, sampling, eta, on_chunk)?;
+    if transport.timings_are_real() {
+        learn_from(&s.reply, label, s.started, s.first_chunk);
+    }
+    Ok(s.reply)
+}
+
+/// Fold one real reply into the pace model, and PERSIST it.
+///
+/// Separate from [`generate_via`] because a function that ends by writing
+/// what it just observed cannot be exercised without mutating shared state:
+/// every test of the STREAM PARSER became a writer of the pace model, and
+/// `B9` is that measured -- `cargo test --lib ollama::` alone moved
+/// `pace gen` from 5 to 517. `V20` is the rule, and it is what makes `V19`'s
+/// hermetic suite enforceable rather than aspirational.
+///
+/// Production calls this immediately after `generate_via`; a test that only
+/// wants the parser calls neither.
+pub fn learn_from(
+    reply: &Reply,
+    label: &str,
+    started: Instant,
+    first_chunk: Option<Instant>,
+) {
+    let mut st = crate::state::State::load();
+    learn_from_in(&mut st, reply, label, timing(reply, started, first_chunk));
+    st.save();
+}
+
+/// Split the observed time at the first token: everything before it is
+/// prefill, everything after is decode. Two rates, learned separately,
+/// because they scale differently (R16/R17). Model load is subtracted -- it
+/// is disk time, not prefill.
+#[must_use]
+pub fn timing(
+    reply: &Reply,
+    started: Instant,
+    first_chunk: Option<Instant>,
+) -> Telemetry {
     let load_ms = u128::from(LAST_LOAD_MS.load(Ordering::Relaxed));
     let pre_ms = first_chunk
         .map_or(reply.ms, |t| (t - started).as_millis())
         .saturating_sub(load_ms);
-    observe(&reply, pre_ms, reply.ms.saturating_sub(pre_ms));
-    LAST_CACHED
-        .store(was_cached(reply.prompt_tokens, pre_ms), Ordering::Relaxed);
-    record_obs(
-        label,
-        reply.prompt_tokens,
-        pre_ms,
-        reply.eval_tokens,
-        reply.ms.saturating_sub(pre_ms),
-        load_ms > 500,
+    Telemetry {
+        prompt_tok: reply.prompt_tokens,
+        prefill_ms: pre_ms,
+        eval_tok: reply.eval_tokens,
+        decode_ms: reply.ms.saturating_sub(pre_ms),
+        cold: load_ms > 500,
+    }
+}
+
+/// Fold one reply into the pace model IN a given store.
+///
+/// `V20`: measuring and learning are separate calls, and the store is a
+/// parameter so learning can be exercised without writing the ambient file
+/// (`V19`, `B9`).
+pub fn learn_from_in(
+    st: &mut crate::state::State,
+    reply: &Reply,
+    label: &str,
+    t: Telemetry,
+) {
+    observe(reply, t.prefill_ms, t.decode_ms);
+    LAST_CACHED.store(
+        was_cached(reply.prompt_tokens, t.prefill_ms),
+        Ordering::Relaxed,
     );
-    save_pace();
-    Ok(reply)
+    record_obs_in(st, label, &t);
+    save_pace_in(st);
 }
 
 /// Generate with no progress reporting.
@@ -702,6 +836,115 @@ mod tests {
             std::env::temp_dir()
                 .join(format!("bbx-pace-{tag}-{}-{n}", std::process::id())),
         )
+    }
+
+    #[test]
+    fn timing_splits_prefill_from_decode_at_the_first_token() {
+        // Two rates learned separately because they scale differently
+        // (R16/R17). Folding them into one would make a fat prompt look like
+        // slow generation and every later eta would be wrong in both halves.
+        let r = Reply {
+            text: String::new(),
+            thinking: String::new(),
+            prompt_tokens: 900,
+            eval_tokens: 100,
+            ms: 3_000,
+        };
+        let started = Instant::now();
+        let first = started.checked_add(Duration::from_millis(1_000));
+        let t = timing(&r, started, first);
+        assert_eq!(t.prefill_ms, 1_000, "everything before the first token");
+        assert_eq!(t.decode_ms, 2_000, "and everything after it");
+        assert_eq!(t.prompt_tok, 900);
+        assert_eq!(t.eval_tok, 100);
+    }
+
+    #[test]
+    fn a_reply_with_no_token_at_all_is_all_prefill() {
+        // No first chunk means nothing ever came back, so the whole elapsed
+        // time was spent waiting -- calling any of it `decode` would teach
+        // the model a generation rate from a call that generated nothing.
+        let r = Reply {
+            text: String::new(),
+            thinking: String::new(),
+            prompt_tokens: 10,
+            eval_tokens: 0,
+            ms: 500,
+        };
+        let t = timing(&r, Instant::now(), None);
+        assert_eq!(t.prefill_ms, 500);
+        assert_eq!(t.decode_ms, 0);
+    }
+
+    #[test]
+    fn a_telemetry_row_round_trips_its_fields_in_order() {
+        // The row is positional and six wide. `prefill_ms` and `decode_ms`
+        // are both `u128` and both plausible in either slot, which is why
+        // they travel in a struct now rather than as bare arguments.
+        let t = Telemetry {
+            prompt_tok: 1,
+            prefill_ms: 2,
+            eval_tok: 3,
+            decode_ms: 4,
+            cold: true,
+        };
+        assert_eq!(t.line("lbl"), "lbl 1 2 3 4 1");
+    }
+
+    #[test]
+    fn learning_from_a_reply_retains_it_and_persists_the_rates() {
+        // The production path's persisting half, exercised in a store of its
+        // own. Before the split this could only run by writing the ambient
+        // `.bbx-state`, which is `B9` -- so the only test of it was every
+        // other test, by accident.
+        let mut st = store("learn");
+        let r = Reply {
+            text: "x".into(),
+            thinking: String::new(),
+            prompt_tokens: 900,
+            eval_tokens: 100,
+            ms: 2_000,
+        };
+        let t = Telemetry {
+            prompt_tok: 900,
+            prefill_ms: 1_000,
+            eval_tok: 100,
+            decode_ms: 1_000,
+            cold: false,
+        };
+        learn_from_in(&mut st, &r, "1 test", t);
+        assert!(!st.all("obs").is_empty(), "the observation is retained");
+        assert!(st.get("pace", "prefill").is_some(), "rates persisted");
+    }
+
+    #[test]
+    fn the_same_observation_twice_is_retained_once() {
+        // Idempotent by content hash. A retry that re-reports the same call
+        // must not double-weight it in the median.
+        let mut st = store("idem");
+        let t = Telemetry {
+            prompt_tok: 7,
+            prefill_ms: 3,
+            eval_tok: 2,
+            decode_ms: 4,
+            cold: false,
+        };
+        record_obs_in(&mut st, "1 test", &t);
+        let after_one = st.all("obs").len();
+        record_obs_in(&mut st, "1 test", &t);
+        assert_eq!(st.all("obs").len(), after_one, "recorded once, not twice");
+    }
+
+    #[test]
+    fn a_scripted_transport_declares_its_timings_fake() {
+        // The whole guard rests on this: a double answers from memory in
+        // microseconds, and folding that into the model would teach it that
+        // calls take no time. `Http` says true by default; a double says no.
+        assert!(Http.timings_are_real(), "a real endpoint is real");
+        assert!(
+            !Canned(String::new()).timings_are_real(),
+            "a double must declare itself -- B9 is the absence of this"
+        );
     }
 
     #[test]
@@ -765,6 +1008,10 @@ mod tests {
     }
 
     impl Transport for Flaky {
+        fn timings_are_real(&self) -> bool {
+            false
+        }
+
         fn post(
             &self,
             url: &str,
@@ -786,6 +1033,10 @@ mod tests {
     struct Canned(String);
 
     impl Transport for Canned {
+        fn timings_are_real(&self) -> bool {
+            false
+        }
+
         fn post(
             &self,
             _u: &str,
@@ -806,8 +1057,11 @@ mod tests {
         }
     }
 
+    /// Drive the PARSER only. `stream` measures and persists nothing, so a
+    /// test of the stream format is not also a writer of the pace model
+    /// (`V20`, `B9`).
     fn drain(t: &dyn Transport) -> Result<Reply, String> {
-        generate_via(
+        stream(
             t,
             "p",
             "test",
@@ -815,6 +1069,7 @@ mod tests {
             slow_eta(),
             &mut |_| {},
         )
+        .map(|s| s.reply)
     }
 
     #[test]
@@ -931,6 +1186,10 @@ mod tests {
     /// request can be checked without an endpoint.
     struct Spy(std::cell::RefCell<String>);
     impl Transport for Spy {
+        fn timings_are_real(&self) -> bool {
+            false
+        }
+
         fn post(
             &self,
             _u: &str,
