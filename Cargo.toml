@@ -55,7 +55,7 @@ itok = { path = "../itok", default-features = false, features = ["bpe"] }
 # microlith is public (crates.io, github.com/pr0d1r2/microlith), so it is a
 # registry dep -- no sibling checkout required. itok is not published, and that
 # is now the only reason this crate cannot be built from a clean clone.
-microlith = "0.5"
+microlith = "0.6"
 # ureq 3 with `rustls`, so `BBX_ENDPOINT` may be an `https://` host. What
 # gets POSTed is the PROMPT -- slices of your spec and your source, because
 # feeding a repository to a model is the whole job -- and `ollama` is a
