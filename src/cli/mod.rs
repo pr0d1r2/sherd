@@ -33,7 +33,18 @@ exit: 0 clean · 1 violation · 2 usage";
 /// Parse argv and dispatch. The binary itself holds nothing (`.:V41`).
 #[must_use]
 pub fn run() -> ExitCode {
-    let mut args: Vec<String> = std::env::args().skip(1).collect();
+    run_args(std::env::args().skip(1).collect())
+}
+
+/// As [`run`], from an explicit argv.
+///
+/// `run` read `std::env::args` directly, so dispatch -- usage, exit codes,
+/// every verb's routing -- could not be exercised at all. This node measured
+/// 0.0% coverage over 445 lines with no test module (`.:R50`), and an
+/// untestable entry point is why. Exit codes and usage are real contracts
+/// per this module's own header; a contract nothing can call is a comment.
+#[must_use]
+pub fn run_args(mut args: Vec<String>) -> ExitCode {
     // -v / --verbose is positional-agnostic: it is a mode, not an argument.
     #[cfg(feature = "ollama")]
     if let Some(i) = args.iter().position(|a| a == "-v" || a == "--verbose") {
@@ -694,4 +705,93 @@ fn slice_cmd(root: &Path, mode: &str) -> ExitCode {
         }
     }
     ExitCode::SUCCESS
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn argv(s: &[&str]) -> Vec<String> {
+        s.iter().map(|a| (*a).to_string()).collect()
+    }
+
+    /// Exit codes are a CONTRACT (`§I`: 0 clean · 1 violation · 2 usage), and
+    /// a contract nothing calls is a comment. This node sat at 0.0% coverage
+    /// over 445 lines because `run` read `std::env::args` directly.
+    #[test]
+    fn an_unknown_command_is_a_usage_error() {
+        assert_eq!(run_args(argv(&["nope"])), ExitCode::from(2));
+    }
+
+    #[test]
+    fn help_and_no_args_both_succeed() {
+        assert_eq!(run_args(argv(&["--help"])), ExitCode::SUCCESS);
+        assert_eq!(run_args(argv(&["-h"])), ExitCode::SUCCESS);
+        assert_eq!(run_args(argv(&["help"])), ExitCode::SUCCESS);
+        assert_eq!(run_args(argv(&[])), ExitCode::SUCCESS);
+    }
+
+    #[test]
+    fn a_verb_missing_its_argument_is_usage_not_a_crash() {
+        // Each of these needs an argument it is not given. Usage, never a
+        // panic: `bbx` runs unattended inside the loop, and a panic there is
+        // a run that stops with no record.
+        assert_eq!(run_args(argv(&["lens"])), ExitCode::from(2));
+        assert_eq!(run_args(argv(&["outcome"])), ExitCode::from(2));
+        assert_eq!(run_args(argv(&["outcome", "src/fed"])), ExitCode::from(2));
+    }
+
+    #[test]
+    fn an_outcome_verdict_outside_the_three_words_is_refused() {
+        // `kept`, `reverted`, `failed`. Anything else must not be read as one
+        // of them -- believability is computed from these and a typo silently
+        // scored as `kept` would corrupt the record it exists to keep.
+        assert_eq!(
+            run_args(argv(&["outcome", "src/fed", "probably"])),
+            ExitCode::from(2)
+        );
+    }
+
+    #[test]
+    fn depth_defaults_to_rule_and_refuses_a_typo() {
+        // `.:V45` -- `rule` is the default. A typo must be a usage error, not
+        // a silent fall back, or an ignored flag looks exactly like an
+        // honoured one (`.:B8`).
+        assert_eq!(depth_arg(&argv(&["lens", "."])), Ok(lens::Depth::Rule));
+        assert_eq!(
+            depth_arg(&argv(&["lens", ".", "--depth", "all"])),
+            Ok(lens::Depth::All)
+        );
+        assert_eq!(
+            depth_arg(&argv(&["lens", ".", "--depth", "why"])),
+            Ok(lens::Depth::Why)
+        );
+        assert!(depth_arg(&argv(&["lens", ".", "--depth", "rules"])).is_err());
+        assert!(depth_arg(&argv(&["lens", ".", "--depth"])).is_err());
+    }
+
+    #[test]
+    fn arg_dir_resolves_against_root_not_the_cwd() {
+        // B9: a relative argument never compared equal to the absolute paths
+        // `fed::discover` returns, so `budget src/tdd` examined nothing.
+        let root = Path::new("/tmp/xyz");
+        assert_eq!(arg_dir(&argv(&["budget"]), root), root.to_path_buf());
+        assert_eq!(
+            arg_dir(&argv(&["budget", "src/tdd"]), root),
+            root.join("src/tdd")
+        );
+        // An absolute argument is left alone.
+        assert_eq!(
+            arg_dir(&argv(&["budget", "/elsewhere"]), root),
+            PathBuf::from("/elsewhere")
+        );
+    }
+
+    #[test]
+    fn the_usage_text_names_every_exit_code_it_returns() {
+        // The three codes the tests above assert are the three §I documents.
+        assert!(USAGE.contains("0 clean"), "{USAGE}");
+        assert!(USAGE.contains("1 violation"), "{USAGE}");
+        assert!(USAGE.contains("2 usage"), "{USAGE}");
+    }
 }
