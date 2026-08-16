@@ -21,7 +21,10 @@ impl std::fmt::Display for Count {
 /// Real tokenizer count. o200k, offline, deterministic.
 #[must_use]
 pub fn count(text: &str) -> Count {
-    Count { tokens: itok::bpe::count(text), method: "o200k" }
+    Count {
+        tokens: itok::bpe::count(text),
+        method: "o200k",
+    }
 }
 
 /// # Errors
@@ -81,10 +84,18 @@ impl Ceilings {
                         .map_err(|_| format!(".context-limits:{}: `{limit}` is not a token count", n + 1))?;
                     rows.push((path.to_string(), v));
                 }
-                _ => return Err(format!(".context-limits:{}: expected `<path> <limit>`", n + 1)),
+                _ => {
+                    return Err(format!(
+                        ".context-limits:{}: expected `<path> <limit>`",
+                        n + 1
+                    ));
+                }
             }
         }
-        Ok(Self { rows, default: DEFAULT_NODE })
+        Ok(Self {
+            rows,
+            default: DEFAULT_NODE,
+        })
     }
 
     /// Load from `root`, or defaults when absent. A missing file is a cold
@@ -101,13 +112,17 @@ impl Ceilings {
 
     #[must_use]
     pub fn default_only() -> Self {
-        Self { rows: Vec::new(), default: DEFAULT_NODE }
+        Self {
+            rows: Vec::new(),
+            default: DEFAULT_NODE,
+        }
     }
 
     /// The ceiling for a path: longest matching prefix wins, else the default.
     #[must_use]
     pub fn for_path(&self, path: &str) -> u64 {
-        self.rows.iter()
+        self.rows
+            .iter()
             .filter(|(p, _)| path.starts_with(p.as_str()))
             .max_by_key(|(p, _)| p.len())
             .map_or(self.default, |(_, v)| *v)
@@ -127,10 +142,16 @@ mod tests {
 
     #[test]
     fn ceilings_parse_the_itok_format() {
-        let c = Ceilings::parse("# comment\n\nSPEC.md    31000\nsrc/fed 4000\n").unwrap();
+        let c =
+            Ceilings::parse("# comment\n\nSPEC.md    31000\nsrc/fed 4000\n")
+                .unwrap();
         assert_eq!(c.for_path("SPEC.md"), 31_000);
         assert_eq!(c.for_path("src/fed/mod.rs"), 4_000);
-        assert_eq!(c.for_path("src/lens/mod.rs"), DEFAULT_NODE, "unlisted -> default");
+        assert_eq!(
+            c.for_path("src/lens/mod.rs"),
+            DEFAULT_NODE,
+            "unlisted -> default"
+        );
     }
 
     #[test]

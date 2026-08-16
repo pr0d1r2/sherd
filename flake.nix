@@ -4,14 +4,44 @@
   # what you are editing -- which is why §C says it enters a lens pack as a
   # CONTRACT (one line per guard) rather than as this file.
   #
-  # Same nixpkgs pin as ../itok and ../microlith. Three sibling crates polished
-  # together should not disagree about their compiler.
+  # The nixpkgs rev is FOLLOWED, not spelled. A literal rev here is a fourth
+  # opinion about the fleet's compiler that nobody refreshes -- and it was
+  # already wrong: this file pinned 241313f4 (rustc 1.96.1) while the fleet
+  # standard was nixos-25.11. nixpkgs-lock is the one place that rev is
+  # decided, for ~80 repos, and it moved to nixos-26.05 (rustc 1.95.0) in
+  # pr0d1r2/nixpkgs-lock#19.
   description = "blackbox -- federated SPEC.md for small-context local models";
 
-  inputs.nixpkgs.url = "github:NixOS/nixpkgs/241313f4e8e508cb9b13278c2b0fa25b9ca27163";
+  # hk is built by `nix-hk` and pushed to this cache. nixos-26.05 ships no hk
+  # at all -- the package landed on nixpkgs master after the branch-off -- so
+  # without the substituter every entry into this shell BUILDS hk from source.
+  # Declared here so the cache travels with the flake; a user outside
+  # `trusted-users` still gets a silent source build, and only a warning.
+  nixConfig = {
+    extra-substituters = [ "https://pr0d1r2.cachix.org" ];
+    extra-trusted-public-keys = [
+      "pr0d1r2.cachix.org-1:NfWjbhgAj41byXhCKiaE+av3Vnphm1fTezHXEGsiQIM="
+    ];
+  };
+
+  # THREE declared inputs, ONE nixpkgs. `nix-hk` follows the same lock rather
+  # than its own copy: a second nixpkgs edge would fork the rev, the cached hk
+  # would be built against a nixpkgs this shell does not have, and every
+  # substitution would miss while looking exactly like success.
+  inputs = {
+    nixpkgs-lock.url = "github:pr0d1r2/nixpkgs-lock";
+    nixpkgs.follows = "nixpkgs-lock/nixpkgs";
+    nix-hk.url = "github:pr0d1r2/nix-hk";
+    nix-hk.inputs.nixpkgs-lock.follows = "nixpkgs-lock";
+  };
 
   outputs =
-    { self, nixpkgs }:
+    {
+      self,
+      nixpkgs,
+      nix-hk,
+      ...
+    }:
     let
       systems = [
         "aarch64-darwin"
@@ -19,7 +49,15 @@
         "aarch64-linux"
         "x86_64-linux"
       ];
-      forAll = f: nixpkgs.lib.genAttrs systems (s: f nixpkgs.legacyPackages.${s});
+      # The overlay is what makes `pkgs.hk` below mean nix-hk's hk. Applied as
+      # an OVERLAY rather than referenced as `nix-hk.packages.${s}.hk` so there
+      # is exactly one `pkgs` in this file: a second lookup path is a second
+      # place to forget, and the package list stays a list of names.
+      forAll =
+        f:
+        nixpkgs.lib.genAttrs systems (
+          s: f (nixpkgs.legacyPackages.${s}.extend nix-hk.overlays.default)
+        );
 
       # blackbox dogfoods itself (V27) -- `bbx check` gates its own commits --
       # so the dev shell must PROVIDE `bbx`, not merely the toolchain to build
@@ -67,6 +105,9 @@
             pkgs.clippy
             pkgs.rustfmt
             pkgs.git
+            # The gate runner: `hk.pkl` holds the ops, hk decides when they run.
+            # From nix-hk via the overlay, because nixos-26.05 has no `hk`.
+            pkgs.hk
           ];
 
           # Derived, never hardcoded: direnv enters with PWD = the directory

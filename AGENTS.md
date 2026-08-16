@@ -20,8 +20,15 @@ A green gate is not correctness. It is the floor.
 - **Never raise a ceiling, edit a test, or weaken a judge to make something
   pass.** Loosening a judge is how the stub got in.
 - **Branch only.** Never commit to `main`. `bbx apply` enforces this.
-- **`bbx check` clean before every commit.** The pre-commit hook runs
-  `cargo build`, `cargo test` (both with `-D warnings`) and `bbx check`.
+- **`bbx check` clean before every commit.** The gate is `hk`; its ops live in
+  `hk.pkl` — `cargo fmt --check`, `cargo clippy -- -D warnings`, `cargo test`,
+  `bbx slice --check`, `bbx check`, in that order, cheapest first. They are
+  file-scoped, so a SPEC-only commit skips the compile. Run the whole set by
+  hand with `hk check --all`.
+- **Commit from inside the dev shell.** The hooks REFUSE when `hk` is not on
+  PATH rather than skipping — `direnv allow`, or `nix develop`. A gate that
+  cannot run has not passed, and B17/B20/B24 are three recordings of exactly
+  that being read as green.
 - **Report what you examined**, not only what failed. A vacuous pass and a real
   one look identical.
 - Commit the reasoning, not just the change. Git is this project's memory.

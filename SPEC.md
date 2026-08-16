@@ -13,21 +13,24 @@ src|code nodes — tokens, spec, fed, lens facades & logic|inference harness, en
 
 ## §C CONSTRAINTS
 
-- lang: Rust. stable. MSRV 1.96 (matches `itok`/`microlith`).
+- lang: Rust **edition 2024**. stable. MSRV **1.95** = the FLEET PIN (`nixpkgs-lock` → nixos-26.05). ⊥ a number copied from a sibling: `itok`/`microlith` declare 1.96 & MEASURED compile clean on 1.95 ∴ their floor is a mirror of an old pin, ⊥ a minimum.
+- nixpkgs rev FOLLOWED from `nixpkgs-lock`, ⊥ spelled here. one rev, ~80 repos.
 - target model: `gpt-oss:20b`, 131,072 ctx, local. ⊥ cloud fallback.
 - inference: local HTTP (Ollama) only. ⊥ network otherwise.
 - deterministic core: parse/DAG/budget/ceiling = pure Rust, ⊥ model. model ? prose gen & drift judgement only.
 - separator = **directory**. dir tree ! source of truth. ⊥ manifest, ⊥ name-encoded grouping (`core-parse` ⊥ imply parent).
 - federation edge = parent dir → child dir, depth **+1 exactly**. ⊥ skip.
 - graph ! DAG. cycle ⊥. re-parent (2+ parents) OK.
-- intra-file spec ops = `microlith` lib dep (crates.io 0.5, zero-dep, pure fn over `&str`). ⊥ reimpl parse/fmt/check/anchors.
-- token counting = `itok` lib dep (`../itok`, 0.2.0). ⊥ own tokenizer, ⊥ own bytes/4.
+- intra-file spec ops = `microlith` lib dep (crates.io 0.6, zero-dep, pure fn over `&str`). ⊥ reimpl parse/fmt/check/anchors.
+- token counting = `itok` lib dep (`../itok`, 0.3.0). ⊥ own tokenizer, ⊥ own bytes/4.
 - fs walk + ignore globs = `itok::walk`/`itok::glob`. ⊥ reimpl.
 - SPEC syntax = FORMAT **4.1.0**, sections `G C I R V T B` fixed & ordered + `§F`/`§N`. `§F`/`§N` ! land in FORMAT/microlith upstream, ⊥ invented locally (V47).
 - layout: **one crate**. module = **dir + `mod.rs`** (the `default.nix` shape — dir is the unit, entry is conventional). ⊥ 2018 `foo.rs`+`foo/`: that puts the facade OUTSIDE the dir it fronts ∴ module entry & its `SPEC.md` land in different federation nodes.
 - node = dir = Rust module. all three aligned or a flat `.rs` owns spec it cannot hold.
 - repo partitions **set** \| **setting** \| **human** (`set-and-setting` vocabulary). default pack = set.
 - caveman encoding ∀ generated spec text. MEASURED 22% saving ⊥ 75% (R23) — it disciplines saying LESS, ⊥ encodes denser.
+- gate runner = `hk` (from `nix-hk`; nixos-26.05 ships none — landed on master after branch-off). ops DECLARED in `hk.pkl`, ⊥ a shell body in `.githooks`. schema VENDORED `pkl/Config.pkl` ∴ the gate runs w/ ⊥ network.
+- SETTING as contract (V82), one line each: `rustfmt` 80 col + edition 2024 · `clippy -D warnings` AFTER `--` ∴ this crate ⊥ its path deps · `cargo test` · `bbx slice --check` · `bbx check`.
 - ⊥ global index file. discovery by walk.
 
 ## §I INTERFACES
@@ -190,6 +193,7 @@ V85: `AGENTS.md` ∈ SET, ⊥ SETTING. it says HOW to work ∴ needed while work
 V74: §C claims ! have a runner. `fed::walk` contradicted §C for a whole session & no gate could see it (B1) — a constraint no check reads is a comment
 V75: format facts read from the CHECKER's own source, ⊥ a vendored `FORMAT.md`. the local copy was 6 sections while the dep shipped 7 (B2)
 V101: a dep ! resolve to an IMMUTABLE artifact — registry version + lock checksum. a sibling PATH dep is a shared working tree ∴ the gate's green is true only for the INSTANT it ran & expires silently when the sibling moves (B5). a new path dep ! carry a §B-recorded reason
+V102: a gate ! declare its OP SET as data, ⊥ bury it in a hook body. green names only what RAN ∴ an op nobody declared is invisible, ⊥ merely absent — fmt & clippy were missing for the project's whole life & every verdict looked identical (B6)
 V73: dir promotion has 2 triggers — (a) V50 code ceiling, (b) module owns SPEC worth its own node even under ceiling. vendor facades are (b): few hundred lines carrying V17/V24/V25. ⊥ promote every `.rs` — 30 files → 60 is ceremony
 
 ## §T TASKS
@@ -238,6 +242,7 @@ T68|.|report caveman 22%-⊥-75% upstream to cavekit FORMAT.md|R23
 T69|.|profile declaration — flag > §T row > `bbx.toml` default. ⊥ inference|V88
 T70|x|V101 runner — path deps limited to the one recorded exception (`itok`)|V101
 T71|.|publish or public-mirror `itok` ∴ ⊥ path dep left, & `packages.default` becomes buildable|V101,R20
+T72|x|gate → `hk` from `nix-hk`, ops in `hk.pkl`, `pre-commit` + `pre-push`, fmt & clippy gated for the 1st time|V26,V82,V102
 
 ## §B BUGS
 
@@ -247,3 +252,4 @@ B2|2026-08-01|`§R` written as RECORDS w/ `id|state|record`. FORMAT 4.1.0 §R = 
 B3|2026-08-01|SPEC defect, mine: V78 written as a STATIC partition — SET = impl+spec+agents, SETTING = tests+guardrails — & committed. TDD breaks it: the test IS the work ∴ `tests` ∈ set, & nothing about the file changed. facet (property of the FILE) conflated w/ profile (property of the TASK). MEASURED after: `tdd` loads 81.4% of itok, `refactor` 80.9% ∴ the axis nearly collapses for 2 of 5 profiles|V78 now names the classification only; V86 adds PROFILE as the task-dependent selection; V87 records that facet × horizontal = 6.1% where facet alone = 81.4%. found by a READER asking about TDD, ⊥ by any check — no gate reads a partition's fitness for a workflow
 B4|2026-08-01|SPEC defect, mine, repeated across ~6 commit messages: claimed "95x on the binding constraint" comparing our max call to 157,071 — which is `itok`'s WHOLE-REPO tdd profile, ⊥ what a one-call prompt needs. MEASURED baseline for the same task = 2,659 tok ∴ real ratio 2.1x. compared against a straw man nobody would build|`bbx oneshot` built as the honest monolith arm; R29/R30 carry the measurement; V60 restated. GENERALLY: a ratio ! name what is in the DENOMINATOR & that thing ! be something someone would actually do
 B5|2026-08-05|HEAD stopped COMPILING w/ ⊥ blackbox commit. `67fa9ad` (08-02 10:26) imported `microlith`'s inner `violation` module & the gate passed; microlith privatized it 9h later (`421ab02`, 08-02 19:16) ∴ E0603 on a tree already judged green, & already pushed. `../microlith` was a path dep ∴ no version could hold it still, & `Cargo.lock` read `0.4.0` for a sibling saying `0.5.0`|`microlith` = crates.io `0.5` + lock checksum (V101). `itok` stays a path dep & is now the ONLY one — recorded, runner-checked (T70), removed by T71. `src/spec:B1` carries the import half
+B6|2026-08-18|gate ran `build` + `test` ONLY, from the first commit that had a hook — no fmt, no clippy — ∴ an entirely unformatted tree & 18 clippy findings accrued behind a verdict that read green every time. the ops lived as a shell BODY in `.githooks/pre-commit` ∴ the SET of checks was never reviewable data & nobody could see what was ⊥ there|ops → `hk.pkl`, file-scoped & readable; fmt + clippy gated & the debt paid (`abd2bb1`). V102. `-D warnings` moved off `RUSTFLAGS` so it stops reaching `../itok`

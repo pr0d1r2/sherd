@@ -30,17 +30,24 @@ mod tests {
     #[test]
     fn path_deps_are_the_one_recorded_exception() {
         const ALLOWED: &[&str] = &["itok"];
-        let manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml");
-        let text = std::fs::read_to_string(&manifest).expect("Cargo.toml is readable");
-        let by_path: Vec<&str> = text.lines()
+        let manifest =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml");
+        let text =
+            std::fs::read_to_string(&manifest).expect("Cargo.toml is readable");
+        let by_path: Vec<&str> = text
+            .lines()
             // `path = "src/lib.rs"` under [lib]/[[bin]] is a target, not a dep:
             // the dep form always names the crate FIRST.
-            .filter(|l| l.contains("path = \"") && !l.trim_start().starts_with("path"))
+            .filter(|l| {
+                l.contains("path = \"") && !l.trim_start().starts_with("path")
+            })
             .filter_map(|l| l.split_once(' ').map(|(name, _)| name))
             .collect();
         for name in &by_path {
-            assert!(ALLOWED.contains(name),
-                    "V101: `{name}` is a path dep -- pin a published version, or record why not");
+            assert!(
+                ALLOWED.contains(name),
+                "V101: `{name}` is a path dep -- pin a published version, or record why not"
+            );
         }
     }
 }

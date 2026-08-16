@@ -14,6 +14,36 @@ Pre-`1.0`, a minor bump may change behaviour. `blackbox` is early: what works
 and what is specced-but-unbuilt is listed in the README's Status section
 rather than implied by the version number.
 
+## [Unreleased]
+
+### Changed
+
+- **The gate is now [`hk`](https://hk.jdx.dev)**, with its ops declared in
+  `hk.pkl` instead of written as a shell body in `.githooks/pre-commit`. The
+  ops are file-scoped, so a SPEC-only commit skips the compile; they are
+  reachable by hand and from CI as `hk check --all`; and the fix half
+  (`cargo fmt`, `bbx slice`) is declared next to the check half rather than
+  described in a refusal message. `hk` comes from the `nix-hk` flake input,
+  because nixos-26.05 ships none.
+- **`cargo fmt` and `cargo clippy` are gated for the first time.** They had
+  never been part of the gate, so an unformatted tree and 18 clippy findings
+  had accumulated behind a verdict that read green; both are paid off. The
+  formatter is pinned at 80 columns with edition 2024 in `rustfmt.toml`.
+- **`-D warnings` moved from `RUSTFLAGS` to a clippy argument after `--`**, so
+  it applies to this crate and not to `../itok`, whose own `dead_code`
+  warnings had been turning this repo's gate red for code it does not own.
+- **A `pre-push` hook exists.** `commit && push` chains where the commit
+  aborted and the push shipped the old head are recorded twice in `§B`; the
+  push side is now checked on its own.
+- **MSRV is 1.95**, the fleet pin (`nixpkgs-lock` → nixos-26.05), reached by
+  `microlith` 0.6.1 and `itok` 0.3.0 both declaring it upstream. The previous
+  1.96 floor was a mirror of an older pin rather than a measured minimum.
+
+### Packaging
+
+- `hk.pkl` and `pkl/` are excluded from the published crate. They gate this
+  working tree and mean nothing in a tarball.
+
 ## [0.1.0] - 2026-08-07
 
 First public release. Early, and honest about it.

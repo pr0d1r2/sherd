@@ -1,9 +1,13 @@
 [package]
 name = "bbx-cli"
 version = "0.1.0"
-edition = "2021"
-# MSRV tracks the deps: itok and microlith both pin 1.96.
-rust-version = "1.96"
+edition = "2024"
+# MSRV tracks the FLEET PIN, which is what actually compiles this: nixpkgs-lock
+# follows nixos-26.05, and that ships rustc 1.95.0. The siblings pin 1.96 --
+# the rev this repo used to name -- so today they are ABOVE the toolchain the
+# fleet standard provides. Edition 2024 is native from 1.85, so it costs the
+# floor nothing.
+rust-version = "1.95"
 license = "MIT"
 description = "two-axis federation of SPEC.md and source over a dir DAG, for small-context local models"
 repository = "https://github.com/pr0d1r2/blackbox"
@@ -21,6 +25,11 @@ exclude = [
   ".context-limits",
   ".bbx-state",
   ".bbx-slices",
+  # The gate: its ops and the pkl schema they amend. Same class as `.githooks`
+  # above -- it runs on THIS working tree and means nothing inside a published
+  # tarball. `pkl/Config.pkl` alone is a 1,014-line vendored schema.
+  "hk.pkl",
+  "pkl",
   # Agent tooling for THIS repo; a consumer has no use for our commands.
   ".claude",
 ]
@@ -51,7 +60,7 @@ itok = { path = "../itok", default-features = false, features = ["bpe"] }
 # microlith is public (crates.io, github.com/pr0d1r2/microlith), so it is a
 # registry dep -- no sibling checkout required. itok is not published, and that
 # is now the only reason this crate cannot be built from a clean clone.
-microlith = "0.5"
+microlith = "0.6"
 # ureq 3 with `rustls`, so `BBX_ENDPOINT` may be an `https://` host. What
 # gets POSTed is the PROMPT -- slices of your spec and your source, because
 # feeding a repository to a model is the whole job -- and `ollama` is a

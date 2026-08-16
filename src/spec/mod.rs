@@ -75,10 +75,17 @@ pub fn unreflected_bugs(spec: &str) -> Vec<(String, String)> {
             continue;
         }
         let fix = cells[3..].join("|");
-        let names_invariant = fix.split(|c: char| !c.is_ascii_alphanumeric())
-            .any(|w| w.len() > 1 && w.starts_with('V') && w[1..].chars().all(|d| d.is_ascii_digit()));
+        let names_invariant =
+            fix.split(|c: char| !c.is_ascii_alphanumeric()).any(|w| {
+                w.len() > 1
+                    && w.starts_with('V')
+                    && w[1..].chars().all(|d| d.is_ascii_digit())
+            });
         if !names_invariant {
-            out.push((cells[0].to_string(), cells[2].chars().take(58).collect()));
+            out.push((
+                cells[0].to_string(),
+                cells[2].chars().take(58).collect(),
+            ));
         }
     }
     out
@@ -100,7 +107,8 @@ mod tests {
 
     #[test]
     fn a_bug_naming_no_invariant_is_unreflected() {
-        let s = "## \u{a7}B BUGS\nid|date|cause|fix\nB1|d|it broke|we fixed it\n";
+        let s =
+            "## \u{a7}B BUGS\nid|date|cause|fix\nB1|d|it broke|we fixed it\n";
         let u = unreflected_bugs(s);
         assert_eq!(u.len(), 1);
         assert_eq!(u[0].0, "B1");
@@ -109,14 +117,21 @@ mod tests {
     #[test]
     fn a_bug_citing_an_invariant_is_reflected() {
         for fix in ["now V9 catches it", "see `src/fed:V9`"] {
-            let s = "## \u{a7}B BUGS\nid|date|cause|fix\nB1|d|broke|".to_string() + fix + "\n";
-            assert!(unreflected_bugs(&s).is_empty(), "should be reflected: {fix}");
+            let s = "## \u{a7}B BUGS\nid|date|cause|fix\nB1|d|broke|"
+                .to_string()
+                + fix
+                + "\n";
+            assert!(
+                unreflected_bugs(&s).is_empty(),
+                "should be reflected: {fix}"
+            );
         }
     }
 
     #[test]
     fn only_the_bugs_section_is_read() {
-        let s = "## \u{a7}T TASKS\nid|status|task|cites\nB1|.|not a bug row|-\n";
+        let s =
+            "## \u{a7}T TASKS\nid|status|task|cites\nB1|.|not a bug row|-\n";
         assert!(unreflected_bugs(s).is_empty(), "a §T row is not a §B row");
     }
 
@@ -131,28 +146,44 @@ mod tests {
         // Built at runtime: a literal here would match itself.
         let deep = "microlith".to_string() + "::";
         let mut offenders = Vec::new();
-        let mut stack = vec![std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src")];
+        let mut stack =
+            vec![std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src")];
         while let Some(dir) = stack.pop() {
-            let Ok(entries) = std::fs::read_dir(&dir) else { continue };
+            let Ok(entries) = std::fs::read_dir(&dir) else {
+                continue;
+            };
             for e in entries.flatten() {
                 let p = e.path();
                 if p.is_dir() {
                     stack.push(p);
                 } else if p.extension().is_some_and(|x| x == "rs") {
-                    let Ok(text) = std::fs::read_to_string(&p) else { continue };
+                    let Ok(text) = std::fs::read_to_string(&p) else {
+                        continue;
+                    };
                     for (n, line) in text.lines().enumerate() {
-                        let Some(rest) = line.split_once(&deep).map(|(_, r)| r) else { continue };
-                        let ident: String = rest.chars()
-                            .take_while(|c| c.is_alphanumeric() || *c == '_').collect();
+                        let Some(rest) = line.split_once(&deep).map(|(_, r)| r)
+                        else {
+                            continue;
+                        };
+                        let ident: String = rest
+                            .chars()
+                            .take_while(|c| c.is_alphanumeric() || *c == '_')
+                            .collect();
                         if rest[ident.len()..].starts_with("::") {
-                            offenders.push(format!("{}:{}: {ident}", p.display(), n + 1));
+                            offenders.push(format!(
+                                "{}:{}: {ident}",
+                                p.display(),
+                                n + 1
+                            ));
                         }
                     }
                 }
             }
         }
-        assert!(offenders.is_empty(),
-                "V5: reach microlith through its root re-exports, not {offenders:?}");
+        assert!(
+            offenders.is_empty(),
+            "V5: reach microlith through its root re-exports, not {offenders:?}"
+        );
     }
 
     #[test]

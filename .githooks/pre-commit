@@ -1,53 +1,30 @@
 #!/usr/bin/env bash
-# The gate. Read by agents as much as by humans: every refusal below says what
-# to RUN to fix it, because a rejection an agent cannot act on gets worked
-# around, and the way it gets worked around is `--no-verify`.
+# The gate, delegated to hk. The OPS live in `hk.pkl`; this file only decides
+# that they must run. Read by agents as much as by humans: the refusal below
+# says what to RUN to fix it, because a rejection an agent cannot act on gets
+# worked around, and the way it gets worked around is `--no-verify`.
 #
-# Warnings DENIED in BOTH build and test: `cargo build` does not compile
-# #[cfg(test)] code, so an unused import in a test module shipped through a
-# "-D warnings" gate that never saw it (fed B8).
+# A TRACKED file, not one generated into `.git/hooks` by the dev shell, because
+# `core.hooksPath` already points here and a hook you can read in a diff is a
+# hook a reviewer can check.
+#
+# It REFUSES when hk is absent; it does not skip. The siblings skip loudly and
+# that is right for them -- their CI gates regardless. blackbox has no CI yet,
+# so these hooks ARE the gate of record, and V26 is explicit: a gate that
+# cannot run has NOT passed. B17, B20 and B24 are three recordings of that one
+# failure shape, twice reported as green.
 set -e
 
-fail() {
+if ! command -v hk >/dev/null 2>&1; then
   echo "" >&2
-  echo "pre-commit REFUSED: $1" >&2
-  echo "  fix: $2" >&2
+  echo "pre-commit REFUSED: hk is not on PATH -- refusing to pass unverified" >&2
+  echo "  fix: \`direnv allow\`, or \`nix develop\`, then commit from that shell." >&2
+  echo "       hk comes from the nix-hk input; nixos-26.05 ships no hk of its own." >&2
+  echo "       A gate that cannot RUN has not passed (tdd V26)." >&2
   echo "" >&2
   echo "  Never \`--no-verify\`. The gate refusing is the system working." >&2
   echo "  Never weaken a test, raise a ceiling, or loosen a judge to pass." >&2
   exit 1
-}
-
-CARGO="${BBX_CARGO:-$(command -v cargo || true)}"
-if [ -z "$CARGO" ] || [ ! -x "$CARGO" ]; then
-  fail "no cargo on PATH -- refusing to pass unverified" \
-       "\`direnv allow\` (dev shell), or export BBX_CARGO=/path/to/cargo.
-       A gate that cannot RUN has not passed (tdd V26)."
 fi
-export RUSTFLAGS="-D warnings"
 
-"$CARGO" build --offline -q 2>/dev/null || fail \
-  "cargo build failed, or emitted a warning" \
-  "RUSTFLAGS=\"-D warnings\" $CARGO build --offline 2>&1 | head -40
-       An unused parameter is how a stub announces itself -- do NOT silence
-       it with a leading underscore. That evasion is recorded twice already."
-
-"$CARGO" test --offline -q >/dev/null 2>&1 || fail \
-  "cargo test failed, or a test emitted a warning" \
-  "RUSTFLAGS=\"-D warnings\" $CARGO test --offline 2>&1 | head -60
-       Fix the CODE. Repeated rejection is evidence about the work, not
-       about the guard (tdd V10)."
-
-./target/debug/bbx slice --check >/dev/null 2>&1 || fail \
-  "a distilled slice has drifted from its source" \
-  "bbx slice   -- regenerates every slice; then \`git add\` the result.
-       Never hand-edit a generated slice. That IS the drift."
-
-./target/debug/bbx check >/dev/null 2>&1 || fail \
-  "bbx check found a structural violation" \
-  "bbx check   -- it names the file, line and rule.
-       Ids are monotonic and never reused. COMPUTE the next one; do not read
-       \`tail -1\` as the next free id, it returns the HIGHEST EXISTING one:
-         grep -oE '^V[0-9]+' src/<node>/SPEC.md | cut -c2- | sort -n | tail -1
-       Rows sort by id within a section, so append IN ORDER -- inserting a
-       row above a lower id fails microlith/V14."
+exec hk run pre-commit --from-hook "$@"
