@@ -268,7 +268,7 @@ T75|.|after T41: re-measure ∀ chain, reset `.context-limits` from the new base
 T76|.|BUILDABILITY SWEEP: `bbx tdd` @ every node, N=3, record (node, rung, kept/tried) → `.bbx-frontier`. answers WHICH modules are buildable, ⊥ whether the idea works|V106,V103,R37
 T77|x|titrate GENERATION against sharp vs vague `§V` — R40 measured precision as the dominant axis for JUDGING; nobody has checked whether it drives WRITING, & vague rows are the live hypothesis for `src/tdd:T13` 0 merit wins|V106,R40
 T78|x|`bbx lens` builds its dir w/ `PathBuf::from`, ⊥ `arg_dir` ∴ it never got T10 root-resolution & `lens .` reports a different chain than `budget` for the same node (B9)|V104,I
-T79|.|EXTEND the generation corpus — 5 items is thin & R43's 3-way split rests on 2 items per class. add items ∀ class (type-carried · magic-number · beyond-frontier). ⊥ more RUNS: variance is 0 (R42)|V107,R43
+T79|x|EXTEND the generation corpus — 5 items is thin & R43's 3-way split rests on 2 items per class. add items ∀ class (type-carried · magic-number · beyond-frontier). ⊥ more RUNS: variance is 0 (R42)|V107,R43
 T80|.|audit `§V` rows for what a TYPE could carry instead (V107). the rows that need prose precision are the ones no signature can hold|V107,R43
 
 ## §B BUGS

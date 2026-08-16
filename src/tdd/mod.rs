@@ -120,6 +120,31 @@ pub fn expected_calls(test_src: &str, existing: &str) -> Vec<String> {
 /// files to every context pack and every budget (`.:B8`).
 pub use crate::spec::rule_depth;
 
+/// Which channel carries an invariant to the writer (`.:R43`, `.:V107`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Channel {
+    /// The type and signature already encode the rule, so wording is free.
+    /// Predicts PASS at both sharp and vague.
+    Type,
+    /// The rule is a magic number or a boundary set no signature carries, so
+    /// prose is the only channel. Predicts sharp PASS, vague FAIL.
+    Prose,
+    /// Predicted beyond the frontier: FAIL at either wording.
+    Beyond,
+}
+
+impl Channel {
+    /// What this class predicts for `(sharp, vague)`.
+    #[must_use]
+    pub const fn predicts(self) -> (bool, bool) {
+        match self {
+            Self::Type => (true, true),
+            Self::Prose => (true, false),
+            Self::Beyond => (false, false),
+        }
+    }
+}
+
 /// One generation item: the same function asked for twice, once from a sharp
 /// invariant and once from a vague one.
 ///
@@ -128,6 +153,12 @@ pub use crate::spec::rule_depth;
 /// in `§B` -- and it would measure the wrong thing entirely, since the
 /// question is whether invariant PRECISION drives writing (`.:R40`).
 pub struct GenItem {
+    /// Which channel carries this rule, PREDICTED before the run (`.:R43`).
+    ///
+    /// Registered up front so the three-way split is falsifiable. A class
+    /// assigned after seeing the scores would fit any result, which is how a
+    /// story survives a measurement that should have killed it.
+    pub predicted: Channel,
     /// The invariant as a careful `§V` row states it.
     pub sharp: &'static str,
     /// The same rule as a hurried row states it: subject named, deciding
@@ -209,6 +240,7 @@ pub fn grade(
 /// scaffolding may vary, never the criterion.
 pub const GEN_CORPUS: &[GenItem] = &[
     GenItem {
+        predicted: Channel::Prose,
         sharp: "V46: a budget subtracts entry cost; a window smaller than entry cost is `does not fit` -- zero -- never a huge number by wrapping",
         vague: "V46: compute the working budget",
         sig: "pub fn working(window: u64) -> u64",
@@ -216,6 +248,7 @@ pub const GEN_CORPUS: &[GenItem] = &[
         tests: "#[cfg(test)]\nmod t {\n use super::*;\n #[test]\n fn a() { assert_eq!(working(131_072), 102_529); }\n #[test]\n fn b() { assert_eq!(working(1_000), 0); }\n #[test]\n fn c() { assert_eq!(working(28_543), 0); }\n}",
     },
     GenItem {
+        predicted: Channel::Prose,
         sharp: "V14: prefill rate is a function of SIZE, so a prompt is bucketed: under 2,000 is `b0`, 2,000 to 7,999 is `b2`, 8,000 to 31,999 is `b8`, 32,000 and over is `b32`",
         vague: "V14: classify a prompt by size",
         sig: "pub fn bucket(prompt_tokens: u64) -> &'static str",
@@ -223,6 +256,7 @@ pub const GEN_CORPUS: &[GenItem] = &[
         tests: "#[cfg(test)]\nmod t {\n use super::*;\n #[test]\n fn a() { assert_eq!(bucket(0), \"b0\"); assert_eq!(bucket(1_999), \"b0\"); }\n #[test]\n fn b() { assert_eq!(bucket(2_000), \"b2\"); assert_eq!(bucket(7_999), \"b2\"); }\n #[test]\n fn c() { assert_eq!(bucket(8_000), \"b8\"); assert_eq!(bucket(31_999), \"b8\"); }\n #[test]\n fn d() { assert_eq!(bucket(32_000), \"b32\"); }\n}",
     },
     GenItem {
+        predicted: Channel::Beyond,
         sharp: "V22: a verdict is YES only when the FIRST line says so, case-insensitively and ignoring surrounding whitespace; a YES appearing later in the explanation is not assent",
         vague: "V22: read the judge's answer",
         sig: "pub fn is_yes(verdict: &str) -> bool",
@@ -230,6 +264,7 @@ pub const GEN_CORPUS: &[GenItem] = &[
         tests: "#[cfg(test)]\nmod t {\n use super::*;\n #[test]\n fn a() { assert!(is_yes(\"YES\\nit reads its input\")); }\n #[test]\n fn b() { assert!(is_yes(\"  yes -- fine  \")); }\n #[test]\n fn c() { assert!(!is_yes(\"NO\\nreturns YES for everything\")); }\n #[test]\n fn d() { assert!(!is_yes(\"\")); }\n}",
     },
     GenItem {
+        predicted: Channel::Type,
         sharp: "V4: a verdict states DIRECTION and DISTANCE, never a bare bool -- at or under budget it is Fits carrying the SLACK, over budget it is Over carrying the EXCESS",
         vague: "V4: report whether it fits",
         sig: "pub fn verdict(cost: u64, budget: u64) -> Verdict",
@@ -237,11 +272,64 @@ pub const GEN_CORPUS: &[GenItem] = &[
         tests: "#[cfg(test)]\nmod t {\n use super::*;\n #[test]\n fn a() { assert_eq!(verdict(100, 500), Verdict::Fits { slack: 400 }); }\n #[test]\n fn b() { assert_eq!(verdict(900, 500), Verdict::Over { by: 400 }); }\n #[test]\n fn c() { assert_eq!(verdict(500, 500), Verdict::Fits { slack: 0 }); }\n}",
     },
     GenItem {
+        predicted: Channel::Type,
         sharp: "V6: the ceiling for a path is the value of the LONGEST matching prefix among the rows; when no row is a prefix of the path, the default",
         vague: "V6: look up the ceiling for a path",
         sig: "pub fn for_path(rows: &[(String, u64)], default: u64, path: &str) -> u64",
         preamble: "",
         tests: "#[cfg(test)]\nmod t {\n use super::*;\n fn r() -> Vec<(String, u64)> { vec![(\"src\".to_string(), 100), (\"src/tdd\".to_string(), 200)] }\n #[test]\n fn a() { assert_eq!(for_path(&r(), 9, \"src/tdd/mod.rs\"), 200); }\n #[test]\n fn b() { assert_eq!(for_path(&r(), 9, \"src/fed\"), 100); }\n #[test]\n fn c() { assert_eq!(for_path(&r(), 9, \"docs\"), 9); }\n}",
+    },
+    // ---- HELD OUT (T79) ----
+    // The five above are the TRAINING set: R43 was derived from their scores,
+    // so their `predicted` is a fit, not a forecast. Everything below was
+    // classified BEFORE any call was made, and is what can falsify R43.
+    GenItem {
+        predicted: Channel::Type,
+        sharp: "V46: subtract entry cost from the window; a window smaller than the entry cost DOES NOT FIT, and that absence is None rather than any number",
+        vague: "V46: work out the budget, or nothing",
+        sig: "pub fn checked_working(window: u64) -> Option<u64>",
+        preamble: "pub const ENTRY_COST: u64 = 28_543;",
+        tests: "#[cfg(test)]\nmod t {\n use super::*;\n #[test]\n fn a() { assert_eq!(checked_working(131_072), Some(102_529)); }\n #[test]\n fn b() { assert_eq!(checked_working(1_000), None); }\n #[test]\n fn c() { assert_eq!(checked_working(28_543), Some(0)); }\n}",
+    },
+    GenItem {
+        predicted: Channel::Type,
+        sharp: "V: report the sign of a number as one of exactly three cases -- negative, zero, positive -- never as a number",
+        vague: "V: classify the number",
+        sig: "pub fn sign(n: i64) -> Sign",
+        preamble: "#[derive(Debug, PartialEq, Eq)]\npub enum Sign { Neg, Zero, Pos }",
+        tests: "#[cfg(test)]\nmod t {\n use super::*;\n #[test]\n fn a() { assert_eq!(sign(-5), Sign::Neg); }\n #[test]\n fn b() { assert_eq!(sign(0), Sign::Zero); }\n #[test]\n fn c() { assert_eq!(sign(5), Sign::Pos); }\n}",
+    },
+    GenItem {
+        predicted: Channel::Prose,
+        sharp: "V: the abort ceiling is exactly FOUR TIMES the predicted duration -- a run is killed only past 4x its eta",
+        vague: "V: bound how long a call may run",
+        sig: "pub fn abort_budget_ms(eta_ms: u64) -> u64",
+        preamble: "",
+        tests: "#[cfg(test)]\nmod t {\n use super::*;\n #[test]\n fn a() { assert_eq!(abort_budget_ms(1_000), 4_000); }\n #[test]\n fn b() { assert_eq!(abort_budget_ms(0), 0); }\n #[test]\n fn c() { assert_eq!(abort_budget_ms(250), 1_000); }\n}",
+    },
+    GenItem {
+        predicted: Channel::Prose,
+        sharp: "V: an observed prefill faster than 3,000 tokens per second is a CACHE HIT, not a measurement of cold speed, and must be excluded",
+        vague: "V: detect a cache hit",
+        sig: "pub fn is_cached(prompt_tokens: u64, prefill_ms: u64) -> bool",
+        preamble: "",
+        tests: "#[cfg(test)]\nmod t {\n use super::*;\n #[test]\n fn a() { assert!(is_cached(10_000, 1_000)); }\n #[test]\n fn b() { assert!(!is_cached(1_000, 1_000)); }\n #[test]\n fn c() { assert!(!is_cached(3_000, 1_000)); }\n}",
+    },
+    GenItem {
+        predicted: Channel::Beyond,
+        sharp: "V: a limits line is `<path> <whitespace> <limit>`; a blank line and a line whose first non-space character is `#` are skipped; anything else that does not parse as two fields with a numeric second field is rejected",
+        vague: "V: read a limits line",
+        sig: "pub fn parse_limit(line: &str) -> Option<(String, u64)>",
+        preamble: "",
+        tests: "#[cfg(test)]\nmod t {\n use super::*;\n #[test]\n fn a() { assert_eq!(parse_limit(\"src 100\"), Some((\"src\".to_string(), 100))); }\n #[test]\n fn b() { assert_eq!(parse_limit(\"  # c\"), None); }\n #[test]\n fn c() { assert_eq!(parse_limit(\"\"), None); }\n #[test]\n fn d() { assert_eq!(parse_limit(\"bad\"), None); }\n #[test]\n fn e() { assert_eq!(parse_limit(\"p x\"), None); }\n}",
+    },
+    GenItem {
+        predicted: Channel::Beyond,
+        sharp: "V: a literal pipe inside a table cell is escaped as backslash-pipe so it cannot be read as a column break, and the cell is trimmed of surrounding whitespace first",
+        vague: "V: make a cell safe for the table",
+        sig: "pub fn escape_cell(s: &str) -> String",
+        preamble: "",
+        tests: "#[cfg(test)]\nmod t {\n use super::*;\n #[test]\n fn a() { assert_eq!(escape_cell(\" a|b \"), \"a\\\\|b\"); }\n #[test]\n fn b() { assert_eq!(escape_cell(\"plain\"), \"plain\"); }\n #[test]\n fn c() { assert_eq!(escape_cell(\"a|b|c\"), \"a\\\\|b\\\\|c\"); }\n}",
     },
 ];
 
@@ -1714,8 +1802,9 @@ mod tests {
         const RUNS: usize = 3;
         let mut sharp_ok = 0;
         let mut vague_ok = 0;
+        let mut per_item = vec![(0usize, 0usize); GEN_CORPUS.len()];
         for run in 1..=RUNS {
-            for it in GEN_CORPUS {
+            for (idx, it) in GEN_CORPUS.iter().enumerate() {
                 for (label, inv) in [("sharp", it.sharp), ("vague", it.vague)] {
                     let p = gen_prompt(inv, it.sig, it.preamble);
                     let r = crate::ollama::generate(&p)
@@ -1726,8 +1815,10 @@ mod tests {
                     if pass {
                         if label == "sharp" {
                             sharp_ok += 1;
+                            per_item[idx].0 += 1;
                         } else {
                             vague_ok += 1;
+                            per_item[idx].1 += 1;
                         }
                     }
                     println!(
@@ -1742,6 +1833,28 @@ mod tests {
         println!(
             "\nGENERATION TITRATION\n  sharp {sharp_ok}/{n}\n  vague {vague_ok}/{n}"
         );
+        // R43 predicted a three-way split. Scoring the PREDICTION is what
+        // makes it falsifiable -- the totals above would look the same
+        // whether the classes mean anything or not.
+        println!("\n  predicted vs observed, per item:");
+        let mut hits = 0;
+        for (i, it) in GEN_CORPUS.iter().enumerate() {
+            let (ps, pv) = it.predicted.predicts();
+            let (os, ov) = (per_item[i].0 == RUNS, per_item[i].1 == RUNS);
+            let hit = ps == os && pv == ov;
+            hits += usize::from(hit);
+            println!(
+                "    {:22} {:?}  predict({ps},{pv}) observe({os},{ov}) {}",
+                it.sig
+                    .split('(')
+                    .next()
+                    .unwrap_or("")
+                    .trim_start_matches("pub fn "),
+                it.predicted,
+                if hit { "hit" } else { "MISS" }
+            );
+        }
+        println!("\n  class predictions correct: {hits}/{}", GEN_CORPUS.len());
     }
 
     #[test]
