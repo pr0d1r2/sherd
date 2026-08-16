@@ -693,7 +693,7 @@ mod tests {
 
     #[test]
     fn sharp_and_vague_prompts_differ_only_in_the_invariant() {
-        // V103: the criterion is fixed, only the wording varies. If the two
+        // `.:V103`: the criterion is fixed, only the wording varies. If the two
         // prompts differed anywhere else the measurement would attribute that
         // difference to precision.
         for it in GEN_CORPUS {
@@ -709,7 +709,7 @@ mod tests {
         }
     }
 
-    /// One call's outcome. ERROR is not FAIL (`src/tdd:V27`): a timed-out
+    /// One call's outcome. ERROR is not FAIL (`V1`): a timed-out
     /// generation says nothing about whether the model can write the
     /// function, and counting it as a miss makes a flaky network look like a
     /// located frontier.
@@ -721,7 +721,7 @@ mod tests {
     }
 
     /// Append one row the moment it exists, so a crash costs ONE call rather
-    /// than the run. B25 lost 33 completed measurements and forty minutes of
+    /// than the run. B1 lost 33 completed measurements and forty minutes of
     /// endpoint time to a single transient.
     fn log_row(row: &str) {
         use std::io::Write;
@@ -789,14 +789,14 @@ mod tests {
         if e > 0 {
             println!(
                 "    {e} of {total} did not RUN -- this condition is \
-                 incomplete, not measured (V27)"
+                 incomplete, not measured (V1)"
             );
         }
     }
 
     #[test]
     fn context_is_the_only_variable_between_the_two_prompts() {
-        // V108: the two conditions must differ in exactly one thing. If the
+        // `.:V108`: the two conditions must differ in exactly one thing. If the
         // request itself changed, a difference in score would be
         // unattributable -- which is why T82 was split from T83 and T84.
         let Some(it) = GEN_CORPUS.first() else {
@@ -815,7 +815,7 @@ mod tests {
 
     #[test]
     fn an_error_is_never_counted_as_a_failure() {
-        // V27, and B25 in one assertion: a transient must not read as a miss.
+        // V1, and B1 in one assertion: a transient must not read as a miss.
         let os = [Outcome::Pass, Outcome::Fail, Outcome::Error];
         assert_eq!(tally(&os), (1, 1, 1), "three outcomes, not two");
         let all_err = [Outcome::Error, Outcome::Error];
@@ -858,7 +858,7 @@ mod tests {
         let node = root.join("src/tokens");
         let Ok(pack) = crate::lens::pack(root, &node, crate::lens::Depth::Rule)
         else {
-            println!("lens pack unavailable -- nothing measured (V27)");
+            println!("lens pack unavailable -- nothing measured (V1)");
             return;
         };
         println!("context pack: {} tok", pack.cost.tokens);
@@ -915,7 +915,7 @@ mod tests {
 
     #[test]
     fn every_rung_asks_the_same_question() {
-        // V103: what weakens between rungs is the SCAFFOLDING. The judged
+        // `.:V103`: what weakens between rungs is the SCAFFOLDING. The judged
         // sentence, the invariant and the code must survive every rung, or
         // the descent is measuring its own generosity.
         for tier in TIERS {
