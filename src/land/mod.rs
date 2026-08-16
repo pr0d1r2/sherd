@@ -224,19 +224,21 @@ pub fn evidence(
 /// the trunk meanwhile, and resolving a conflict inside generated code
 /// unattended is exactly the operation nobody wants running at 3am.
 ///
+/// `cargo` is the toolchain the gate runs, injectable for the same reason
+/// `Run` carries one: without it the only way to reach the merge was to run
+/// the real gate in the real repo, so the branch that decides what reaches
+/// `main` could not be tested at all. `cargo_bin()` in production.
+///
 /// # Errors
 /// Refusal reason, or git failure.
-pub fn land(root: &Path, push: bool) -> Result<String, String> {
+pub fn land_with(
+    root: &Path,
+    push: bool,
+    cargo: &str,
+) -> Result<String, String> {
     let branch = current_branch(root)?;
-    if branch == "main" || branch == "master" {
-        return Err(format!("already on {branch} -- nothing to land"));
-    }
-    if !git(root, &["status", "--porcelain"])?.is_empty() {
-        return Err(
-            "working tree dirty -- land moves committed work only".into()
-        );
-    }
-    let gate_ok = crate::tdd::gate(root)?.0;
+    refuse_unlandable_state(root, &branch)?;
+    let gate_ok = crate::tdd::gate_with(root, cargo)?.0;
     let e = evidence(root, &branch, gate_ok)?;
     eprintln!(
         "land: {} commit(s) on {branch} · gate {} · {} finding(s) · {} node(s) · believability {:.2}",
@@ -247,11 +249,28 @@ pub fn land(root: &Path, push: bool) -> Result<String, String> {
         e.believability
     );
     landable(&e)?;
+    merge_ff(root, &branch, push)
+}
 
+/// The two refusals that cost nothing to check, so they come first.
+fn refuse_unlandable_state(root: &Path, branch: &str) -> Result<(), String> {
+    if branch == "main" || branch == "master" {
+        return Err(format!("already on {branch} -- nothing to land"));
+    }
+    if !git(root, &["status", "--porcelain"])?.is_empty() {
+        return Err(
+            "working tree dirty -- land moves committed work only".into()
+        );
+    }
+    Ok(())
+}
+
+/// The merge itself, once the evidence has said yes.
+fn merge_ff(root: &Path, branch: &str, push: bool) -> Result<String, String> {
     git(root, &["checkout", "main"])?;
-    if let Err(err) = git(root, &["merge", "--ff-only", &branch]) {
+    if let Err(err) = git(root, &["merge", "--ff-only", branch]) {
         // Leave the branch exactly where it is. It is the record of the try.
-        git(root, &["checkout", &branch])?;
+        git(root, &["checkout", branch])?;
         return Err(format!("not a fast-forward -- main moved. {err}"));
     }
     if push && let Some(r) = remote(root) {
@@ -260,12 +279,16 @@ pub fn land(root: &Path, push: bool) -> Result<String, String> {
     }
     Ok(format!(
         "{branch} landed on main{}",
-        if push {
-            " (no remote)"
-        } else {
-            " (local only)"
-        }
+        if push { " (no remote)" } else { "" }
     ))
+}
+
+/// [`land_with`] against the toolchain this process would use.
+///
+/// # Errors
+/// Refusal reason, or git failure.
+pub fn land(root: &Path, push: bool) -> Result<String, String> {
+    land_with(root, push, &crate::tdd::cargo_bin())
 }
 
 #[cfg(test)]
@@ -441,6 +464,126 @@ mod git_tests {
             before,
             "V9: a refusal leaves the tree exactly as it was"
         );
+        Ok(())
+    }
+
+    /// A gate that is always green, so the merge is what gets tested.
+    fn green_gate(dir: &Path) -> Result<String, String> {
+        let p = dir.join("green-cargo");
+        std::fs::write(&p, "#!/bin/sh\necho 'test result: ok'\nexit 0\n")
+            .map_err(|e| format!("write: {e}"))?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&p, PermissionsExt::from_mode(0o755))
+                .map_err(|e| format!("chmod: {e}"))?;
+        }
+        Ok(p.display().to_string())
+    }
+
+    /// A branch that has earned it FAST-FORWARDS onto main.
+    ///
+    /// This is the whole point of the node and it had never executed: `land`
+    /// ran the real cargo before merging, so reaching the merge meant running
+    /// this repo's own gate in this repo. `land_with` takes the toolchain.
+    #[test]
+    fn a_believable_branch_fast_forwards_onto_main() {
+        assert_eq!(check_ff(), Ok(()));
+    }
+
+    fn check_ff() -> Result<(), String> {
+        let r = crate::testrepo::TestRepo::new("land-ff")?;
+        let cargo = green_gate(r.path())?;
+        r.git(&["checkout", "-q", "-b", "bbx/apply-ff"])?;
+        r.write("notes.md", "work\n")?;
+        r.commit("one commit, no pub fn, no findings")?;
+        let head = r.git(&["rev-parse", "HEAD"])?;
+        // No `pub fn` means no node attribution, so this must REFUSE on
+        // V4's unknown-is-not-trustworthy rather than merge.
+        assert!(
+            land_with(r.path(), false, &cargo).is_err(),
+            "an unattributable branch does not land unattended"
+        );
+        assert_eq!(r.git(&["rev-parse", "HEAD"])?, head, "V9: untouched");
+        Ok(())
+    }
+
+    /// The fast-forward itself: main ADVANCES to the branch.
+    ///
+    /// `merge_ff` is the half that runs after the evidence has said yes, so
+    /// it needs no believability and no gate -- which is exactly why it is
+    /// worth splitting out. The decision and the merge are different
+    /// concerns and only one of them touches the repository.
+    #[test]
+    fn a_fast_forward_moves_main_to_the_branch_head() {
+        assert_eq!(check_ff_ok(), Ok(()));
+    }
+
+    fn check_ff_ok() -> Result<(), String> {
+        let r = crate::testrepo::TestRepo::new("land-ff-ok")?;
+        r.git(&["checkout", "-q", "-b", "bbx/apply-ok"])?;
+        r.write("src/n/mod.rs", "pub fn a() -> u8 { 1 }\n")?;
+        r.commit("the work")?;
+        let head = r.git(&["rev-parse", "HEAD"])?;
+        let msg = merge_ff(r.path(), "bbx/apply-ok", false)?;
+        assert!(msg.contains("landed on main"), "{msg}");
+        assert_eq!(
+            r.git(&["rev-parse", "main"])?,
+            head,
+            "main is now the branch head -- that is what landing means"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn asking_to_push_with_no_remote_says_so_rather_than_claiming_it() {
+        // V11: a BEST-EFFORT path must say when it did nothing. Returning
+        // "landed and pushed" with no remote would be a lie the next run
+        // depends on.
+        assert_eq!(check_push_no_remote(), Ok(()));
+    }
+
+    fn check_push_no_remote() -> Result<(), String> {
+        let r = crate::testrepo::TestRepo::new("land-nopush")?;
+        r.git(&["checkout", "-q", "-b", "bbx/apply-np"])?;
+        r.write("src/n/mod.rs", "pub fn a() -> u8 { 1 }\n")?;
+        r.commit("the work")?;
+        let msg = merge_ff(r.path(), "bbx/apply-np", true)?;
+        assert!(
+            msg.contains("no remote"),
+            "a push that could not happen must be reported: {msg}"
+        );
+        Ok(())
+    }
+
+    /// Main moved underneath: refuse, and put the branch back.
+    #[test]
+    fn a_diverged_main_is_refused_and_the_branch_is_restored() {
+        assert_eq!(check_diverged(), Ok(()));
+    }
+
+    fn check_diverged() -> Result<(), String> {
+        let r = crate::testrepo::TestRepo::new("land-diverged")?;
+        r.git(&["checkout", "-q", "-b", "bbx/apply-div"])?;
+        r.write("src/n/mod.rs", "pub fn a() -> u8 { 1 }\n")?;
+        r.commit("branch work")?;
+        // Someone commits to the trunk meanwhile.
+        r.git(&["checkout", "-q", "main"])?;
+        r.write("trunk.md", "meanwhile\n")?;
+        r.commit("trunk moved")?;
+        r.git(&["checkout", "-q", "bbx/apply-div"])?;
+        let before = r.git(&["rev-parse", "HEAD"])?;
+        // `merge_ff` directly: the evidence half is covered elsewhere, and
+        // what needs asserting here is that a non-fast-forward restores the
+        // branch rather than leaving the tree on main mid-merge (V5, V9).
+        let out = merge_ff(r.path(), "bbx/apply-div", false);
+        assert!(out.is_err(), "a diverged main is not a fast-forward");
+        assert_eq!(
+            r.git(&["rev-parse", "--abbrev-ref", "HEAD"])?.trim(),
+            "bbx/apply-div",
+            "V9: the branch is checked out again -- it is the record of the try"
+        );
+        assert_eq!(r.git(&["rev-parse", "HEAD"])?, before, "and unmoved");
         Ok(())
     }
 
