@@ -115,34 +115,10 @@ pub fn expected_calls(test_src: &str, existing: &str) -> Vec<String> {
     }
     out
 }
-
-/// The RULE depth of a spec: §G §C §I §V only.
-///
-/// §B and §R are rationale and history -- what was tried, what broke, what was
-/// measured. A prompt that must AUTHOR a test needs the rule, not the archive.
-/// Measured: adding one §B row to a node spec pushed step 1 from 1,210 to 1,520
-/// tokens and turned a run that produced correct code into one the judge
-/// rejected (B9). V43/V45 in the root spec say rules inline, rationale by
-/// reference; this is that rule applied to our own prompts.
-#[must_use]
-pub fn rule_depth(spec: &str) -> String {
-    // §T is the PLAN, not the archive -- the row being implemented names the
-    // work. Dropping it cost a run (B9). §B/§R are history and stay out.
-    const KEEP: [&str; 5] =
-        ["\u{a7}G", "\u{a7}C", "\u{a7}I", "\u{a7}V", "\u{a7}T"];
-    let mut out = String::new();
-    let mut keeping = true;
-    for line in spec.lines() {
-        if line.starts_with("## \u{a7}") {
-            keeping = KEEP.iter().any(|k| line.contains(k));
-        }
-        if keeping {
-            out.push_str(line);
-            out.push('\n');
-        }
-    }
-    out
-}
+/// Moved to `crate::spec`, which owns `SPEC.md` structure. It lived here,
+/// reachable only from the worker path, while `lens::pack` shipped whole
+/// files to every context pack and every budget (`.:B8`).
+pub use crate::spec::rule_depth;
 
 /// Split a Rust source file at the `#[cfg(test)]` boundary.
 ///

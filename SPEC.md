@@ -231,7 +231,7 @@ T25|x|moved — `src/cli:T3`|I,V48
 T28|.|backprop: bug → leaf `§B`, decide promote|V14
 T36|x|superseded — `§N` derivation is `src/fed:T6`, at the node that owns it|V36,V38,V39
 T37|.|`bbx sync` + exit 1 when wrote|I,V36
-T41|.|`lens --depth rule\|why\|all` — `pack` reads the WHOLE `SPEC.md` ∀ chain member & `Depth` is consulted ONLY for `Why` ∴ `rule` selects nothing & `§R`/`§B` archive rides in every pack (MEASURED 33% of root, 59% of `src/tdd`, 58% of `src/plan`). `rule_depth` already exists & is TESTED in `src/tdd` — move it to the owner, ⊥ reimpl|V45,V15,V105
+T41|x|`lens --depth rule\|why\|all` — `pack` reads the WHOLE `SPEC.md` ∀ chain member & `Depth` is consulted ONLY for `Why` ∴ `rule` selects nothing & `§R`/`§B` archive rides in every pack (MEASURED 33% of root, 59% of `src/tdd`, 58% of `src/plan`). `rule_depth` already exists & is TESTED in `src/tdd` — move it to the owner, ⊥ reimpl|V45,V15,V105
 T42|.|cross-file losslessness proof, asserted pre-write|V49,V44
 T46|.|coupling report after proposed split|V53
 T47|.|violation renderer `file:line: bbx/Vn:` + why + mechanical\|judgment + json `kind`|V55,V54

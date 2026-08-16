@@ -30,6 +30,36 @@ pub fn fmt(text: &str) -> Result<String, String> {
     microlith::format_spec(text)
 }
 
+/// The RULE sections: what a worker needs to act, without the archive.
+///
+/// `§G §C §I §V §T` survive; `§R` and `§B` are history and stay out. `§T` is
+/// the PLAN rather than the archive -- the row being implemented names the
+/// work, and dropping it cost a run (`src/tdd:B9`).
+///
+/// This lives here because `src/spec` owns `SPEC.md` structure. It spent the
+/// project's life in `src/tdd`, reachable only from the worker path, while
+/// `lens::pack` -- the thing that builds every context pack and every budget
+/// -- shipped whole files including both archive sections (`.:B8`).
+///
+/// MEASURED share dropped: 33% of root, 59% of `src/tdd`, 58% of `src/plan`.
+#[must_use]
+pub fn rule_depth(spec: &str) -> String {
+    const KEEP: [&str; 5] =
+        ["\u{a7}G", "\u{a7}C", "\u{a7}I", "\u{a7}V", "\u{a7}T"];
+    let mut out = String::new();
+    let mut keeping = true;
+    for line in spec.lines() {
+        if line.starts_with("## \u{a7}") {
+            keeping = KEEP.iter().any(|k| line.contains(k));
+        }
+        if keeping {
+            out.push_str(line);
+            out.push('\n');
+        }
+    }
+    out
+}
+
 /// Split a spec into `(header, body)` pairs, one per `## §X` section.
 #[must_use]
 pub fn sections(text: &str) -> Vec<(String, String)> {

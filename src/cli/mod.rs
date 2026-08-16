@@ -12,7 +12,7 @@ const USAGE: &str = "\
 bbx -- federated SPEC.md for small-context local models
 
   bbx budget [dir]     token cost of every node, against the working budget
-  bbx lens <dir>       the context pack for one node
+  bbx lens <dir> [--depth rule|why|all]  the context pack for one node
   bbx fed [dir]        the federation edges declared by a node
   bbx check [dir]      microlith structural check of every node
   bbx review [rev]     mechanical checks on what a commit added (default HEAD)
@@ -45,9 +45,10 @@ pub fn run() -> ExitCode {
     crate::ollama::load_pace();
     match args.first().map(String::as_str) {
         Some("budget") => budget(&root, arg_dir(&args, &root)),
-        Some("lens") => match args.get(1) {
-            Some(d) => lens_cmd(&root, &PathBuf::from(d)),
-            None => usage("lens needs a dir"),
+        Some("lens") => match (args.get(1), depth_arg(&args)) {
+            (Some(d), Ok(dep)) => lens_cmd(&root, &PathBuf::from(d), dep),
+            (Some(_), Err(m)) => usage(&m),
+            (None, _) => usage("lens needs a dir"),
         },
         Some("fed") => fed_cmd(&arg_dir(&args, &root)),
         Some("graph") => {
@@ -176,6 +177,25 @@ fn repo_root() -> PathBuf {
 ///
 /// `join` leaves an absolute argument alone, so passing a full path still
 /// works.
+/// `--depth rule|why|all`, defaulting to `rule` (`.:V45`).
+///
+/// An unknown value is a USAGE error, never a quiet fall back to the default.
+/// `bbx lens x --depth rules` would otherwise look exactly like a flag that
+/// was honoured, which is `.:B8` wearing a typo -- and `.:V105` says a
+/// declared option must change behaviour or it is a claim with no runner.
+fn depth_arg(args: &[String]) -> Result<lens::Depth, String> {
+    let Some(i) = args.iter().position(|a| a == "--depth") else {
+        return Ok(lens::Depth::Rule);
+    };
+    match args.get(i + 1).map(String::as_str) {
+        Some("rule") => Ok(lens::Depth::Rule),
+        Some("why") => Ok(lens::Depth::Why),
+        Some("all") => Ok(lens::Depth::All),
+        Some(v) => Err(format!("unknown --depth `{v}` -- rule|why|all")),
+        None => Err("--depth needs rule|why|all".into()),
+    }
+}
+
 fn arg_dir(args: &[String], root: &Path) -> PathBuf {
     args.get(1)
         .map_or_else(|| root.to_path_buf(), |d| root.join(d))
@@ -292,8 +312,8 @@ fn budget(root: &Path, dir: PathBuf) -> ExitCode {
     }
 }
 
-fn lens_cmd(root: &Path, dir: &Path) -> ExitCode {
-    match lens::pack(root, dir, lens::Depth::Rule) {
+fn lens_cmd(root: &Path, dir: &Path, depth: lens::Depth) -> ExitCode {
+    match lens::pack(root, dir, depth) {
         Ok(p) => {
             eprintln!("# chain: {} nodes · {}", p.chain.len(), p.cost);
             for c in &p.children {

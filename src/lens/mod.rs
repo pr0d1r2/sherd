@@ -14,6 +14,9 @@ pub enum Depth {
     Rule,
     /// Rules plus rationale from `SPEC.why.md`.
     Why,
+    /// Everything, archive included. For reading a node's history, never for
+    /// handing to a worker.
+    All,
 }
 
 #[derive(Debug)]
@@ -34,7 +37,19 @@ pub fn pack(root: &Path, dir: &Path, depth: Depth) -> std::io::Result<Pack> {
     let chain = fed::chain(root, dir);
     let mut text = String::new();
     for spec in &chain {
-        text.push_str(&std::fs::read_to_string(spec)?);
+        let raw = std::fs::read_to_string(spec)?;
+        // `Depth` used to be consulted ONLY for `Why`, so `Rule` -- the
+        // default §I documents -- selected nothing and every pack, every
+        // budget and every `ask` carried §R and §B (`.:B8`, `.:V105`). The
+        // archive is what was tried and measured; a worker acts on rules.
+        //
+        // §F leaves the TEXT here and stays reachable: `Pack::children` is
+        // parsed from the node's own spec below and rendered separately, so
+        // navigation survives without the table riding in every prompt.
+        text.push_str(&match depth {
+            Depth::All => raw,
+            Depth::Rule | Depth::Why => crate::spec::rule_depth(&raw),
+        });
         text.push('\n');
     }
     if depth == Depth::Why {
@@ -134,6 +149,36 @@ mod tests {
         assert!(
             c > tokens::DEFAULT_NODE,
             "root must resolve to its SPEC.md row, got the default: {c}"
+        );
+    }
+
+    #[test]
+    fn depth_selects_something_or_it_is_a_flag_that_lies() {
+        // V105, and the test that would have caught B8 the day `Depth` was
+        // introduced: same input, two settings, DIFFERENT output. `Rule` was
+        // consulted nowhere, so the two branches agreed for the project's
+        // whole life while §I advertised a choice.
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let rule = pack(root, root, Depth::Rule).unwrap();
+        let all = pack(root, root, Depth::All).unwrap();
+        assert!(
+            rule.cost.tokens < all.cost.tokens,
+            "rule {} must be cheaper than all {}",
+            rule.cost.tokens,
+            all.cost.tokens
+        );
+        assert!(all.text.contains("## \u{a7}B"), "all keeps the archive");
+        assert!(
+            !rule.text.contains("## \u{a7}B"),
+            "rule drops §B -- history is not a rule"
+        );
+        assert!(
+            !rule.text.contains("## \u{a7}R"),
+            "rule drops §R -- a measurement is not a rule"
+        );
+        assert!(
+            rule.text.contains("## \u{a7}V"),
+            "rule keeps §V -- that is the point of it"
         );
     }
 
