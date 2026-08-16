@@ -136,7 +136,9 @@ pub fn run_args(mut args: Vec<String>) -> ExitCode {
         #[cfg(feature = "ollama")]
         Some("oneshot") => match (args.get(1), args.get(2), args.get(3)) {
             (Some(_), Some(v), Some(t)) => {
-                match crate::tdd::oneshot(&root, &arg_dir(&args, &root), v, t) {
+                let dir = arg_dir(&args, &root);
+                let run = crate::tdd::Run::new(&root, &dir, v, t);
+                match crate::tdd::oneshot(&run) {
                     Ok(_) => ExitCode::SUCCESS,
                     Err(e) => {
                         eprintln!("bbx: {e}");
@@ -715,9 +717,257 @@ mod tests {
         s.iter().map(|a| (*a).to_string()).collect()
     }
 
-    /// Exit codes are a CONTRACT (`§I`: 0 clean · 1 violation · 2 usage), and
-    /// a contract nothing calls is a comment. This node sat at 0.0% coverage
-    /// over 445 lines because `run` read `std::env::args` directly.
+    /// The read-only verbs, driven through `run_args` against THIS repo.
+    ///
+    /// Exit codes are the contract `§I` states -- `0 clean / 1 violation /
+    /// 2 usage` -- so asserting them is asserting the documented surface, not
+    /// merely executing lines. The gate runs `bbx check` and `bbx budget` on
+    /// every commit and requires them clean, so SUCCESS here is a claim the
+    /// gate independently holds true.
+    ///
+    /// `cargo test` runs with the package root as CWD, so `repo_root` finds
+    /// the real tree. None of these verbs writes: `slice` is given
+    /// `--check`, and `outcome`, `apply`, `tdd` and `ask` are excluded --
+    /// they write state or need an endpoint.
+    #[test]
+    fn the_read_only_verbs_all_exit_clean_on_this_repo() {
+        for verb in [
+            vec!["check"],
+            vec!["budget"],
+            vec!["fed"],
+            vec!["plan"],
+            vec!["plan", "--triage"],
+            vec!["slice", "--check"],
+        ] {
+            assert_eq!(
+                run_args(argv(&verb)),
+                ExitCode::SUCCESS,
+                "`bbx {}` must exit 0 on a clean tree",
+                verb.join(" ")
+            );
+        }
+    }
+
+    /// Every `graph` rendering, including the default.
+    ///
+    /// B15 is why there are four: a mermaid diagram that no renderer draws is
+    /// a diagram nobody reads, so `--tree` renders in any markdown forever.
+    /// A flag whose branches agree is a claim with no runner (`.:V105`), so
+    /// the renderings must also DIFFER.
+    #[test]
+    fn every_graph_rendering_succeeds_and_they_are_not_the_same_render() {
+        for flag in [
+            vec!["graph"],
+            vec!["graph", "--dot"],
+            vec!["graph", "--table"],
+            vec!["graph", "--tree"],
+        ] {
+            assert_eq!(run_args(argv(&flag)), ExitCode::SUCCESS, "{flag:?}");
+        }
+        let root = repo_root();
+        let (dot, table) = (fed::dot(&root), fed::table(&root));
+        let (tree, mermaid) = (fed::tree(&root), fed::mermaid(&root));
+        assert!(dot.contains("digraph"), "--dot must emit dot");
+        assert!(table.contains('|'), "--table must emit a markdown table");
+        assert_ne!(dot, mermaid, "a flag whose branches agree is no flag");
+        assert_ne!(tree, mermaid);
+        assert_ne!(table, tree);
+    }
+
+    /// `lens` at each depth, and the depths must not agree.
+    ///
+    /// `.:B8` is `--depth rule` selecting NOTHING for the project's whole
+    /// life while §I documented it as the default. A test that only checked
+    /// the exit code would have passed throughout.
+    #[test]
+    fn lens_runs_at_every_depth_and_the_depths_differ() {
+        for d in ["rule", "why", "all"] {
+            assert_eq!(
+                run_args(argv(&["lens", ".", "--depth", d])),
+                ExitCode::SUCCESS,
+                "lens --depth {d}"
+            );
+        }
+        let root = repo_root();
+        let p = |d| lens::pack(&root, &root, d).map(|p| p.text.len());
+        let (Ok(rule), Ok(all)) = (p(lens::Depth::Rule), p(lens::Depth::All))
+        else {
+            panic!("the root pack must be readable at both depths")
+        };
+        assert!(rule < all, "B8: `rule` must SELECT, not render everything");
+    }
+
+    /// A verb pointed at a directory that is not a node.
+    ///
+    /// USAGE (2), not violation (1): you named the wrong directory, which is
+    /// a bad argument -- distinct from `check` finding a real defect inside a
+    /// node that does exist. `§I` separates the two codes and something has
+    /// to hold them apart.
+    #[test]
+    fn a_dir_with_no_spec_is_a_usage_error_not_a_violation() {
+        assert_eq!(
+            run_args(argv(&["fed", "target"])),
+            ExitCode::from(2),
+            "no SPEC.md there is a bad ARGUMENT, never a silent zero"
+        );
+        assert_eq!(
+            run_args(argv(&["check"])),
+            ExitCode::SUCCESS,
+            "and a real node still checks clean -- the codes differ"
+        );
+    }
+
+    /// `budget` on a repo whose chain EXCEEDS its declared ceiling.
+    ///
+    /// The over-ceiling branch is another detector with no positive case:
+    /// `.:B7` is `.context-limits` declaring per-node ceilings while `budget`
+    /// PRINTED the table without comparing against them, so every chain
+    /// drifted over unseen for the project's life. The comparison now exists
+    /// and the gate keeps this repo at 0 over, which means the branch that
+    /// reports a breach can never fire here.
+    #[test]
+    fn a_chain_over_its_ceiling_exits_one_and_a_generous_one_exits_zero() {
+        assert_eq!(over_ceiling_is_caught(), Ok(()));
+    }
+
+    /// A node whose SPEC costs more than one token -- which is every real one.
+    const FAT_SPEC: &str = "# SPEC\n\n## \u{a7}G GOAL\n\nsomething long \
+         enough to cost more than one token, several times over, so the \
+         ceiling below is genuinely exceeded rather than merely equalled\n";
+
+    fn over_ceiling_is_caught() -> Result<(), String> {
+        let r = crate::testrepo::TestRepo::new("cli-budget-over")?;
+        r.write("SPEC.md", FAT_SPEC)?;
+        r.write(".context-limits", "SPEC.md 1\n")?;
+        r.commit("a node over its ceiling")?;
+        let root = r.path().to_path_buf();
+        assert_eq!(
+            budget(r.path(), root.clone()),
+            ExitCode::from(1),
+            "B7: a chain over its ceiling must FAIL, not merely print"
+        );
+        // The control: raise the ceiling and the same tree passes. Without
+        // it, `budget` returning 1 unconditionally would satisfy the test.
+        r.write(".context-limits", "SPEC.md 100000\n")?;
+        r.commit("raise it")?;
+        assert_eq!(budget(r.path(), root), ExitCode::SUCCESS);
+        Ok(())
+    }
+
+    /// `check` on a repo that IS broken.
+    ///
+    /// Every reporting branch in `check` only runs when something is wrong,
+    /// so a clean tree exercises none of them -- and this repo is kept clean
+    /// by the gate. A detector tested only on the negative case is satisfied
+    /// by finding nothing, which is `src/fed:B6` and the reason `src/fed:V10`
+    /// exists. These are five such detectors with no positive case.
+    #[test]
+    fn check_reports_the_violations_it_finds_and_exits_one() {
+        assert_eq!(broken_repo_is_caught(), Ok(()));
+    }
+
+    /// A §F row pointing at a directory that is not there (fed V1), the same
+    /// dir named twice (fed V12), a child on disk with no row (fed V11), and
+    /// a §B row naming no invariant (spec V4).
+    const BROKEN: &str = "# SPEC\n\n## \u{a7}V INVARIANTS\n\nV1: out of order\n\n## \u{a7}G GOAL\n\nbroken on purpose\n\n## \u{a7}T TASKS\n\nid|status|task|cites\nT1|?|a status that is not x, ~ or .|-\n\n\
+         ## \u{a7}F FEDERATION\n\ndir|owns|\u{22a5}owns|tokens\n\
+         ghost|nothing real|-|-\n\
+         twice|a|-|-\n\
+         twice|b|-|-\n\n\
+         ## \u{a7}B BUGS\n\nid|date|cause|fix\n\
+         B1|2026-08-21|something broke|no invariant named here\n";
+
+    fn broken_repo_is_caught() -> Result<(), String> {
+        let r = crate::testrepo::TestRepo::new("cli-check-broken")?;
+        r.write("SPEC.md", BROKEN)?;
+        // A real child dir with no §F row -- fed V11's advisory.
+        r.write("orphan/SPEC.md", "# SPEC\n\n## \u{a7}G GOAL\n\nx\n")?;
+        r.commit("a deliberately broken tree")?;
+        assert_eq!(
+            check(r.path()),
+            ExitCode::from(1),
+            "a tree with violations must exit 1, never 0"
+        );
+        Ok(())
+    }
+
+    /// The control, and it is what makes the test above mean anything: the
+    /// same function on a clean tree exits 0. Without this, `check` returning
+    /// 1 unconditionally would pass.
+    #[test]
+    fn check_on_a_clean_tree_exits_zero() {
+        assert_eq!(check_clean_tree(), Ok(()));
+    }
+
+    fn check_clean_tree() -> Result<(), String> {
+        let r = crate::testrepo::TestRepo::new("cli-check-clean")?;
+        r.write(
+            "SPEC.md",
+            "# SPEC\n\n## \u{a7}G GOAL\n\nclean\n\n## \u{a7}V INVARIANTS\n\n\
+             V1: something ! hold\n",
+        )?;
+        r.commit("a clean tree")?;
+        assert_eq!(check(r.path()), ExitCode::SUCCESS);
+        Ok(())
+    }
+
+    /// `review` on a commit that adds a STUB, so the findings loop runs.
+    ///
+    /// The printing branch only executes when there is something to print,
+    /// and this repo's own commits are reviewed clean -- so `review_cmd`'s
+    /// findings path had never run. A stub is a new `pub fn` called only from
+    /// its own test, which is exactly what `unwired` flags (`src/fed:B6`).
+    #[test]
+    fn review_prints_the_findings_it_has_and_stays_advisory() {
+        assert_eq!(review_a_stub_commit(), Ok(()));
+    }
+
+    fn review_a_stub_commit() -> Result<(), String> {
+        let r = crate::testrepo::TestRepo::new("cli-review-stub")?;
+        r.write(
+            "src/n/mod.rs",
+            "pub fn stub() -> bool { false }\n\n#[cfg(test)]\nmod t {\n \
+             use super::*;\n #[test]\n fn a() { assert!(!stub()); }\n}\n",
+        )?;
+        r.commit("add a stub called only by its own test")?;
+        assert_eq!(
+            review_cmd(r.path(), "HEAD"),
+            ExitCode::SUCCESS,
+            "V3: a finding is ADVISORY -- review reports, the reader judges, \
+             and auto-failing would trade a false negative for a false positive"
+        );
+        Ok(())
+    }
+
+    /// `review` against a revision that does not exist.
+    #[test]
+    fn review_of_an_unknown_revision_is_an_error_not_a_clean_bill() {
+        // `src/review`'s own rule: an unreadable module is an error, never a
+        // clean review. A missing rev reporting "no findings" would be the
+        // most dangerous possible output.
+        assert_ne!(
+            run_args(argv(&["review", "definitely-not-a-rev"])),
+            ExitCode::SUCCESS,
+            "a rev that does not exist cannot be clean"
+        );
+    }
+
+    /// `review` of a real revision runs and reports.
+    #[test]
+    fn review_of_a_real_revision_reports_and_succeeds() {
+        // ADVISORY by design -- findings do not fail the command -- so the
+        // assertion is that it runs and classifies, not that it is silent.
+        assert_eq!(run_args(argv(&["review", "HEAD"])), ExitCode::SUCCESS);
+    }
+
+    /// `repo_root` walks UP to the tree that has both markers.
+    #[test]
+    fn repo_root_finds_the_tree_that_has_both_markers() {
+        let root = repo_root();
+        assert!(root.join("SPEC.md").is_file(), "root must carry a SPEC.md");
+        assert!(root.join(".git").exists(), "and a .git");
+    }
+
     #[test]
     fn an_unknown_command_is_a_usage_error() {
         assert_eq!(run_args(argv(&["nope"])), ExitCode::from(2));

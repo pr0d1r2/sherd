@@ -298,14 +298,9 @@ impl<'a> Caller<'a> {
 ///
 /// # Errors
 /// Returns the reason it could not proceed, same as [`drive`].
-pub fn oneshot(
-    root: &Path,
-    node: &Path,
-    invariant: &str,
-    task: &str,
-) -> Result<Vec<Step>, String> {
-    let spec_path = node.join("SPEC.md");
-    let mod_path = node.join("mod.rs");
+pub fn oneshot(r: &Run) -> Result<Vec<Step>, String> {
+    let spec_path = r.node.join("SPEC.md");
+    let mod_path = r.node.join("mod.rs");
     let spec_txt =
         std::fs::read_to_string(&spec_path).map_err(|e| e.to_string())?;
     let original =
@@ -313,21 +308,21 @@ pub fn oneshot(
     let (impl_r, tests_r) = split_module(&original);
     let inv = spec_txt
         .lines()
-        .find(|l| l.starts_with(&format!("{invariant}:")))
-        .ok_or_else(|| format!("{invariant} not declared"))?
+        .find(|l| l.starts_with(&format!("{}:", r.invariant)))
+        .ok_or_else(|| format!("{} not declared", r.invariant))?
         .to_string();
 
-    let mut c = Caller::new(&ollama::Http);
+    let mut c = Caller::new(r.transport);
     let reply = c.run(
         &format!(
             "{}\n--- spec (complete) ---\n{spec_txt}\n\n\
          --- implementation (complete) ---\n{impl_r}\n\n\
          --- existing tests ---\n{tests_r}\n\n\
-         Prove and implement this invariant:\n  {inv}\n\nTask: {task}\n\n\
+         Prove and implement this invariant:\n  {inv}\n\nTask: {}\n\n\
          Reply with TWO ```rust fenced blocks: first the new `#[test]` function, \
          then the new implementation function(s) to add. The test must fail against \
          the current implementation and pass against your new one.",
-            NOTATION
+            NOTATION, r.task
         ),
         "monolith",
     )?;
@@ -349,7 +344,7 @@ pub fn oneshot(
         insert_impl(&insert_test(&original, blocks[0]), blocks[1]),
     )
     .map_err(|e| e.to_string())?;
-    let (ok, out) = gate(root)?;
+    let (ok, out) = gate_with(r.root, &r.cargo)?;
     let sent: u64 = c.log.iter().map(|s| s.prompt_tokens).sum();
     eprintln!("\n  1 round-trip · {sent} tok sent · max single call {sent}");
     if ok {
@@ -1228,6 +1223,22 @@ mod tests {
 #[cfg(test)]
 mod loop_tests {
     use super::*;
+
+    #[test]
+    fn a_gate_that_could_not_run_is_an_error_not_a_verdict() {
+        // V26, and it is the distinction the whole harness rests on: a
+        // missing toolchain scoring RED is indistinguishable from code that
+        // failed its tests, and every titration would read as a located
+        // boundary rather than as a broken bench.
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let Err(msg) = gate_with(root, "definitely-not-a-cargo-binary") else {
+            return;
+        };
+        assert!(
+            msg.contains("could not RUN"),
+            "say the gate did not EXECUTE, not that it failed: {msg}"
+        );
+    }
     use std::cell::Cell;
     use std::io::BufRead;
     use std::time::Duration;
@@ -1298,7 +1309,15 @@ mod loop_tests {
     /// Step 1 REQUIRES a red gate before the loop will write an
     /// implementation, so a fake toolchain has to be red first and green
     /// after -- the transition the loop exists to observe.
-    fn fake_cargo(dir: &Path, red_times: u32) -> Result<String, String> {
+    /// A `cargo` that goes RED `red_times` times, then green.
+    ///
+    /// SCRIPTED, matching `Scripted` fifty lines above: both are canned
+    /// answers indexed by call number, one for the endpoint and one for the
+    /// gate. Not a mock -- it verifies no expectations. Not a fake -- it is
+    /// no simplified cargo. And deliberately not `stub_`, which in this repo
+    /// names the DEFECT under test: a plausible-but-wrong implementation the
+    /// model wrote (`src/fed:B6`, and the `STUBS` corpus in `src/assay`).
+    fn scripted_cargo(dir: &Path, red_times: u32) -> Result<String, String> {
         let counter = dir.join("gate-count");
         let script = dir.join("fake-cargo");
         let body = format!(
@@ -1363,9 +1382,21 @@ mod loop_tests {
     }
 
     /// Build the scratch repo and hand back its root and node.
-    fn scratch() -> Result<(std::path::PathBuf, std::path::PathBuf), String> {
+    ///
+    /// Unique per INSTANCE, not per process. Keying on the pid alone gave
+    /// every test in the binary the same directory, so the second caller
+    /// raced the first and one `remove_dir_all` deleted a tree the other was
+    /// still reading (B25). `src/review:V6` is the rule and `TestRepo`
+    /// already carried the remedy; this node did not have it because exactly
+    /// one test used the fixture.
+    fn scratch(
+        tag: &str,
+    ) -> Result<(std::path::PathBuf, std::path::PathBuf), String> {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static N: AtomicUsize = AtomicUsize::new(0);
+        let n = N.fetch_add(1, Ordering::Relaxed);
         let dir = std::env::temp_dir()
-            .join(format!("bbx-loop-{}", std::process::id()));
+            .join(format!("bbx-loop-{tag}-{}-{n}", std::process::id()));
         let node = dir.join("node");
         node_fixture(&node)?;
         repo_fixture(&dir)?;
@@ -1373,8 +1404,8 @@ mod loop_tests {
     }
 
     fn drive_a_scripted_run() -> Result<(), String> {
-        let (dir, node) = scratch()?;
-        let cargo = fake_cargo(&dir, 1)?;
+        let (dir, node) = scratch("repair")?;
+        let cargo = scripted_cargo(&dir, 1)?;
         let t = script();
         let base = Run::new(&dir, &node, "V1", "add double()")
             .with_cargo(&cargo)
@@ -1386,7 +1417,211 @@ mod loop_tests {
         let after = std::fs::read_to_string(node.join("mod.rs"))
             .map_err(|e| format!("read back: {e}"))?;
         let _ = std::fs::remove_dir_all(&dir);
+        eprintln!("REPAIR OUTCOME: {out:?}");
         check_outcome(&out, &after)
+    }
+
+    /// The monolith arm, offline.
+    ///
+    /// `oneshot` is what blackbox claims to BEAT -- full spec, full bodies,
+    /// test and implementation asked for together in one call (R29/R30). It
+    /// took `&ollama::Http` and the real `gate`, so the comparison arm could
+    /// only ever run against a live endpoint and this repo's own toolchain.
+    /// It now takes `&Run` like `drive_run`, which is what `Run` exists for.
+    fn monolith_script(blocks: &str) -> Scripted {
+        Scripted::new(&[blocks])
+    }
+
+    const TWO_BLOCKS: &str = "```rust\n#[test]\nfn doubles() { assert_eq!(double(2), 4); }\n```\n\
+         and now the implementation:\n\
+         ```rust\npub fn double(n: u8) -> u8 { n * 2 }\n```";
+
+    #[test]
+    fn the_monolith_arm_runs_and_reports_mergeable_on_a_green_gate() {
+        assert_eq!(monolith_green(), Ok(()));
+    }
+
+    fn monolith_green() -> Result<(), String> {
+        let (dir, node) = scratch("mono-green")?;
+        let cargo = scripted_cargo(&dir, 0)?;
+        let t = monolith_script(TWO_BLOCKS);
+        let base = scripted_run(&dir, &node, &cargo, 0);
+        let out = oneshot(&Run {
+            transport: &t,
+            ..base
+        });
+        let after = std::fs::read_to_string(node.join("mod.rs"))
+            .map_err(|e| format!("read back: {e}"))?;
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(out.is_ok(), "a green gate is MERGEABLE: {out:?}");
+        assert_both_blocks_landed(&after);
+        Ok(())
+    }
+
+    /// The monolith writes BOTH halves in one call -- that is the whole
+    /// difference from the decomposed arm, and half of it landing would be a
+    /// worse failure than none.
+    fn assert_both_blocks_landed(after: &str) {
+        assert!(after.contains("n * 2"), "the impl block landed: {after}");
+        assert!(after.contains("doubles"), "the test block landed too");
+    }
+
+    #[test]
+    fn the_monolith_arm_reports_red_rather_than_claiming_a_merge() {
+        assert_eq!(monolith_red(), Ok(()));
+    }
+
+    fn monolith_red() -> Result<(), String> {
+        let (dir, node) = scratch("mono-red")?;
+        // Never green: the monolith FAILING is the measured outcome R29
+        // recorded (1 of 2 green, against the decomposed arm's 2 of 2).
+        let cargo = scripted_cargo(&dir, 9)?;
+        let t = monolith_script(TWO_BLOCKS);
+        let base = scripted_run(&dir, &node, &cargo, 0);
+        let out = oneshot(&Run {
+            transport: &t,
+            ..base
+        });
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(out.is_err(), "a red gate is NOT mergeable: {out:?}");
+        Ok(())
+    }
+
+    #[test]
+    fn a_monolith_reply_short_of_two_blocks_is_an_error() {
+        // One block means the model gave a test or an implementation but not
+        // both, and guessing which would write the wrong half into the file.
+        assert_eq!(monolith_one_block(), Ok(()));
+    }
+
+    fn monolith_one_block() -> Result<(), String> {
+        let (dir, node) = scratch("mono-one")?;
+        let cargo = scripted_cargo(&dir, 0)?;
+        let t =
+            monolith_script("```rust\npub fn double(n: u8) -> u8 { n*2 }\n```");
+        let base = scripted_run(&dir, &node, &cargo, 0);
+        let out = oneshot(&Run {
+            transport: &t,
+            ..base
+        });
+        let after = std::fs::read_to_string(node.join("mod.rs"))
+            .map_err(|e| format!("read back: {e}"))?;
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_unusable_reply_wrote_nothing(&out, &after)
+    }
+
+    /// One block means the model gave a test or an implementation but not
+    /// both. Guessing which would write the wrong half into the file, so the
+    /// run must say what was wrong and leave the module alone.
+    fn assert_unusable_reply_wrote_nothing(
+        out: &Result<Vec<Step>, String>,
+        after: &str,
+    ) -> Result<(), String> {
+        let Err(msg) = out else {
+            return Err("one block is not two".into());
+        };
+        assert!(msg.contains("expected 2"), "say what was wrong: {msg}");
+        assert!(
+            !after.contains("double"),
+            "nothing is written when the reply is unusable: {after}"
+        );
+        Ok(())
+    }
+
+    /// A run where the candidate's gate goes RED, so step 4 has to repair.
+    ///
+    /// The repair loop was 60 lines nothing had ever executed. It is the part
+    /// of the loop that EDITS code it previously wrote, and `B5` is it
+    /// guessing wrong about where its own insertion went -- so it is the most
+    /// dangerous stretch in the node and it was reachable only with an
+    /// endpoint and a genuinely failing gate.
+    fn repair_script() -> Scripted {
+        Scripted::new(&[
+            "```rust\n#[test]\nfn doubles() { assert_eq!(double(2), 4); }\n```",
+            "YES it exercises the invariant",
+            "```rust\npub fn double(n: u8) -> u8 { n + n }\n```",
+            "```rust\npub fn double(n: u8) -> u8 { n * 2 }\n```",
+            "YES it reads its input",
+        ])
+    }
+
+    #[test]
+    fn a_red_gate_sends_the_loop_through_repair() {
+        assert_eq!(drive_with_one_repair(), Ok(()));
+    }
+
+    /// Build a run over `dir`/`node` with a scripted transport and gate.
+    fn scripted_run<'a>(
+        dir: &'a Path,
+        node: &'a Path,
+        cargo: &str,
+        repairs: usize,
+    ) -> Run<'a> {
+        Run::new(dir, node, "V1", "add double()")
+            .with_cargo(cargo)
+            .repairs(repairs)
+    }
+
+    fn drive_with_one_repair() -> Result<(), String> {
+        let (dir, node) = scratch("repair")?;
+        // RED twice: once for step 3's required red, once for the candidate,
+        // so the repair round-trip is what turns it green.
+        let cargo = scripted_cargo(&dir, 2)?;
+        let t = repair_script();
+        let base = scripted_run(&dir, &node, &cargo, 1);
+        let out = drive_run(&Run {
+            transport: &t,
+            ..base
+        });
+        let after = std::fs::read_to_string(node.join("mod.rs"))
+            .map_err(|e| format!("read back: {e}"))?;
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(out.is_ok(), "a repaired run that goes green lands: {out:?}");
+        assert_repaired_body_landed(&after);
+        Ok(())
+    }
+
+    /// The repaired body is what lands, and the first attempt is GONE.
+    fn assert_repaired_body_landed(after: &str) {
+        assert!(
+            after.contains("n * 2"),
+            "the REPAIRED body is what lands, not the first attempt: {after}"
+        );
+        assert!(
+            !after.contains("n + n"),
+            "repair REPLACES its own previous insertion rather than appending \
+             beside it -- appending would duplicate the definition (B5): {after}"
+        );
+    }
+
+    /// The gate never goes green, and repairs run out.
+    ///
+    /// The exhaustion path must REPORT what was tried. Landing a red tree
+    /// because the loop gave up would be the worst of both -- generated code
+    /// on the branch and no verdict about it.
+    #[test]
+    fn repair_exhaustion_reports_rather_than_landing_a_red_tree() {
+        assert_eq!(exhausted_repairs_do_not_pass(), Ok(()));
+    }
+
+    fn exhausted_repairs_do_not_pass() -> Result<(), String> {
+        let (dir, node) = scratch("exhaust")?;
+        // Red for longer than the loop has repairs, so it runs out.
+        let cargo = scripted_cargo(&dir, 9)?;
+        let t = repair_script();
+        let base = scripted_run(&dir, &node, &cargo, 1);
+        let out = drive_run(&Run {
+            transport: &t,
+            ..base
+        });
+        let _ = std::fs::remove_dir_all(&dir);
+        // The blind judge is SKIPPED on a red gate -- asking a judge to
+        // confirm a refusal costs a call to learn nothing.
+        assert!(
+            out.is_err(),
+            "an exhausted repair reports, never a silent pass: {out:?}"
+        );
+        Ok(())
     }
 
     /// The loop reached the END: authored a test, judged it, saw the gate go

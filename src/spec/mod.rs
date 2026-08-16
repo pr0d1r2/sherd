@@ -217,6 +217,18 @@ mod tests {
     }
 
     #[test]
+    fn fmt_is_lossless_and_idempotent() {
+        // `fmt` is the write half of the spec binding and had no test at all.
+        // Idempotence is the property that matters: a formatter whose second
+        // pass differs from its first turns every `bbx` run into a diff, and
+        // the gate would then fail on a tree nobody edited.
+        let once = fmt(SAMPLE).unwrap_or_default();
+        assert!(!once.is_empty(), "a valid spec formats to something");
+        let twice = fmt(&once).unwrap_or_default();
+        assert_eq!(once, twice, "formatting twice must change nothing");
+    }
+
+    #[test]
     fn check_runs_against_microlith() {
         // Not asserting a specific verdict -- asserting the binding works and
         // returns microlith's own Violation type.

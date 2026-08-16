@@ -134,6 +134,51 @@ mod tests {
     use super::*;
 
     #[test]
+    fn a_malformed_ceiling_line_is_named_and_numbered() {
+        // A skipped line means a ceiling that silently stops being enforced,
+        // which is `.:B7` -- chains drifting over unseen. Both malformations
+        // name the LINE so it can be fixed rather than hunted.
+        let short = Ceilings::parse("src/fed 9000\nonlyonefield\n")
+            .err()
+            .unwrap_or_default();
+        assert!(short.contains(":2"), "name the line: {short}");
+        assert!(short.contains("<path> <limit>"), "say the shape: {short}");
+        let nan = Ceilings::parse("src/fed notanumber\n")
+            .err()
+            .unwrap_or_default();
+        assert!(nan.contains(":1"), "name the line: {nan}");
+        assert!(nan.contains("not a token count"), "say why: {nan}");
+    }
+
+    #[test]
+    fn a_file_that_cannot_be_read_is_an_error_never_a_zero() {
+        // V48. A missing file contributing zero tokens makes an over-budget
+        // chain read as comfortably under one, and every ceiling in this repo
+        // is compared against these numbers.
+        assert!(count_file(std::path::Path::new("/no/such/file.md")).is_err());
+    }
+
+    #[test]
+    fn counting_a_real_file_agrees_with_counting_its_text() {
+        assert_eq!(file_matches_text(), Ok(()));
+    }
+
+    fn file_matches_text() -> Result<(), String> {
+        let p = std::env::temp_dir()
+            .join(format!("bbx-tok-{}.md", std::process::id()));
+        let body = "# SPEC\n\nV1: something ! hold\n";
+        std::fs::write(&p, body).map_err(|e| e.to_string())?;
+        let from_file = count_file(&p).map_err(|e| e.to_string())?;
+        let _ = std::fs::remove_file(&p);
+        assert_eq!(
+            from_file.tokens,
+            count(body).tokens,
+            "reading a file must not change what its text costs"
+        );
+        Ok(())
+    }
+
+    #[test]
     fn count_carries_its_method() {
         let c = count("hello world");
         assert!(c.tokens > 0);

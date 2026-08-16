@@ -947,97 +947,232 @@ pub const TIERS: &[Tier] = &[
     },
 ];
 
+/// `(signature GIVEN, signature INVENTED)` for one `§V` row -- T84's pair.
+pub type SignaturePair = (Grade, Grade);
+
+/// How one arm of T84 read, named so the two failure modes stay apart.
+///
+/// `NoCompile` in the FREE arm means the invented name or arity is one the
+/// hidden tests cannot call -- `src/tdd:B12`'s exact shape, three repairs
+/// deep and unrecoverable -- and that is a different problem from writing
+/// the wrong logic. Folding it into `fail` would report a naming mismatch as
+/// incompetence.
+#[must_use]
+pub const fn signature_mark(g: Grade) -> &'static str {
+    match g {
+        Grade::Pass => "PASS",
+        Grade::Fail => "fail",
+        Grade::NoCompile => "NOCALL",
+        Grade::Hung => "HUNG",
+    }
+}
+
+/// T84's report. Returns the text rather than printing it, so a test can
+/// ASSERT on it -- `.coverage` warns that a percentage cannot tell a test
+/// that asserts from one that merely executes, and the old form was the
+/// latter.
+#[must_use]
+pub fn signature_report(rs: &[SignaturePair]) -> String {
+    let n = rs.len();
+    let c = |f: fn(&SignaturePair) -> bool| rs.iter().filter(|r| f(r)).count();
+    format!(
+        "\nSIGNATURE TITRATION ({n} measured)\n  \
+         given  PASS   {}/{n}\n  \
+         free   PASS   {}/{n}\n  \
+         free   NOCALL {}/{n}  (invented a name the tests cannot call)\n  \
+         free   wrong  {}/{n}  (callable, wrong logic)\n",
+        c(|r| r.0 == Grade::Pass),
+        c(|r| r.1 == Grade::Pass),
+        c(|r| r.1 == Grade::NoCompile),
+        c(|r| r.1 == Grade::Fail)
+    )
+}
+
+/// Did a self-authored test kill a known-wrong implementation?
+///
+/// `.:V111` says such a test cannot grade its own author. This is whether a
+/// MECHANICAL check would have caught that -- run the test against a mutant
+/// and require RED. R53 answered it: 33 of 33 killed the stub, so the check
+/// would have caught NONE of T83's failures and the remedy is REFUTED.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Kill {
+    /// The authored test FAILED the stub -- it discriminates.
+    pub killed: bool,
+    /// The authored test would not compile against the stub.
+    pub broken: bool,
+}
+
+impl Kill {
+    /// SURVIVED and BROKE must never read alike: a test that would not
+    /// compile graded nothing, while one that let the stub live graded it
+    /// and got it wrong. Collapsing them would flatter the model.
+    #[must_use]
+    pub const fn word(self) -> &'static str {
+        if self.broken {
+            "BROKE"
+        } else if self.killed {
+            "killed"
+        } else {
+            "SURVIVED"
+        }
+    }
+}
+
+/// The mutation sweep's report. `survived` is the REMAINDER, and saturating,
+/// because a miscount must not wrap into a headline.
+#[must_use]
+pub fn kills_report(ks: &[Kill]) -> String {
+    let n = ks.len();
+    let killed = ks.iter().filter(|k| k.killed).count();
+    let broken = ks.iter().filter(|k| k.broken).count();
+    let survived = n.saturating_sub(killed).saturating_sub(broken);
+    format!(
+        "\nMUTATION SWEEP ({n} authored tests)\n  \
+         killed the stub   {killed}/{n}  (the test discriminates)\n  \
+         stub SURVIVED     {survived}/{n}  (the test measured nothing)\n  \
+         test no-compile   {broken}/{n}  (graded nothing at all)\n"
+    )
+}
+
+/// What two graders said about ONE implementation (T83).
+///
+/// The implementation is written BLIND in both arms, so the ONLY variable is
+/// which tests grade it: hidden ones written before any candidate existed,
+/// or one the model wrote itself. That is `.:V108`, one variable.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Verdicts {
+    /// Hidden tests, written before any candidate existed.
+    pub hidden: bool,
+    /// The test the model wrote for itself.
+    pub own: bool,
+    /// The model's own test did not compile -- it graded NOTHING.
+    pub own_broken: bool,
+}
+
+/// `[hidden, own, certified_wrong, caught, broke]`.
+///
+/// `caught` EXCLUDES no-compile: a test that never built rejected nothing,
+/// and counting it as a catch would flatter the model exactly where `.:V111`
+/// says not to.
+#[must_use]
+pub fn authorship_counts(vs: &[Verdicts]) -> [usize; 5] {
+    let c = |f: fn(&Verdicts) -> bool| vs.iter().filter(|v| f(v)).count();
+    [
+        c(|v| v.hidden),
+        c(|v| v.own),
+        c(|v| v.own && !v.hidden),
+        c(|v| !v.own && !v.hidden && !v.own_broken),
+        c(|v| v.own_broken),
+    ]
+}
+
+/// One measured row, rendered.
+#[must_use]
+pub fn authorship_row(v: Verdicts, sig: &str) -> String {
+    let own = if v.own_broken {
+        "BROKE"
+    } else if v.own {
+        "PASS"
+    } else {
+        "fail"
+    };
+    format!(
+        "hidden {} · own {own} · {}",
+        if v.hidden { "PASS" } else { "fail" },
+        sig.split('(').next().unwrap_or(sig).trim()
+    )
+}
+
+/// T83's report.
+///
+/// The discriminating cell is `own PASS, hidden fail`: a self-authored test
+/// CERTIFYING an implementation the real tests reject. That is `src/tdd:B2`
+/// and `B12` expressed as a number, and R51 measured it at 3 of 33 while the
+/// same tests rejected 6 correct implementations -- worse than a coin flip.
+#[must_use]
+pub fn authorship_report(vs: &[Verdicts]) -> String {
+    let n = vs.len();
+    let [hidden, own, wrong, caught, broke] = authorship_counts(vs);
+    format!(
+        "\nAUTHORSHIP TITRATION ({n} measured)\n  \
+         hidden tests pass  {hidden}/{n}\n  \
+         own test passes    {own}/{n}\n  \
+         CERTIFIED WRONG    {wrong}/{n}  (own PASS, hidden fail)\n  \
+         correctly rejected {caught}/{n}  (both fail)\n  \
+         own test unusable  {broke}/{n}  (did not compile)\n"
+    )
+}
+
+/// One call's outcome in a titration.
+///
+/// FOUR, not two. `Error` is `assay:V1`: a call that did not RUN says nothing
+/// about capability, and counting it as a miss makes a flaky network look
+/// like a located frontier. `Hung` is `V6`, the same rule again for a run
+/// that never ended.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Outcome {
+    /// Compiled, ran, hidden tests passed.
+    Pass,
+    /// A wrong answer -- including one that would not compile.
+    Fail,
+    /// The call never ran. NEVER a miss.
+    Error,
+    /// Compiled, ran, never terminated. Killed at [`GRADE_TIMEOUT`].
+    Hung,
+}
+
+impl Outcome {
+    /// Named so no two read alike in a row someone acts on.
+    #[must_use]
+    pub const fn word(self) -> &'static str {
+        match self {
+            Self::Pass => "PASS",
+            Self::Fail => "fail",
+            Self::Error => "ERROR",
+            Self::Hung => "HUNG",
+        }
+    }
+}
+
+/// `(pass, fail, error, hung)`. Counted by filtering rather than by `+=`,
+/// which `arithmetic_side_effects` rejects.
+#[must_use]
+pub fn titration_tally(os: &[Outcome]) -> (usize, usize, usize, usize) {
+    let n = |w: Outcome| os.iter().filter(|o| **o == w).count();
+    (
+        n(Outcome::Pass),
+        n(Outcome::Fail),
+        n(Outcome::Error),
+        n(Outcome::Hung),
+    )
+}
+
+/// Report one condition.
+///
+/// An ERROR or a HUNG count above zero means the run is INCOMPLETE, and the
+/// summary has to say so where a reader will see it: `p/total` reads as a
+/// score, and every call that produced no verdict is silently shrinking it
+/// (`.:B4` -- a ratio must name what is in its denominator).
+#[must_use]
+pub fn titration_report(label: &str, os: &[Outcome]) -> String {
+    let (p, f, e, h) = titration_tally(os);
+    let total = os.len();
+    let mut out = format!(
+        "  {label:5} pass {p}/{total} · fail {f} · error {e} · hung {h}\n"
+    );
+    let lost = e.saturating_add(h);
+    if lost > 0 {
+        out.push_str(&format!(
+            "    {lost} of {total} produced NO verdict -- this condition is \
+             incomplete, not measured (V1, V6)\n"
+        ));
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tdd::is_yes;
-
-    /// V22 is a claim about the endpoint, so it is measured against the
-    /// endpoint. `#[ignore]` because the gate stays offline; run with
-    /// `cargo test -- --ignored --nocapture blind_lens`.
-    ///
-    /// Corpus: the stub half of [`RECORDED`] -- the five actually in `§B`,
-    /// verbatim, each paired with the invariant it was written against. A NO
-    /// on all five is the claim; anything less is the real number.
-    #[test]
-    #[ignore]
-    fn blind_lens_vs_the_recorded_stubs() {
-        let rejected = measure_arm(true);
-        println!("blind lens rejected {rejected}/5 recorded stubs");
-        assert!(
-            rejected >= 4,
-            "measured {rejected}/5 -- record the real number in §B, \
-             do not weaken the corpus"
-        );
-    }
-
-    /// The control half. A judge that answers NO to everything scores 5/5 on
-    /// the stub corpus, which is exactly the vacuous pass the other arm
-    /// exists to catch -- so the stub number means nothing without this one.
-    ///
-    /// Corpus: the working half of [`RECORDED`] -- real functions from this
-    /// repo, each with the invariant it was actually written against.
-    #[test]
-    #[ignore]
-    fn blind_lens_vs_working_code() {
-        let accepted = measure_arm(false);
-        println!("blind lens accepted {accepted}/5 working functions");
-        assert!(
-            accepted >= 4,
-            "measured {accepted}/5 -- a lens that rejects working code is a \
-             lens that rejects everything, and its 5/5 on the stub corpus \
-             proves nothing"
-        );
-    }
-
-    /// One arm of [`RECORDED`], scored against the endpoint.
-    fn measure_arm(violates: bool) -> usize {
-        RECORDED
-            .iter()
-            .filter(|it| it.violates == violates)
-            .filter(|it| {
-                let r = crate::ollama::generate(&blind_prompt(it.inv, it.code))
-                    .expect("endpoint unreachable -- BBX_ENDPOINT");
-                let yes = is_yes(&r.text);
-                println!(
-                    "{} {} tok · {}",
-                    if yes { "ACCEPT" } else { "REJECT" },
-                    r.prompt_tokens,
-                    r.text.trim().lines().next().unwrap_or("")
-                );
-                yes != violates
-            })
-            .count()
-    }
-
-    /// THE TITRATION (`.:T74`). Rung 0 is the regression guard and asserts;
-    /// rungs 1-3 exist to FAIL, so they report and assert nothing about the
-    /// score. A test that demanded success at a rung built to break it would
-    /// be flaky by construction, and the first red run would be answered by
-    /// weakening the corpus -- which is the one move `.:V103` forbids.
-    #[test]
-    #[ignore]
-    fn blind_lens_titration() {
-        let mut judge =
-            |p: &str| crate::ollama::generate(p).map(|r| is_yes(&r.text));
-        for tier in TIERS {
-            let s = titrate_tier(tier, &mut judge).expect(
-                "endpoint unreachable -- a rung that did not run is \
-                         an error, not a boundary (V26)",
-            );
-            let pct = s.correct * 100 / s.total;
-            println!("tier {} · {}/{} ({pct}%)", s.name, s.correct, s.total);
-            if tier.name == "0-tells" {
-                assert!(
-                    s.correct * 10 >= s.total * 8,
-                    "rung 0 is the REGRESSION guard: {}/{} means the baseline \
-                     moved, not that a boundary was found",
-                    s.correct,
-                    s.total
-                );
-            }
-        }
-    }
 
     /// The grader's control arm. If the real implementation fails its own
     /// tests, every zero the titration reports is the harness, not the model.
@@ -1109,128 +1244,6 @@ mod tests {
         }
     }
 
-    /// One call's outcome. ERROR is not FAIL (`V1`): a timed-out
-    /// generation says nothing about whether the model can write the
-    /// function, and counting it as a miss makes a flaky network look like a
-    /// located frontier.
-    #[derive(Clone, Copy, PartialEq, Eq)]
-    enum Outcome {
-        Pass,
-        Fail,
-        Error,
-        /// Compiled, ran, never terminated. Killed at `GRADE_TIMEOUT` and
-        /// counted apart -- `V6`. Folding it into `Fail` would score the
-        /// model wrong for code that never gave an answer.
-        Hung,
-    }
-
-    /// Append one row the moment it exists, so a crash costs ONE call rather
-    /// than the run. B1 lost 33 completed measurements and forty minutes of
-    /// endpoint time to a single transient.
-    fn log_row(row: &str) {
-        use std::io::Write;
-        let path = std::path::Path::new("target").join("titration.tsv");
-        if let Ok(mut f) = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(path)
-        {
-            let _ = writeln!(f, "{row}");
-        }
-    }
-
-    /// Grade a reply that arrived. A compiler that cannot RUN is an error,
-    /// never a wrong answer -- the same distinction `grade_detail` draws, and
-    /// a run that never TERMINATED is a third thing again (`V6`).
-    fn grade_reply(
-        r: &crate::ollama::Reply,
-        it: &GenItem,
-    ) -> (Outcome, String) {
-        let code = crate::ollama::rust_block(&r.text);
-        let tok = format!("{} tok", r.prompt_tokens);
-        match grade_detail(&code, it.preamble, it.tests, "rustc") {
-            Ok(Grade::Pass) => (Outcome::Pass, tok),
-            Ok(Grade::Fail | Grade::NoCompile) => (Outcome::Fail, tok),
-            Ok(Grade::Hung) => (Outcome::Hung, tok),
-            Err(e) => (Outcome::Error, e),
-        }
-    }
-    /// One measurement, which NEVER panics. A transient belongs in the
-    /// record, not in a stack trace.
-    fn run_one(prompt: &str, it: &GenItem) -> (Outcome, String) {
-        match crate::ollama::generate(prompt) {
-            Err(e) => (Outcome::Error, e),
-            Ok(r) => grade_reply(&r, it),
-        }
-    }
-
-    /// Run one condition and record it, returning the outcome.
-    fn measure(tag: &str, run: usize, prompt: &str, it: &GenItem) -> Outcome {
-        let (o, note) = run_one(prompt, it);
-        let name = it.sig.split('(').next().unwrap_or("");
-        let word = match o {
-            Outcome::Pass => "PASS",
-            Outcome::Fail => "fail",
-            Outcome::Error => "ERROR",
-            Outcome::Hung => "HUNG",
-        };
-        let row = format!("{run}\t{tag}\t{word}\t{name}\t{note}");
-        println!("run {run} · {tag:5} · {word} · {name} · {note}");
-        log_row(&row);
-        o
-    }
-
-    /// `(pass, fail, error, hung)` over a set of outcomes. Counted by
-    /// filtering rather than by `+=`, which `arithmetic_side_effects`
-    /// rejects.
-    fn tally(os: &[Outcome]) -> (usize, usize, usize, usize) {
-        let n = |w: Outcome| os.iter().filter(|o| **o == w).count();
-        (
-            n(Outcome::Pass),
-            n(Outcome::Fail),
-            n(Outcome::Error),
-            n(Outcome::Hung),
-        )
-    }
-
-    /// Report one condition. An ERROR or a HUNG count above zero means the
-    /// run is INCOMPLETE, and the summary has to say so where a reader will
-    /// see it: `p/total` reads as a score, and every call that did not
-    /// produce one is silently shrinking it (`.:B4`).
-    fn report(label: &str, os: &[Outcome]) {
-        let (p, f, e, h) = tally(os);
-        let total = os.len();
-        println!(
-            "  {label:5} pass {p}/{total} · fail {f} · error {e} · hung {h}"
-        );
-        let lost = e.saturating_add(h);
-        if lost > 0 {
-            println!(
-                "    {lost} of {total} produced NO verdict -- this condition \
-                 is incomplete, not measured (V1, V6)"
-            );
-        }
-    }
-
-    #[test]
-    fn context_is_the_only_variable_between_the_two_prompts() {
-        // `.:V108`: the two conditions must differ in exactly one thing. If the
-        // request itself changed, a difference in score would be
-        // unattributable -- which is why T82 was split from T83 and T84.
-        let Some(it) = GEN_CORPUS.first() else {
-            panic!("corpus must not be empty")
-        };
-        let bare = gen_prompt(it.sharp, it.sig, it.preamble);
-        let ctx =
-            gen_prompt_in_context("PACK BODY", it.sharp, it.sig, it.preamble);
-        assert!(
-            ctx.ends_with(&bare),
-            "the request must survive verbatim after the pack"
-        );
-        assert!(ctx.contains("PACK BODY"), "the pack must be carried");
-        assert!(ctx.len() > bare.len(), "context must actually be larger");
-    }
-
     #[test]
     fn a_call_that_produced_no_verdict_is_never_counted_as_a_failure() {
         // V1 and B1 in one assertion: a transient must not read as a miss.
@@ -1238,69 +1251,17 @@ mod tests {
         // a miss either, and it is the more dangerous of the two because a
         // killed child exits non-zero and looks exactly like `fail`.
         let os = [Outcome::Pass, Outcome::Fail, Outcome::Error, Outcome::Hung];
-        assert_eq!(tally(&os), (1, 1, 1, 1), "four outcomes, not two");
+        assert_eq!(
+            titration_tally(&os),
+            (1, 1, 1, 1),
+            "four outcomes, not two"
+        );
         let none_ran = [Outcome::Error, Outcome::Hung];
         assert_eq!(
-            tally(&none_ran),
+            titration_tally(&none_ran),
             (0, 0, 1, 1),
             "a run that produced no verdict scores zero PASS and zero FAIL"
         );
-    }
-
-    /// T77. Records; asserts nothing about the model, for T74's reason -- a
-    /// test demanding a result from a run built to find one is flaky by
-    /// construction, and the first red would be answered by weakening it.
-    #[test]
-    #[ignore]
-    fn generation_titration() {
-        const RUNS: usize = 3;
-        let mut sharp = Vec::new();
-        let mut vague = Vec::new();
-        for run in 1..=RUNS {
-            for it in GEN_CORPUS {
-                let p = gen_prompt(it.sharp, it.sig, it.preamble);
-                sharp.push(measure("sharp", run, &p, it));
-                let v = gen_prompt(it.vague, it.sig, it.preamble);
-                vague.push(measure("vague", run, &v, it));
-            }
-        }
-        println!("\nGENERATION TITRATION");
-        report("sharp", &sharp);
-        report("vague", &vague);
-    }
-
-    /// T82. Same items, same hidden tests, same sharp wording -- the node's
-    /// real lens pack is the only thing that changes.
-    #[test]
-    #[ignore]
-    fn context_titration() {
-        const RUNS: usize = 3;
-        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-        let node = root.join("src/tokens");
-        let Ok(pack) = crate::lens::pack(root, &node, crate::lens::Depth::Rule)
-        else {
-            println!("lens pack unavailable -- nothing measured (V1)");
-            return;
-        };
-        println!("context pack: {} tok", pack.cost.tokens);
-        let mut bare = Vec::new();
-        let mut ctx = Vec::new();
-        for run in 1..=RUNS {
-            for it in GEN_CORPUS {
-                let b = gen_prompt(it.sharp, it.sig, it.preamble);
-                bare.push(measure("bare", run, &b, it));
-                let c = gen_prompt_in_context(
-                    &pack.text,
-                    it.sharp,
-                    it.sig,
-                    it.preamble,
-                );
-                ctx.push(measure("ctx", run, &c, it));
-            }
-        }
-        println!("\nCONTEXT TITRATION (pack {} tok)", pack.cost.tokens);
-        report("bare", &bare);
-        report("ctx", &ctx);
     }
     #[test]
     fn the_bare_prompt_carries_no_tells() {
@@ -1376,103 +1337,6 @@ mod tests {
 mod authorship {
     use super::*;
 
-    /// What two graders said about ONE implementation.
-    #[derive(Clone, Copy)]
-    struct Verdicts {
-        /// Hidden tests, written before any candidate existed.
-        hidden: bool,
-        /// The test the model wrote for itself.
-        own: bool,
-        /// The model's own test did not compile -- it graded NOTHING.
-        own_broken: bool,
-    }
-
-    fn ask(prompt: &str) -> Result<String, String> {
-        crate::ollama::generate(prompt)
-            .map(|r| crate::ollama::rust_block(&r.text))
-    }
-
-    /// One implementation, graded twice. Written BLIND in both arms -- only
-    /// the grading tests differ, which is the single variable (`.:V108`).
-    fn one(it: &GenItem) -> Result<Verdicts, String> {
-        let code = ask(&gen_prompt(it.sharp, it.sig, it.preamble))?;
-        let own_test = ask(&test_prompt(it.sharp, it.sig, it.preamble))?;
-        let h = grade_detail(&code, it.preamble, it.tests, "rustc")?;
-        let o = grade_detail(&code, it.preamble, &own_test, "rustc")?;
-        Ok(Verdicts {
-            hidden: h == Grade::Pass,
-            own: o == Grade::Pass,
-            own_broken: o == Grade::NoCompile,
-        })
-    }
-
-    fn row(run: usize, it: &GenItem, v: Verdicts) {
-        println!(
-            "run {run} · hidden {} · own {} · {}",
-            if v.hidden { "PASS" } else { "fail" },
-            if v.own_broken {
-                "BROKE"
-            } else if v.own {
-                "PASS"
-            } else {
-                "fail"
-            },
-            it.sig.split('(').next().unwrap_or("")
-        );
-    }
-
-    fn counts(vs: &[Verdicts]) -> [usize; 5] {
-        let c = |f: fn(&Verdicts) -> bool| vs.iter().filter(|v| f(v)).count();
-        [
-            c(|v| v.hidden),
-            c(|v| v.own),
-            c(|v| v.own && !v.hidden),
-            c(|v| !v.own && !v.hidden && !v.own_broken),
-            c(|v| v.own_broken),
-        ]
-    }
-
-    /// The discriminating cell is `own PASS, hidden fail`: a self-authored
-    /// test certifying an implementation the real tests reject. That is
-    /// `src/tdd:B2` and `B12` expressed as a number.
-    fn report(vs: &[Verdicts]) {
-        let n = vs.len();
-        let [hidden, own, wrong, caught, broke] = counts(vs);
-        println!("\nAUTHORSHIP TITRATION ({n} measured)");
-        println!("  hidden tests pass  {hidden}/{n}");
-        println!("  own test passes    {own}/{n}");
-        println!("  CERTIFIED WRONG    {wrong}/{n}  (own PASS, hidden fail)");
-        println!("  correctly rejected {caught}/{n}  (both fail)");
-        println!("  own test unusable  {broke}/{n}  (did not compile)");
-    }
-
-    /// T83. Records; asserts nothing about the model.
-    #[test]
-    #[ignore]
-    fn authorship_titration() {
-        const RUNS: usize = 3;
-        let mut vs = Vec::new();
-        for run in 1..=RUNS {
-            for it in GEN_CORPUS {
-                measure(run, it, &mut vs);
-            }
-        }
-        report(&vs);
-    }
-
-    /// One item, recorded. An endpoint failure is an ERROR line and never a
-    /// verdict, so a transient cannot look like the model getting it wrong
-    /// (`src/tdd:V27`, and `B1` is that mistake costing forty minutes).
-    fn measure(run: usize, it: &GenItem, vs: &mut Vec<Verdicts>) {
-        match one(it) {
-            Ok(v) => {
-                row(run, it, v);
-                vs.push(v);
-            }
-            Err(e) => println!("run {run} · ERROR · {e}"),
-        }
-    }
-
     /// Build a `Verdicts` from a two-letter shorthand: hidden then own,
     /// where `P` is pass, `f` is fail and `x` is did-not-compile.
     ///
@@ -1501,7 +1365,7 @@ mod authorship {
             v("ff"), // both agree it is broken
             v("Px"), // own test did not compile
         ];
-        let [hidden, own, wrong, caught, broke] = counts(&vs);
+        let [hidden, own, wrong, caught, broke] = authorship_counts(&vs);
         assert_eq!(hidden, 3, "hidden passes");
         assert_eq!(own, 2, "own passes");
         assert_eq!(wrong, 1, "own PASS while hidden FAILED");
@@ -1514,20 +1378,33 @@ mod authorship {
         // The `caught` cell must exclude no-compile: a test that never built
         // rejected nothing, and counting it as a catch would flatter the
         // model exactly where V111 says not to.
-        let vs = [v("fx")];
-        let [_, _, _, caught, broke] = counts(&vs);
+        let [_, _, _, caught, broke] = authorship_counts(&[v("fx")]);
         assert_eq!(caught, 0, "a no-compile test caught nothing");
         assert_eq!(broke, 1);
     }
 
     #[test]
-    fn report_and_row_render_without_panicking() {
-        let vs = [v("PP"), v("fP")];
-        report(&vs);
-        let Some(it) = GEN_CORPUS.first() else {
-            return;
-        };
-        row(1, it, vs[0]);
+    fn the_report_names_the_certified_wrong_cell() {
+        // This used to call `report` and `row` and assert only that neither
+        // panicked -- it executed lines and proved none of them.
+        let out = authorship_report(&[v("PP"), v("fP")]);
+        assert!(out.contains("(2 measured)"), "{out}");
+        assert!(out.contains("CERTIFIED WRONG    1/2"), "{out}");
+        assert!(out.contains("hidden tests pass  1/2"), "{out}");
+    }
+
+    #[test]
+    fn a_row_shows_broke_apart_from_fail() {
+        // BROKE and fail must not read alike: one graded nothing, the other
+        // graded and disagreed.
+        assert_eq!(
+            authorship_row(v("Px"), "pub fn bucket(n: u64)"),
+            "hidden PASS · own BROKE · pub fn bucket"
+        );
+        assert_eq!(
+            authorship_row(v("ff"), "pub fn is_yes(v: &str)"),
+            "hidden fail · own fail · pub fn is_yes"
+        );
     }
 
     const GOOD: &str = "pub fn bucket(n: u64) -> &'static str { match n { 0..=1_999 => \"b0\", 2_000..=7_999 => \"b2\", 8_000..=31_999 => \"b8\", _ => \"b32\" } }";
@@ -1554,7 +1431,6 @@ mod authorship {
         Ok(())
     }
 }
-
 #[cfg(test)]
 mod mutants {
     use super::*;
@@ -1601,108 +1477,13 @@ mod mutants {
 mod kills {
     use super::*;
 
-    /// Did the model's own test kill a known-wrong implementation?
-    #[derive(Clone, Copy)]
-    struct Kill {
-        /// The authored test FAILED the stub -- it discriminates.
-        killed: bool,
-        /// The authored test would not compile against the stub.
-        broken: bool,
-    }
-
-    fn one(it: &GenItem) -> Result<Kill, String> {
-        let stub = stub_for(it.sig).ok_or("no mutant")?;
-        let t = crate::ollama::generate(&test_prompt(
-            it.sharp,
-            it.sig,
-            it.preamble,
-        ))
-        .map(|r| crate::ollama::rust_block(&r.text))?;
-        // Keep the test itself: T83 discarded its raw material and the next
-        // question could not be asked without re-running (`B1`).
-        log_test(it.sig, &t);
-        let g = grade_detail(stub, it.preamble, &t, "rustc")?;
-        Ok(Kill {
-            killed: g == Grade::Fail,
-            broken: g == Grade::NoCompile,
-        })
-    }
-
-    fn log_test(sig: &str, body: &str) {
-        use std::io::Write;
-        let p = std::path::Path::new("target").join("authored-tests.txt");
-        if let Ok(mut f) = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(p)
-        {
-            let _ = writeln!(f, "=== {sig}\n{body}");
-        }
-    }
-
-    fn report(ks: &[Kill]) {
-        let n = ks.len();
-        let killed = ks.iter().filter(|k| k.killed).count();
-        let broken = ks.iter().filter(|k| k.broken).count();
-        let survived = n.saturating_sub(killed).saturating_sub(broken);
-        println!("\nMUTATION SWEEP ({n} authored tests)");
-        println!("  killed the stub   {killed}/{n}  (the test discriminates)");
-        println!(
-            "  stub SURVIVED     {survived}/{n}  (the test measured nothing)"
-        );
-        println!("  test no-compile   {broken}/{n}  (graded nothing at all)");
-    }
-
-    /// Can a self-authored test kill a known-wrong implementation?
-    ///
-    /// `.:V111` says such a test cannot grade its own author. This asks
-    /// whether a MECHANICAL check would have caught that -- run the test
-    /// against a mutant and require RED. If most tests let the stub through,
-    /// the check is the remedy; if most kill it, the fault is elsewhere.
-    #[test]
-    #[ignore]
-    fn authored_tests_vs_mutants() {
-        const RUNS: usize = 3;
-        let mut ks = Vec::new();
-        for run in 1..=RUNS {
-            for it in GEN_CORPUS {
-                measure(run, it, &mut ks);
-            }
-        }
-        report(&ks);
-    }
-
-    /// One item, recorded. An endpoint failure is an ERROR line, never a
-    /// verdict -- a transient must not read as a test that failed to
-    /// discriminate (`src/tdd:V27`).
-    fn measure(run: usize, it: &GenItem, ks: &mut Vec<Kill>) {
-        let name = it.sig.split('(').next().unwrap_or("");
-        match one(it) {
-            Ok(k) => {
-                println!("run {run} · {} · {name}", word(k));
-                ks.push(k);
-            }
-            Err(e) => println!("run {run} · ERROR · {name} · {e}"),
-        }
-    }
-
-    const fn word(k: Kill) -> &'static str {
-        if k.broken {
-            "BROKE"
-        } else if k.killed {
-            "killed"
-        } else {
-            "SURVIVED"
-        }
-    }
-
     /// Shorthand: `k` killed, `s` survived, `x` did not compile.
     ///
     /// Two bool parameters trips `fn_params_excessive_bools`, and the lint
     /// is right -- `k(false, true)` at a call site says nothing about which
     /// flag is which, and these two are exactly the pair that must not be
     /// confused.
-    fn k(spec: char) -> Kill {
+    const fn k(spec: char) -> Kill {
         Kill {
             killed: spec == 'k',
             broken: spec == 'x',
@@ -1712,19 +1493,29 @@ mod kills {
     #[test]
     fn the_three_outcomes_are_named_distinctly() {
         // SURVIVED and BROKE must never read alike: a test that would not
-        // compile graded nothing, while one that let the stub live graded
-        // it and got it wrong. Collapsing them would flatter the model.
-        assert_eq!(word(k('k')), "killed");
-        assert_eq!(word(k('s')), "SURVIVED");
-        assert_eq!(word(k('x')), "BROKE");
+        // compile graded nothing, while one that let the stub live graded it
+        // and got it wrong. Collapsing them would flatter the model.
+        assert_eq!(k('k').word(), "killed");
+        assert_eq!(k('s').word(), "SURVIVED");
+        assert_eq!(k('x').word(), "BROKE");
     }
 
     #[test]
-    fn report_counts_survivors_as_the_remainder() {
-        // `survived` is derived, so an off-by-one here would misstate the
-        // headline. Saturating, because a miscount must not wrap.
-        report(&[k('k'), k('s'), k('x')]);
-        report(&[]);
+    fn the_report_counts_survivors_as_the_remainder() {
+        // `survived` is DERIVED, so an off-by-one here misstates the
+        // headline. This used to call `report` and assert nothing.
+        let out = kills_report(&[k('k'), k('s'), k('x')]);
+        assert!(out.contains("killed the stub   1/3"), "{out}");
+        assert!(out.contains("stub SURVIVED     1/3"), "{out}");
+        assert!(out.contains("test no-compile   1/3"), "{out}");
+    }
+
+    #[test]
+    fn an_empty_sweep_never_wraps_the_remainder() {
+        // Saturating: a miscount must not become a huge number.
+        let out = kills_report(&[]);
+        assert!(out.contains("(0 authored tests)"), "{out}");
+        assert!(out.contains("stub SURVIVED     0/0"), "{out}");
     }
 
     #[test]
@@ -1744,101 +1535,44 @@ mod kills {
         );
     }
 }
-
 #[cfg(test)]
 mod signature {
     use super::*;
 
-    fn ask(p: &str) -> Result<String, String> {
-        crate::ollama::generate(p).map(|r| crate::ollama::rust_block(&r.text))
-    }
-
-    /// Same invariant, same hidden tests. Only the signature differs.
-    /// `(signature given, signature invented)` for one item.
-    type Pair = (Grade, Grade);
-
-    fn one(it: &GenItem) -> Result<Pair, String> {
-        let given = ask(&gen_prompt(it.sharp, it.sig, it.preamble))?;
-        let free = ask(&gen_prompt_no_sig(it.sharp, it.preamble))?;
-        Ok((
-            grade_detail(&given, it.preamble, it.tests, "rustc")?,
-            grade_detail(&free, it.preamble, it.tests, "rustc")?,
-        ))
-    }
-
-    const fn mark(g: Grade) -> &'static str {
-        match g {
-            Grade::Pass => "PASS",
-            Grade::Fail => "fail",
-            Grade::NoCompile => "NOCALL",
-            Grade::Hung => "HUNG",
-        }
-    }
-
-    /// `NoCompile` in the free arm means the invented name or arity is one
-    /// the hidden tests cannot call -- `src/tdd:B12`'s exact shape, and a
-    /// different failure from writing the wrong logic.
-    fn report(rs: &[Pair]) {
-        let n = rs.len();
-        let c = |f: fn(&Pair) -> bool| rs.iter().filter(|r| f(r)).count();
-        println!("\nSIGNATURE TITRATION ({n} measured)");
-        println!("  given  PASS   {}/{n}", c(|r| r.0 == Grade::Pass));
-        println!("  free   PASS   {}/{n}", c(|r| r.1 == Grade::Pass));
-        println!(
-            "  free   NOCALL {}/{n}  (invented a name the tests cannot call)",
-            c(|r| r.1 == Grade::NoCompile)
-        );
-        println!(
-            "  free   wrong  {}/{n}  (callable, wrong logic)",
-            c(|r| r.1 == Grade::Fail)
-        );
-    }
-
-    fn measure(run: usize, it: &GenItem, rs: &mut Vec<Pair>) {
-        let name = it.sig.split('(').next().unwrap_or("");
-        match one(it) {
-            Ok((g, f)) => {
-                println!(
-                    "run {run} · given {} · free {} · {name}",
-                    mark(g),
-                    mark(f)
-                );
-                rs.push((g, f));
-            }
-            Err(e) => println!("run {run} · ERROR · {name} · {e}"),
-        }
-    }
-
-    /// T84. Records; asserts nothing about the model.
-    #[test]
-    #[ignore]
-    fn signature_titration() {
-        const RUNS: usize = 3;
-        let mut rs = Vec::new();
-        for run in 1..=RUNS {
-            for it in GEN_CORPUS {
-                measure(run, it, &mut rs);
-            }
-        }
-        report(&rs);
-    }
-
     #[test]
     fn a_name_the_tests_cannot_call_is_not_wrong_logic() {
-        // The two failure modes must stay separate: B12 is an unreachable
-        // NAME, which three repairs could not fix, and that is a different
-        // problem from an implementation that is simply incorrect.
-        assert_eq!(mark(Grade::NoCompile), "NOCALL");
-        assert_eq!(mark(Grade::Fail), "fail");
-        assert_eq!(mark(Grade::Pass), "PASS");
-        report(&[
+        // The two failure modes must stay separate: `src/tdd:B12` is an
+        // unreachable NAME, which three repairs could not fix, and that is a
+        // different problem from an implementation that is simply incorrect.
+        assert_eq!(signature_mark(Grade::NoCompile), "NOCALL");
+        assert_eq!(signature_mark(Grade::Fail), "fail");
+        assert_eq!(signature_mark(Grade::Pass), "PASS");
+        assert_eq!(signature_mark(Grade::Hung), "HUNG");
+    }
+
+    #[test]
+    fn the_report_separates_uncallable_from_wrong() {
+        // This used to call `report` and assert NOTHING -- it executed lines
+        // and proved none of them. One NOCALL and one wrong must show as one
+        // each, never as two failures.
+        let out = signature_report(&[
             (Grade::Pass, Grade::NoCompile),
             (Grade::Pass, Grade::Fail),
             (Grade::Pass, Grade::Pass),
         ]);
+        assert!(out.contains("given  PASS   3/3"), "{out}");
+        assert!(out.contains("free   PASS   1/3"), "{out}");
+        assert!(out.contains("free   NOCALL 1/3"), "{out}");
+        assert!(out.contains("free   wrong  1/3"), "{out}");
+    }
+
+    #[test]
+    fn an_empty_run_reports_zero_of_zero_and_not_a_score() {
+        let out = signature_report(&[]);
+        assert!(out.contains("(0 measured)"), "{out}");
+        assert!(out.contains("given  PASS   0/0"), "{out}");
     }
 }
-
 #[cfg(test)]
 mod ambiguity {
     use super::*;
@@ -2013,5 +1747,76 @@ mod bound {
             grade_detail(good, it.preamble, it.tests, "rustc"),
             Ok(Grade::Pass)
         );
+    }
+}
+
+#[cfg(test)]
+mod reports {
+    use super::*;
+
+    #[test]
+    fn a_condition_with_errors_says_it_is_incomplete() {
+        // `.:B4`: `p/total` reads as a SCORE, and every call that produced no
+        // verdict silently shrinks it. A run where a third of the calls never
+        // happened is not a 2/3 result, it is a 2/2 result over an incomplete
+        // run, and the report has to say so where a reader will see it.
+        let out = titration_report(
+            "bare",
+            &[Outcome::Pass, Outcome::Pass, Outcome::Error],
+        );
+        assert!(out.contains("pass 2/3"), "{out}");
+        assert!(out.contains("1 of 3 produced NO verdict"), "{out}");
+        assert!(out.contains("incomplete, not measured"), "{out}");
+    }
+
+    #[test]
+    fn a_hung_call_counts_as_incomplete_alongside_an_error() {
+        // V6 and V1 share the line: neither produced a verdict, and folding
+        // either into `fail` would score the model for a call that never
+        // answered.
+        let out = titration_report("ctx", &[Outcome::Hung, Outcome::Error]);
+        assert!(out.contains("2 of 2 produced NO verdict"), "{out}");
+    }
+
+    #[test]
+    fn a_complete_condition_adds_no_incomplete_line() {
+        // The control: the warning must not appear when nothing was lost, or
+        // it becomes noise nobody reads.
+        let out = titration_report("bare", &[Outcome::Pass, Outcome::Fail]);
+        assert!(out.contains("pass 1/2"), "{out}");
+        assert!(!out.contains("NO verdict"), "{out}");
+    }
+
+    #[test]
+    fn the_four_outcomes_are_named_distinctly() {
+        assert_eq!(Outcome::Pass.word(), "PASS");
+        assert_eq!(Outcome::Fail.word(), "fail");
+        assert_eq!(Outcome::Error.word(), "ERROR");
+        assert_eq!(Outcome::Hung.word(), "HUNG");
+    }
+
+    #[test]
+    fn a_channel_predicts_before_the_scores_are_seen() {
+        // `assay:V5`: a class assigned AFTER seeing the scores fits any
+        // result. R43 pre-registered these three and scored 8 of 11 (R45),
+        // which is only a meaningful number because the predictions were
+        // written down first.
+        assert_eq!(Channel::Type.predicts(), (true, true));
+        assert_eq!(Channel::Prose.predicts(), (true, false));
+        assert_eq!(Channel::Beyond.predicts(), (false, false));
+    }
+
+    #[test]
+    fn a_pack_is_prepended_and_the_request_survives_verbatim() {
+        // `.:V108`: the pack must be the ONLY variable between the two arms
+        // of T82, so everything after it is byte-identical to the bare
+        // prompt. R25 is why it goes at the END of the prefix rather than
+        // being woven in -- a prepend costs 2.1x an append.
+        let Some(it) = GEN_CORPUS.first() else { return };
+        let bare = gen_prompt(it.sharp, it.sig, it.preamble);
+        let ctx =
+            gen_prompt_in_context("PACK BODY", it.sharp, it.sig, it.preamble);
+        assert!(ctx.ends_with(&bare), "the request survives verbatim");
+        assert!(ctx.contains("PACK BODY"), "the pack is carried");
     }
 }

@@ -200,6 +200,61 @@ pub fn cached_tokens(
 mod tests {
     use super::*;
 
+    /// `cached_tokens` is a CACHE, and a cache that never hits is a slow
+    /// counter while a cache that never misses is a wrong one.
+    ///
+    /// `State::at` rather than `State::load`, so this touches no ambient
+    /// `.bbx-state`. `.coverage` records the suite's coverage flapping
+    /// because tests share that one file, and adding another writer to it
+    /// would make a measurement problem worse to fix a coverage number.
+    #[test]
+    fn counting_a_file_twice_hits_the_cache_and_a_changed_file_misses() {
+        assert_eq!(cache_hits_then_misses(), Ok(()));
+    }
+
+    /// A file and a state file, both unique per INSTANCE (`src/review:V6`).
+    fn scratch_pair(tag: &str) -> (std::path::PathBuf, std::path::PathBuf) {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static N: AtomicUsize = AtomicUsize::new(0);
+        let n = N.fetch_add(1, Ordering::Relaxed);
+        let d = std::env::temp_dir();
+        let pid = std::process::id();
+        (
+            d.join(format!("bbx-{tag}-{pid}-{n}.md")),
+            d.join(format!("bbx-{tag}-{pid}-{n}.state")),
+        )
+    }
+
+    fn cache_hits_then_misses() -> Result<(), String> {
+        let (f, s) = scratch_pair("cache");
+        std::fs::write(&f, "hello world").map_err(|e| e.to_string())?;
+        let mut st = State::at(&s);
+        let first = cached_tokens(&mut st, &f).map_err(|e| e.to_string())?;
+        let key = f.to_string_lossy().to_string();
+        assert!(st.get("hash", &key).is_some(), "the hash is recorded");
+        let again = cached_tokens(&mut st, &f).map_err(|e| e.to_string())?;
+        assert_eq!(first, again, "identical content, identical count");
+        // Changed content must MISS -- a cache keyed on the path alone would
+        // return a stale count for an edited file, and every budget and
+        // ceiling in this repo is computed from these numbers.
+        std::fs::write(&f, "hello world, and a good deal more text besides")
+            .map_err(|e| e.to_string())?;
+        let after = cached_tokens(&mut st, &f).map_err(|e| e.to_string())?;
+        assert!(after > first, "an edited file recounts: {first} -> {after}");
+        let _ = std::fs::remove_file(&f);
+        let _ = std::fs::remove_file(&s);
+        Ok(())
+    }
+
+    #[test]
+    fn an_unreadable_file_is_an_error_not_a_zero() {
+        // V48 through `cached_tokens`: a file that cannot be read must not
+        // silently contribute zero tokens to a budget.
+        let mut st = State::at(std::env::temp_dir().join("bbx-nonexistent"));
+        let missing = std::path::Path::new("/definitely/not/here.md");
+        assert!(cached_tokens(&mut st, missing).is_err());
+    }
+
     #[test]
     fn round_trips_and_is_idempotent() {
         let mut a = State::default();

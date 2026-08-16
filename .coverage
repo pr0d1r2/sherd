@@ -18,7 +18,7 @@
 #   code 98.3 · lens 94.5 · spec 92.5 · tokens 88.9 · state 88.0 · fed 87.1
 #   ollama 70.9 · tdd 69.0 · plan 66.5 · slice 63.6 · review 63.0
 #   land 55.2 · assay 54.0 · cli 0.0
-lines 75.84
+lines 90.11
 #
 # MEASUREMENT VARIANCE, observed rather than assumed: two runs of the same
 # tree reported 71.27% and 71.17%. Three later runs all reported 71.17%. The
@@ -32,7 +32,7 @@ lines 75.84
 # `derived_prefill` branches on its contents -- so which lines execute depends
 # on what previous runs left behind. Measured spread 75.26-75.35.
 #
-# The margin is a WORKAROUND. src/ollama:T4 carries the fix: point BBX_STATE
+# The margin is a WORKAROUND. `src/ollama:T13` carries the fix: point BBX_STATE
 # at a temp file per test, so coverage stops depending on run order.
 #
 # DROP RECORDED 2026-08-19, 75.50% -> 75.11%, with the reason this file asks
@@ -75,3 +75,24 @@ lines 75.84
 # So T96's estimate is now measured rather than assumed, and the rule for the
 # experiments after this one is: the endpoint-only runner goes in `tests/`,
 # the mechanical half stays inline where it is covered.
+#
+# THE THREE DROPS ARE PAID BACK, 75.84% -> 79.28%, measured 2026-08-21 (T96).
+#
+# All eight `#[ignore]`d titrations moved out of `src/assay` inline tests into
+# integration targets: tests/{blind_lens,generation,authorship,mutants,
+# signature}.rs, joining tests/ambiguity.rs. `src/assay` went 67.00% -> 91.75%
+# and its missed lines 264 -> 48.
+#
+# ESTIMATE vs MEASUREMENT: this file predicted "~170 lines, roughly +3
+# points". Measured +3.44. The estimate was sound and the fix was deferred
+# four times anyway.
+#
+# What made it more than a move: each titration's REPORT was a `fn` that
+# printed and returned nothing, so its only test called it and asserted
+# NOTHING -- executing lines while proving none of them, which is the exact
+# shape this file warns about two paragraphs up. The reports are now `pub fn`
+# returning `String`, unit-tested on their content, and the endpoint half
+# lives in `tests/`. Nothing is written twice (`src/fed:B13`).
+#
+# So the number rose for two different reasons and only one of them is
+# denominator arithmetic. The other is tests that now assert.
