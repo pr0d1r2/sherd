@@ -45,7 +45,11 @@ pub fn last_cached() -> bool {
 /// absent -- a missing cache is a cold start, not an error.
 pub fn load_pace() {
     let st = crate::state::State::load();
-    for (key, cell) in [("prefill", &PREFILL_TOK_S), ("decode", &DECODE_TOK_S), ("gen", &EXPECT_GEN)] {
+    for (key, cell) in [
+        ("prefill", &PREFILL_TOK_S),
+        ("decode", &DECODE_TOK_S),
+        ("gen", &EXPECT_GEN),
+    ] {
         if let Some(v) = st.get_u64("pace", key) {
             cell.store(v.max(1), Ordering::Relaxed);
         }
@@ -56,9 +60,21 @@ pub fn load_pace() {
 /// shares. Best-effort: a read-only tree must not fail a run over a cache.
 pub fn save_pace() {
     let mut st = crate::state::State::load();
-    st.set("pace", "prefill", PREFILL_TOK_S.load(Ordering::Relaxed).to_string());
-    st.set("pace", "decode", DECODE_TOK_S.load(Ordering::Relaxed).to_string());
-    st.set("pace", "gen", EXPECT_GEN.load(Ordering::Relaxed).to_string());
+    st.set(
+        "pace",
+        "prefill",
+        PREFILL_TOK_S.load(Ordering::Relaxed).to_string(),
+    );
+    st.set(
+        "pace",
+        "decode",
+        DECODE_TOK_S.load(Ordering::Relaxed).to_string(),
+    );
+    st.set(
+        "pace",
+        "gen",
+        EXPECT_GEN.load(Ordering::Relaxed).to_string(),
+    );
     st.save();
 }
 
@@ -69,8 +85,12 @@ pub fn save_pace() {
 /// whether the stable-prefix ordering (V76/V89) is actually paying.
 #[must_use]
 pub fn was_cached(prompt_tokens: u64, prefill_ms: u128) -> bool {
-    if prompt_tokens == 0 { return false }
-    if prefill_ms == 0 { return true }
+    if prompt_tokens == 0 {
+        return false;
+    }
+    if prefill_ms == 0 {
+        return true;
+    }
     let observed = prompt_tokens as f64 / (prefill_ms as f64 / 1000.0);
     // ABSOLUTE bound, not relative to the learned rate. Measured cold prefill
     // spans 284 tok/s (M1 Pro @ 28k) to 1,519 (M5 Pro @ 7k), so 3,000 is
@@ -127,11 +147,19 @@ pub fn bucket(prompt_tokens: u64) -> &'static str {
 ///
 /// Retained raw rather than folded away: an average cannot be re-derived into
 /// a median, a percentile, or a per-size fit, but samples can become all three.
-pub fn record_obs(label: &str, prompt_tok: u64, prefill_ms: u128, eval_tok: u64,
-                  decode_ms: u128, cold: bool) {
+pub fn record_obs(
+    label: &str,
+    prompt_tok: u64,
+    prefill_ms: u128,
+    eval_tok: u64,
+    decode_ms: u128,
+    cold: bool,
+) {
     const KEEP: usize = 200;
-    let row = format!("{label} {prompt_tok} {prefill_ms} {eval_tok} {decode_ms} {}",
-                      u8::from(cold));
+    let row = format!(
+        "{label} {prompt_tok} {prefill_ms} {eval_tok} {decode_ms} {}",
+        u8::from(cold)
+    );
     let mut st = crate::state::State::load();
     let key = crate::state::content_hash(row.as_bytes());
     if st.get("obs", &key).is_some() {
@@ -149,16 +177,27 @@ pub fn record_obs(label: &str, prompt_tok: u64, prefill_ms: u128, eval_tok: u64,
 pub fn derived_prefill(prompt_tokens: u64) -> Option<f64> {
     let want = bucket(prompt_tokens);
     let st = crate::state::State::load();
-    let mut rates: Vec<f64> = st.all("obs").iter().filter_map(|row| {
-        let f: Vec<&str> = row.split(' ').collect();
-        if f.len() < 6 || f[5] == "1" { return None }
-        let (tok, ms) = (f[1].parse::<u64>().ok()?, f[2].parse::<f64>().ok()?);
-        if bucket(tok) != want || ms <= 0.0 { return None }
-        let r = tok as f64 / (ms / 1000.0);
-        // A cache hit is not evidence about cold prefill (V9).
-        if r > 3_000.0 { None } else { Some(r) }
-    }).collect();
-    if rates.len() < 2 { return None }
+    let mut rates: Vec<f64> = st
+        .all("obs")
+        .iter()
+        .filter_map(|row| {
+            let f: Vec<&str> = row.split(' ').collect();
+            if f.len() < 6 || f[5] == "1" {
+                return None;
+            }
+            let (tok, ms) =
+                (f[1].parse::<u64>().ok()?, f[2].parse::<f64>().ok()?);
+            if bucket(tok) != want || ms <= 0.0 {
+                return None;
+            }
+            let r = tok as f64 / (ms / 1000.0);
+            // A cache hit is not evidence about cold prefill (V9).
+            if r > 3_000.0 { None } else { Some(r) }
+        })
+        .collect();
+    if rates.len() < 2 {
+        return None;
+    }
     rates.sort_by(f64::total_cmp);
     Some(rates[rates.len() / 2])
 }
@@ -248,10 +287,16 @@ pub fn observe(r: &Reply, prefill_ms: u128, decode_ms: u128) {
     // A cache hit is not evidence about cold prefill speed -- folding it in
     // would collapse the learned rate and make every future eta meaningless.
     if prefill_ms > 0 && !was_cached(r.prompt_tokens, prefill_ms) {
-        ewma(&PREFILL_TOK_S, r.prompt_tokens as f64 / (prefill_ms as f64 / 1000.0));
+        ewma(
+            &PREFILL_TOK_S,
+            r.prompt_tokens as f64 / (prefill_ms as f64 / 1000.0),
+        );
     }
     if decode_ms > 0 {
-        ewma(&DECODE_TOK_S, r.eval_tokens as f64 / (decode_ms as f64 / 1000.0));
+        ewma(
+            &DECODE_TOK_S,
+            r.eval_tokens as f64 / (decode_ms as f64 / 1000.0),
+        );
     }
     ewma(&EXPECT_GEN, r.eval_tokens as f64);
 }
@@ -266,8 +311,12 @@ pub trait Transport {
     ///
     /// # Errors
     /// Any transport-level failure, as a message naming the endpoint.
-    fn post(&self, url: &str, body: &str, timeout: Duration)
-        -> Result<Box<dyn BufRead + Send>, String>;
+    fn post(
+        &self,
+        url: &str,
+        body: &str,
+        timeout: Duration,
+    ) -> Result<Box<dyn BufRead + Send>, String>;
 }
 
 /// The real one: `ureq` with TLS compiled in, so `BBX_ENDPOINT` may name an
@@ -282,18 +331,24 @@ pub trait Transport {
 pub struct Http;
 
 impl Transport for Http {
-    fn post(&self, url: &str, body: &str, timeout: Duration)
-        -> Result<Box<dyn BufRead + Send>, String>
-    {
+    fn post(
+        &self,
+        url: &str,
+        body: &str,
+        timeout: Duration,
+    ) -> Result<Box<dyn BufRead + Send>, String> {
         let agent: ureq::Agent = ureq::Agent::config_builder()
             .timeout_recv_response(Some(timeout))
             .build()
             .into();
-        let resp = agent.post(url)
+        let resp = agent
+            .post(url)
             .content_type("application/json")
             .send(body)
             .map_err(|e| format!("{url}: {e}"))?;
-        Ok(Box::new(std::io::BufReader::new(resp.into_body().into_reader())))
+        Ok(Box::new(std::io::BufReader::new(
+            resp.into_body().into_reader(),
+        )))
     }
 }
 
@@ -312,7 +367,8 @@ pub struct Reply {
 }
 
 fn endpoint() -> String {
-    std::env::var("BBX_ENDPOINT").unwrap_or_else(|_| "http://localhost:11434".into())
+    std::env::var("BBX_ENDPOINT")
+        .unwrap_or_else(|_| "http://localhost:11434".into())
 }
 
 fn model() -> String {
@@ -323,7 +379,10 @@ fn model() -> String {
 /// global value makes every model allocate a full cache whether it needs one
 /// or not, and we know what we are asking for.
 fn num_ctx() -> u64 {
-    std::env::var("BBX_NUM_CTX").ok().and_then(|v| v.parse().ok()).unwrap_or(131_072)
+    std::env::var("BBX_NUM_CTX")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(131_072)
 }
 
 /// How to sample. Carried explicitly because it changes what a call MEANS:
@@ -341,14 +400,24 @@ pub struct Sampling {
 
 impl Sampling {
     /// Temperature 0. Every step of the loop uses this unless asked otherwise.
-    pub const DETERMINISTIC: Self = Self { temperature: 0.0, seed: 0 };
+    pub const DETERMINISTIC: Self = Self {
+        temperature: 0.0,
+        seed: 0,
+    };
 
     /// The `k`th competing candidate. Candidate 0 IS the deterministic call --
     /// so asking for one candidate is exactly today's behaviour, not a
     /// differently-sampled approximation of it.
     #[must_use]
     pub fn candidate(k: usize) -> Self {
-        if k == 0 { Self::DETERMINISTIC } else { Self { temperature: 0.6, seed: k as u64 } }
+        if k == 0 {
+            Self::DETERMINISTIC
+        } else {
+            Self {
+                temperature: 0.6,
+                seed: k as u64,
+            }
+        }
     }
 }
 
@@ -435,8 +504,11 @@ pub fn generate_via(
                      "seed": sampling.seed },
     });
     let started = Instant::now();
-    let stream = transport.post(&format!("{}/api/generate", endpoint()),
-                                &body.to_string(), hard)?;
+    let stream = transport.post(
+        &format!("{}/api/generate", endpoint()),
+        &body.to_string(),
+        hard,
+    )?;
 
     let mut text = String::new();
     let mut thinking = String::new();
@@ -448,13 +520,16 @@ pub fn generate_via(
         if line.trim().is_empty() {
             continue;
         }
-        let v: serde_json::Value = serde_json::from_str(&line).map_err(|e| e.to_string())?;
-        if let Some(th) = v["thinking"].as_str() {
-            if !th.is_empty() {
-                thinking.push_str(th);
-                if first_chunk.is_none() { first_chunk = Some(Instant::now()) }
-                on_chunk("");
+        let v: serde_json::Value =
+            serde_json::from_str(&line).map_err(|e| e.to_string())?;
+        if let Some(th) = v["thinking"].as_str()
+            && !th.is_empty()
+        {
+            thinking.push_str(th);
+            if first_chunk.is_none() {
+                first_chunk = Some(Instant::now())
             }
+            on_chunk("");
         }
         if let Some(chunk) = v["response"].as_str() {
             if first_chunk.is_none() && !chunk.is_empty() {
@@ -466,15 +541,32 @@ pub fn generate_via(
         // Escalate against the prediction: notice, notice again, warn, abort.
         // A prediction nobody checks is a decoration.
         let over = started.elapsed().as_secs_f64() / budget.as_secs_f64();
-        let level = if over >= ABORT { 4 } else if over >= WARN { 3 }
-                    else if over >= NOTICE_2 { 2 } else if over >= NOTICE_1 { 1 } else { 0 };
+        let level = if over >= ABORT {
+            4
+        } else if over >= WARN {
+            3
+        } else if over >= NOTICE_2 {
+            2
+        } else if over >= NOTICE_1 {
+            1
+        } else {
+            0
+        };
         if level > warned {
             warned = level;
             let el = started.elapsed().as_secs_f64();
             match level {
-                1 => eprintln!("\n  [pace] {el:.0}s: past the {:.0}s estimate, still streaming", budget.as_secs_f64()),
-                2 => eprintln!("\n  [pace] {el:.0}s: 2x the estimate -- the endpoint is slower than this run assumed"),
-                3 => eprintln!("\n  [pace] WARNING {el:.0}s: {WARN:.0}x the estimate. Hard stop at {:.0}s.", hard.as_secs_f64()),
+                1 => eprintln!(
+                    "\n  [pace] {el:.0}s: past the {:.0}s estimate, still streaming",
+                    budget.as_secs_f64()
+                ),
+                2 => eprintln!(
+                    "\n  [pace] {el:.0}s: 2x the estimate -- the endpoint is slower than this run assumed"
+                ),
+                3 => eprintln!(
+                    "\n  [pace] WARNING {el:.0}s: {WARN:.0}x the estimate. Hard stop at {:.0}s.",
+                    hard.as_secs_f64()
+                ),
                 _ => {
                     // A killed call still teaches: record what it managed as a
                     // FLOOR, so the next estimate for this kind is not as low.
@@ -485,7 +577,11 @@ pub fn generate_via(
                          {} output + {} reasoning tokens so far (recorded as a floor \
                          for `{label}`). Endpoint {} may be overloaded, or \
                          BBX_NUM_CTX too large for its memory.",
-                        budget.as_secs_f64(), text.len() / 4, thinking.len() / 4, endpoint()));
+                        budget.as_secs_f64(),
+                        text.len() / 4,
+                        thinking.len() / 4,
+                        endpoint()
+                    ));
                 }
             }
         }
@@ -493,21 +589,38 @@ pub fn generate_via(
         if v["done"].as_bool().unwrap_or(false) {
             prompt_tokens = v["prompt_eval_count"].as_u64().unwrap_or(0);
             eval_tokens = v["eval_count"].as_u64().unwrap_or(0);
-            LAST_LOAD_MS.store(v["load_duration"].as_u64().unwrap_or(0) / 1_000_000,
-                               Ordering::Relaxed);
+            LAST_LOAD_MS.store(
+                v["load_duration"].as_u64().unwrap_or(0) / 1_000_000,
+                Ordering::Relaxed,
+            );
         }
     }
-    let reply = Reply { text, thinking, prompt_tokens, eval_tokens, ms: started.elapsed().as_millis() };
+    let reply = Reply {
+        text,
+        thinking,
+        prompt_tokens,
+        eval_tokens,
+        ms: started.elapsed().as_millis(),
+    };
     // Split the observed time at the first token: everything before it is
     // prefill, everything after is decode. Two rates, learned separately,
     // because they scale differently (R16/R17).
     // Subtract model load: it is disk time, not prefill.
     let load_ms = u128::from(LAST_LOAD_MS.load(Ordering::Relaxed));
-    let pre_ms = first_chunk.map_or(reply.ms, |t| (t - started).as_millis()).saturating_sub(load_ms);
+    let pre_ms = first_chunk
+        .map_or(reply.ms, |t| (t - started).as_millis())
+        .saturating_sub(load_ms);
     observe(&reply, pre_ms, reply.ms.saturating_sub(pre_ms));
-    LAST_CACHED.store(was_cached(reply.prompt_tokens, pre_ms), Ordering::Relaxed);
-    record_obs(label, reply.prompt_tokens, pre_ms, reply.eval_tokens,
-               reply.ms.saturating_sub(pre_ms), load_ms > 500);
+    LAST_CACHED
+        .store(was_cached(reply.prompt_tokens, pre_ms), Ordering::Relaxed);
+    record_obs(
+        label,
+        reply.prompt_tokens,
+        pre_ms,
+        reply.eval_tokens,
+        reply.ms.saturating_sub(pre_ms),
+        load_ms > 500,
+    );
     save_pace();
     Ok(reply)
 }
@@ -529,14 +642,20 @@ pub fn rust_block(text: &str) -> String {
     while let Some(open) = rest.find("```") {
         let after = &rest[open + 3..];
         let start = after.find('\n').map_or(0, |i| i + 1);
-        let Some(close) = after[start..].find("```") else { break };
+        let Some(close) = after[start..].find("```") else {
+            break;
+        };
         let block = &after[start..start + close];
         if block.len() > best.len() {
             best = block.to_string();
         }
         rest = &after[start + close..];
     }
-    if best.is_empty() { text.trim().to_string() } else { best.trim().to_string() }
+    if best.is_empty() {
+        text.trim().to_string()
+    } else {
+        best.trim().to_string()
+    }
 }
 
 #[cfg(test)]
@@ -550,32 +669,56 @@ mod tests {
     }
 
     impl Transport for Flaky {
-        fn post(&self, url: &str, _b: &str, _t: Duration)
-            -> Result<Box<dyn BufRead + Send>, String>
-        {
+        fn post(
+            &self,
+            url: &str,
+            _b: &str,
+            _t: Duration,
+        ) -> Result<Box<dyn BufRead + Send>, String> {
             let left = self.fail_times.get();
             if left > 0 {
                 self.fail_times.set(left - 1);
                 return Err(format!("{url}: simulated transport failure"));
             }
-            Ok(Box::new(std::io::Cursor::new(self.body.clone().into_bytes())))
+            Ok(Box::new(std::io::Cursor::new(
+                self.body.clone().into_bytes(),
+            )))
         }
     }
 
     #[test]
     fn a_transport_can_be_substituted_and_made_to_fail() {
-        let t = Flaky { fail_times: std::cell::Cell::new(1), body: String::new() };
-        assert!(t.post("u", "b", Duration::from_secs(1)).is_err(), "first call fails");
-        assert!(t.post("u", "b", Duration::from_secs(1)).is_ok(), "then succeeds");
+        let t = Flaky {
+            fail_times: std::cell::Cell::new(1),
+            body: String::new(),
+        };
+        assert!(
+            t.post("u", "b", Duration::from_secs(1)).is_err(),
+            "first call fails"
+        );
+        assert!(
+            t.post("u", "b", Duration::from_secs(1)).is_ok(),
+            "then succeeds"
+        );
     }
 
     #[test]
     fn generate_via_reads_a_substituted_stream() {
         let body = "{\"response\":\"hi\",\"done\":false}\n\
                     {\"response\":\"\",\"done\":true,\"prompt_eval_count\":7,\"eval_count\":2}\n";
-        let t = Flaky { fail_times: std::cell::Cell::new(0), body: body.into() };
-        let r = generate_via(&t, "p", "test", Sampling::DETERMINISTIC, predict(10),
-                             &mut |_| {}).unwrap();
+        let t = Flaky {
+            fail_times: std::cell::Cell::new(0),
+            body: body.into(),
+        };
+        let r = generate_via(
+            &t,
+            "p",
+            "test",
+            Sampling::DETERMINISTIC,
+            predict(10),
+            &mut |_| {},
+        )
+        .unwrap();
         assert_eq!(r.text, "hi");
         assert_eq!((r.prompt_tokens, r.eval_tokens), (7, 2));
     }
@@ -584,11 +727,16 @@ mod tests {
     /// request can be checked without an endpoint.
     struct Spy(std::cell::RefCell<String>);
     impl Transport for Spy {
-        fn post(&self, _u: &str, b: &str, _t: Duration)
-            -> Result<Box<dyn BufRead + Send>, String> {
+        fn post(
+            &self,
+            _u: &str,
+            b: &str,
+            _t: Duration,
+        ) -> Result<Box<dyn BufRead + Send>, String> {
             self.0.replace(b.to_string());
             Ok(Box::new(std::io::Cursor::new(
-                "{\"response\":\"x\",\"done\":true}\n".as_bytes().to_vec())))
+                "{\"response\":\"x\",\"done\":true}\n".as_bytes().to_vec(),
+            )))
         }
     }
 
@@ -602,14 +750,20 @@ mod tests {
     #[test]
     fn sampling_reaches_the_request_and_candidates_differ() {
         let zero = posted(Sampling::candidate(0));
-        assert_eq!(zero["options"]["temperature"], 0.0,
-                   "candidate 0 must be today's deterministic call, unchanged");
+        assert_eq!(
+            zero["options"]["temperature"], 0.0,
+            "candidate 0 must be today's deterministic call, unchanged"
+        );
 
         let two = posted(Sampling::candidate(2));
-        assert!(two["options"]["temperature"].as_f64().unwrap() > 0.0,
-                "a competing candidate at temperature 0 is the same call twice (V17)");
-        assert_eq!(two["options"]["seed"], 2,
-                   "diverse but REPRODUCIBLE -- an unseeded failure cannot be re-examined");
+        assert!(
+            two["options"]["temperature"].as_f64().unwrap() > 0.0,
+            "a competing candidate at temperature 0 is the same call twice (V17)"
+        );
+        assert_eq!(
+            two["options"]["seed"], 2,
+            "diverse but REPRODUCIBLE -- an unseeded failure cannot be re-examined"
+        );
         assert_ne!(zero["options"]["seed"], two["options"]["seed"]);
     }
 

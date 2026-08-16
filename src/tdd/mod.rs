@@ -41,38 +41,77 @@ pub struct Step {
 /// three repairs could not recover (B12): step 2 was never told what to define.
 #[must_use]
 pub fn expected_calls(test_src: &str, existing: &str) -> Vec<String> {
-    const SKIP: [&str; 18] = ["fn", "if", "for", "while", "match", "let", "return",
-        "assert", "assert_eq", "assert_ne", "panic", "println", "format", "vec",
-        "write", "read", "Some", "Ok"];
+    const SKIP: [&str; 18] = [
+        "fn",
+        "if",
+        "for",
+        "while",
+        "match",
+        "let",
+        "return",
+        "assert",
+        "assert_eq",
+        "assert_ne",
+        "panic",
+        "println",
+        "format",
+        "vec",
+        "write",
+        "read",
+        "Some",
+        "Ok",
+    ];
     let b = test_src.as_bytes();
     let mut out: Vec<String> = Vec::new();
     let mut i = 0;
     while i < b.len() {
-        if !(b[i].is_ascii_alphabetic() || b[i] == b'_') { i += 1; continue }
+        if !(b[i].is_ascii_alphabetic() || b[i] == b'_') {
+            i += 1;
+            continue;
+        }
         let start = i;
-        while i < b.len() && (b[i].is_ascii_alphanumeric() || b[i] == b'_') { i += 1 }
+        while i < b.len() && (b[i].is_ascii_alphanumeric() || b[i] == b'_') {
+            i += 1
+        }
         let name = &test_src[start..i];
         // a call is `name(`; a macro is `name!(`; a method is `.name(`
-        if i >= b.len() || b[i] != b'(' { continue }
-        if start > 0 && (b[start - 1] == b'.' || b[start - 1] == b'!') { continue }
+        if i >= b.len() || b[i] != b'(' {
+            continue;
+        }
+        if start > 0 && (b[start - 1] == b'.' || b[start - 1] == b'!') {
+            continue;
+        }
         // `fn name(` is a DEFINITION, not a call -- including the test's own
         let mut k = start;
-        while k > 0 && (b[k - 1] == b' ' || b[k - 1] == b'\t') { k -= 1 }
-        if k >= 2 && &test_src[k - 2..k] == "fn" { continue }
-        if SKIP.contains(&name) || existing.contains(&format!("fn {name}")) { continue }
+        while k > 0 && (b[k - 1] == b' ' || b[k - 1] == b'\t') {
+            k -= 1
+        }
+        if k >= 2 && &test_src[k - 2..k] == "fn" {
+            continue;
+        }
+        if SKIP.contains(&name) || existing.contains(&format!("fn {name}")) {
+            continue;
+        }
         // keep the call verbatim, arguments included -- the signature is the point
         let mut depth = 0usize;
         let mut j = i;
         while j < b.len() {
-            if b[j] == b'(' { depth += 1 } else if b[j] == b')' {
+            if b[j] == b'(' {
+                depth += 1
+            } else if b[j] == b')' {
                 depth -= 1;
-                if depth == 0 { break }
+                if depth == 0 {
+                    break;
+                }
             }
             j += 1;
         }
-        let call = test_src[start..(j + 1).min(test_src.len())].replace('\n', " ");
+        let call =
+            test_src[start..(j + 1).min(test_src.len())].replace('\n', " ");
         let call = call.split_whitespace().collect::<Vec<_>>().join(" ");
-        if !out.contains(&call) { out.push(call) }
+        if !out.contains(&call) {
+            out.push(call)
+        }
     }
     out
 }
@@ -89,7 +128,8 @@ pub fn expected_calls(test_src: &str, existing: &str) -> Vec<String> {
 pub fn rule_depth(spec: &str) -> String {
     // §T is the PLAN, not the archive -- the row being implemented names the
     // work. Dropping it cost a run (B9). §B/§R are history and stay out.
-    const KEEP: [&str; 5] = ["\u{a7}G", "\u{a7}C", "\u{a7}I", "\u{a7}V", "\u{a7}T"];
+    const KEEP: [&str; 5] =
+        ["\u{a7}G", "\u{a7}C", "\u{a7}I", "\u{a7}V", "\u{a7}T"];
     let mut out = String::new();
     let mut keeping = true;
     for line in spec.lines() {
@@ -134,26 +174,47 @@ pub fn signatures(impl_src: &str) -> String {
         if s.starts_with("///") {
             // Inside a type body a doc belongs to the FIELD below it, so emit
             // it in place; at top level it belongs to the item still to come.
-            if depth > 0 { out.push_str(line); out.push('\n'); } else { pending.push(line); }
+            if depth > 0 {
+                out.push_str(line);
+                out.push('\n');
+            } else {
+                pending.push(line);
+            }
             continue;
         }
-        let is_sig = s.starts_with("pub fn") || s.starts_with("pub struct")
-            || s.starts_with("pub enum") || s.starts_with("pub const");
+        let is_sig = s.starts_with("pub fn")
+            || s.starts_with("pub struct")
+            || s.starts_with("pub enum")
+            || s.starts_with("pub const");
         if depth > 0 {
             // inside a type body: keep field lines, they are part of the shape
-            if s == "}" { depth = 0; out.push_str("}\n"); }
-            else if !s.is_empty() { out.push_str(line); out.push('\n'); }
+            if s == "}" {
+                depth = 0;
+                out.push_str("}\n");
+            } else if !s.is_empty() {
+                out.push_str(line);
+                out.push('\n');
+            }
             continue;
         }
-        if !is_sig { pending.clear(); }
+        if !is_sig {
+            pending.clear();
+        }
         if is_sig {
-            for d in pending.drain(..) { out.push_str(d); out.push('\n'); }
+            for d in pending.drain(..) {
+                out.push_str(d);
+                out.push('\n');
+            }
             if s.starts_with("pub fn") {
                 let sig = s.split('{').next().unwrap_or(s).trim_end();
-                out.push_str(sig); out.push_str(" { /* ... */ }\n");
+                out.push_str(sig);
+                out.push_str(" { /* ... */ }\n");
             } else {
-                out.push_str(line); out.push('\n');
-                if s.ends_with('{') { depth = 1; }
+                out.push_str(line);
+                out.push('\n');
+                if s.ends_with('{') {
+                    depth = 1;
+                }
             }
         }
     }
@@ -189,17 +250,34 @@ pub fn gate(root: &Path) -> Result<(bool, String), String> {
     // and the commit's gate must be ONE rule. `-D warnings` in BOTH, because
     // `cargo build` does not compile `#[cfg(test)]` code and an unused import
     // in a test module shipped through a gate that never saw it (fed B8).
-    let out = Command::new(&cargo).args(["test", "--offline"])
-        .env("RUSTFLAGS", "-D warnings").current_dir(root).output();
+    let out = Command::new(&cargo)
+        .args(["test", "--offline"])
+        .env("RUSTFLAGS", "-D warnings")
+        .current_dir(root)
+        .output();
     let (tests_ok, mut report) = match out {
         Ok(o) => {
-            let s = format!("{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr));
-            (o.status.success(), format!("=== cargo test: {} ===\n{}", if o.status.success() { "PASS" } else { "FAIL" }, tail(&s, 2500)))
+            let s = format!(
+                "{}{}",
+                String::from_utf8_lossy(&o.stdout),
+                String::from_utf8_lossy(&o.stderr)
+            );
+            (
+                o.status.success(),
+                format!(
+                    "=== cargo test: {} ===\n{}",
+                    if o.status.success() { "PASS" } else { "FAIL" },
+                    tail(&s, 2500)
+                ),
+            )
         }
-        Err(e) => return Err(format!(
-            "the gate could not RUN: `{cargo}` -- {e}. set BBX_CARGO or enter the \
+        Err(e) => {
+            return Err(format!(
+                "the gate could not RUN: `{cargo}` -- {e}. set BBX_CARGO or enter the \
              dev shell. a gate that did not execute is not a gate that passed \
-             or failed")),
+             or failed"
+            ));
+        }
     };
     // spec::check runs in-process -- no subprocess, no stdout scraping.
     let mut viol = 0;
@@ -209,12 +287,18 @@ pub fn gate(root: &Path) -> Result<(bool, String), String> {
             viol += spec::check(&t).len();
         }
     }
-    report.push_str(&format!("\n=== bbx check: {} === {} nodes examined, {viol} violations\n",
-        if viol == 0 { "PASS" } else { "FAIL" }, nodes.len()));
+    report.push_str(&format!(
+        "\n=== bbx check: {} === {} nodes examined, {viol} violations\n",
+        if viol == 0 { "PASS" } else { "FAIL" },
+        nodes.len()
+    ));
     // Slice drift, by the same function `bbx slice --check` calls.
     let drift = crate::slice::drifted(root)?;
-    report.push_str(&format!("=== slice: {} === {} drifted\n",
-        if drift.is_empty() { "PASS" } else { "FAIL" }, drift.len()));
+    report.push_str(&format!(
+        "=== slice: {} === {} drifted\n",
+        if drift.is_empty() { "PASS" } else { "FAIL" },
+        drift.len()
+    ));
     Ok((tests_ok && viol == 0 && drift.is_empty(), report))
 }
 
@@ -222,12 +306,20 @@ fn tail(s: &str, n: usize) -> &str {
     if s.len() <= n { s } else { &s[s.len() - n..] }
 }
 
-fn run(prompt: &str, label: &'static str, log: &mut Vec<Step>) -> Result<String, String> {
+fn run(
+    prompt: &str,
+    label: &'static str,
+    log: &mut Vec<Step>,
+) -> Result<String, String> {
     run_sampled(prompt, label, ollama::Sampling::DETERMINISTIC, log)
 }
 
-fn run_sampled(prompt: &str, label: &'static str, sampling: ollama::Sampling,
-               log: &mut Vec<Step>) -> Result<String, String> {
+fn run_sampled(
+    prompt: &str,
+    label: &'static str,
+    sampling: ollama::Sampling,
+    log: &mut Vec<Step>,
+) -> Result<String, String> {
     use std::io::Write;
     // Count locally too: the server's number and ours must agree, and a
     // silent divergence means the prompt is not what this code thinks it is.
@@ -236,55 +328,90 @@ fn run_sampled(prompt: &str, label: &'static str, sampling: ollama::Sampling,
     // silent 40-90s wait is indistinguishable from a hang (V21), and a
     // prediction is what lets the escalation guards mean anything.
     let eta = ollama::predict_for(label, local.tokens);
-    eprintln!("  [{label}] -> {} tok ({:.1} KB) - eta {:.0}s cold / {:.0}s if cached (~{} gen)",
-              local.tokens, prompt.len() as f64 / 1024.0,
-              eta.total_s(), eta.cached_s(), eta.gen_est);
+    eprintln!(
+        "  [{label}] -> {} tok ({:.1} KB) - eta {:.0}s cold / {:.0}s if cached (~{} gen)",
+        local.tokens,
+        prompt.len() as f64 / 1024.0,
+        eta.total_s(),
+        eta.cached_s(),
+        eta.gen_est
+    );
     eprint!("       ");
     let _ = std::io::stderr().flush();
     if ollama::verbose() {
         eprintln!("\n--- prompt [{label}] ---\n{prompt}\n--- end prompt ---");
     }
     let mut n = 0usize;
-    let r = ollama::generate_sampled(prompt, label, sampling, eta, &mut |chunk| {
-        if ollama::verbose() {
-            eprint!("{chunk}");
-        } else {
-            n += 1;
-            // One dot per ~25 chunks: visible motion, not a firehose.
-            if n % 25 == 0 {
-                eprint!(".");
+    let r =
+        ollama::generate_sampled(prompt, label, sampling, eta, &mut |chunk| {
+            if ollama::verbose() {
+                eprint!("{chunk}");
+            } else {
+                n += 1;
+                // One dot per ~25 chunks: visible motion, not a firehose.
+                if n.is_multiple_of(25) {
+                    eprint!(".");
+                }
             }
-        }
-        let _ = std::io::stderr().flush();
-    })?;
+            let _ = std::io::stderr().flush();
+        })?;
     eprintln!();
     ollama::observe_gen(label, r.eval_tokens);
     if ollama::verbose() {
         if !r.thinking.is_empty() {
-            eprintln!("\n--- reasoning [{label}] ---\n{}\n--- end reasoning ---", r.thinking);
+            eprintln!(
+                "\n--- reasoning [{label}] ---\n{}\n--- end reasoning ---",
+                r.thinking
+            );
         }
         eprintln!("--- end reply [{label}] ---");
     }
     // Prediction against telemetry -- the comparison is the point. A delta
     // that stays large means the pace model is wrong about THIS endpoint.
     let actual = r.ms as f64 / 1000.0;
-    let basis = if ollama::last_cached() { eta.cached_s() } else { eta.total_s() };
+    let basis = if ollama::last_cached() {
+        eta.cached_s()
+    } else {
+        eta.total_s()
+    };
     let delta = (actual - basis) / basis * 100.0;
-    eprintln!("  [{label}] <- {} sent · {} gen · {actual:.1}s (eta {:.0}s, {delta:+.0}%){}",
-              r.prompt_tokens, r.eval_tokens, basis,
-              if ollama::last_cached() { "  [prefix CACHED]" } else { "" });
+    eprintln!(
+        "  [{label}] <- {} sent · {} gen · {actual:.1}s (eta {:.0}s, {delta:+.0}%){}",
+        r.prompt_tokens,
+        r.eval_tokens,
+        basis,
+        if ollama::last_cached() {
+            "  [prefix CACHED]"
+        } else {
+            ""
+        }
+    );
     if !r.thinking.is_empty() {
-        eprintln!("       (+{} reasoning tokens, hidden -- see -v){}",
-                  r.thinking.len() / 4,
-                  if ollama::last_load_ms() > 500 {
-                      format!("  [endpoint was COLD: {}ms model load]", ollama::last_load_ms())
-                  } else { String::new() });
+        eprintln!(
+            "       (+{} reasoning tokens, hidden -- see -v){}",
+            r.thinking.len() / 4,
+            if ollama::last_load_ms() > 500 {
+                format!(
+                    "  [endpoint was COLD: {}ms model load]",
+                    ollama::last_load_ms()
+                )
+            } else {
+                String::new()
+            }
+        );
     }
     if r.prompt_tokens.abs_diff(local.tokens) > local.tokens / 10 {
-        eprintln!("  [{label}] note: local count {} vs server {} -- >10% apart",
-                  local.tokens, r.prompt_tokens);
+        eprintln!(
+            "  [{label}] note: local count {} vs server {} -- >10% apart",
+            local.tokens, r.prompt_tokens
+        );
     }
-    log.push(Step { label, prompt_tokens: r.prompt_tokens, eval_tokens: r.eval_tokens, ms: r.ms });
+    log.push(Step {
+        label,
+        prompt_tokens: r.prompt_tokens,
+        eval_tokens: r.eval_tokens,
+        ms: r.ms,
+    });
     Ok(r.text)
 }
 
@@ -296,37 +423,68 @@ fn run_sampled(prompt: &str, label: &'static str, sampling: ollama::Sampling,
 ///
 /// # Errors
 /// Returns the reason it could not proceed, same as [`drive`].
-pub fn oneshot(root: &Path, node: &Path, invariant: &str, task: &str) -> Result<Vec<Step>, String> {
+pub fn oneshot(
+    root: &Path,
+    node: &Path,
+    invariant: &str,
+    task: &str,
+) -> Result<Vec<Step>, String> {
     let spec_path = node.join("SPEC.md");
     let mod_path = node.join("mod.rs");
-    let spec_txt = std::fs::read_to_string(&spec_path).map_err(|e| e.to_string())?;
-    let original = std::fs::read_to_string(&mod_path).map_err(|e| e.to_string())?;
+    let spec_txt =
+        std::fs::read_to_string(&spec_path).map_err(|e| e.to_string())?;
+    let original =
+        std::fs::read_to_string(&mod_path).map_err(|e| e.to_string())?;
     let (impl_r, tests_r) = split_module(&original);
-    let inv = spec_txt.lines().find(|l| l.starts_with(&format!("{invariant}:")))
-        .ok_or_else(|| format!("{invariant} not declared"))?.to_string();
+    let inv = spec_txt
+        .lines()
+        .find(|l| l.starts_with(&format!("{invariant}:")))
+        .ok_or_else(|| format!("{invariant} not declared"))?
+        .to_string();
     let mut log = Vec::new();
 
-    let reply = run(&format!(
-        "{}\n--- spec (complete) ---\n{spec_txt}\n\n\
+    let reply = run(
+        &format!(
+            "{}\n--- spec (complete) ---\n{spec_txt}\n\n\
          --- implementation (complete) ---\n{impl_r}\n\n\
          --- existing tests ---\n{tests_r}\n\n\
          Prove and implement this invariant:\n  {inv}\n\nTask: {task}\n\n\
          Reply with TWO ```rust fenced blocks: first the new `#[test]` function, \
          then the new implementation function(s) to add. The test must fail against \
-         the current implementation and pass against your new one.", NOTATION), "monolith", &mut log)?;
+         the current implementation and pass against your new one.",
+            NOTATION
+        ),
+        "monolith",
+        &mut log,
+    )?;
 
-    let blocks: Vec<&str> = reply.split("```").skip(1).step_by(2)
-        .map(|b| b.strip_prefix("rust").unwrap_or(b).trim()).collect();
+    let blocks: Vec<&str> = reply
+        .split("```")
+        .skip(1)
+        .step_by(2)
+        .map(|b| b.strip_prefix("rust").unwrap_or(b).trim())
+        .collect();
     if blocks.len() < 2 {
-        return Err(format!("monolith returned {} code blocks, expected 2", blocks.len()));
+        return Err(format!(
+            "monolith returned {} code blocks, expected 2",
+            blocks.len()
+        ));
     }
-    std::fs::write(&mod_path, insert_impl(&insert_test(&original, blocks[0]), blocks[1]))
-        .map_err(|e| e.to_string())?;
+    std::fs::write(
+        &mod_path,
+        insert_impl(&insert_test(&original, blocks[0]), blocks[1]),
+    )
+    .map_err(|e| e.to_string())?;
     let (ok, out) = gate(root)?;
     let sent: u64 = log.iter().map(|s| s.prompt_tokens).sum();
     eprintln!("\n  1 round-trip · {sent} tok sent · max single call {sent}");
-    if ok { eprintln!("  VERDICT: MERGEABLE -- gates green"); Ok(log) }
-    else { eprintln!("{}", tail(&out, 1200)); Err("NOT mergeable -- gates red".into()) }
+    if ok {
+        eprintln!("  VERDICT: MERGEABLE -- gates green");
+        Ok(log)
+    } else {
+        eprintln!("{}", tail(&out, 1200));
+        Err("NOT mergeable -- gates red".into())
+    }
 }
 
 /// Drive one invariant from red to green.
@@ -335,9 +493,13 @@ pub fn oneshot(root: &Path, node: &Path, invariant: &str, task: &str) -> Result<
 /// Returns the reason the loop could not proceed. A rejected test, a test that
 /// is already green, or an exhausted repair budget are all reported -- never
 /// silently swallowed.
-pub fn drive(root: &Path, node: &Path, invariant: &str, task: &str, max_repair: usize)
-    -> Result<Vec<Step>, String>
-{
+pub fn drive(
+    root: &Path,
+    node: &Path,
+    invariant: &str,
+    task: &str,
+    max_repair: usize,
+) -> Result<Vec<Step>, String> {
     drive_from(root, node, node, invariant, task, max_repair)
 }
 
@@ -366,7 +528,11 @@ struct Restore {
 
 impl Restore {
     fn arm(path: &Path, original: &str) -> Self {
-        Self { path: path.to_path_buf(), original: original.to_string(), armed: true }
+        Self {
+            path: path.to_path_buf(),
+            original: original.to_string(),
+            armed: true,
+        }
     }
     /// The run earned it. Nothing is restored when this guard drops.
     fn keep(&mut self) {
@@ -405,7 +571,9 @@ pub struct Candidate {
 /// deterministic call. Merit has to be demonstrated to displace it.
 #[must_use]
 pub fn best(cands: &[Candidate]) -> Option<usize> {
-    cands.iter().enumerate()
+    cands
+        .iter()
+        .enumerate()
         .filter(|(_, c)| c.green && c.findings == 0)
         .map(|(i, _)| i)
         .next()
@@ -457,7 +625,8 @@ pub fn select(cands: &[Candidate]) -> Pick {
 /// until someone opts in.
 #[must_use]
 pub fn candidate_count() -> usize {
-    std::env::var("BBX_CANDIDATES").ok()
+    std::env::var("BBX_CANDIDATES")
+        .ok()
         .and_then(|v| v.parse::<usize>().ok())
         .unwrap_or(1)
         .clamp(1, 5)
@@ -492,7 +661,14 @@ pub fn named_fn(task: &str) -> Option<String> {
 /// change to what counts as assent cannot apply to one and not the other.
 #[must_use]
 pub fn is_yes(verdict: &str) -> bool {
-    verdict.trim().lines().next().unwrap_or("").trim().to_uppercase().starts_with("YES")
+    verdict
+        .trim()
+        .lines()
+        .next()
+        .unwrap_or("")
+        .trim()
+        .to_uppercase()
+        .starts_with("YES")
 }
 
 /// The second judge: invariant plus implementation, and **never** the test.
@@ -520,26 +696,35 @@ pub fn blind_prompt(inv: &str, added: &str) -> String {
          reports a quantity other than the one the invariant is about; or its \
          own comments describe it as a stub, a placeholder, or as satisfying \
          tests. Answer YES only if code that violated the invariant would \
-         differ from this. Answer YES or NO on the first line, then one sentence.")
+         differ from this. Answer YES or NO on the first line, then one sentence."
+    )
 }
 
 ///
 /// # Errors
 /// See [`drive`].
-pub fn drive_from(root: &Path, node: &Path, owner: &Path, invariant: &str,
-                  task: &str, max_repair: usize) -> Result<Vec<Step>, String>
-{
+pub fn drive_from(
+    root: &Path,
+    node: &Path,
+    owner: &Path,
+    invariant: &str,
+    task: &str,
+    max_repair: usize,
+) -> Result<Vec<Step>, String> {
     let spec_path = node.join("SPEC.md");
     let inv_path = owner.join("SPEC.md");
     let mod_path = node.join("mod.rs");
-    let spec_txt = std::fs::read_to_string(&spec_path).map_err(|e| format!("{}: {e}", spec_path.display()))?;
-    let original = std::fs::read_to_string(&mod_path).map_err(|e| format!("{}: {e}", mod_path.display()))?;
+    let spec_txt = std::fs::read_to_string(&spec_path)
+        .map_err(|e| format!("{}: {e}", spec_path.display()))?;
+    let original = std::fs::read_to_string(&mod_path)
+        .map_err(|e| format!("{}: {e}", mod_path.display()))?;
     let (impl_r, tests_r) = split_module(&original);
     // Armed from here on: every exit below this line restores unless the run
     // ends by earning `keep()`.
     let mut guard = Restore::arm(&mod_path, &original);
 
-    let inv_txt = std::fs::read_to_string(&inv_path).unwrap_or_else(|_| spec_txt.clone());
+    let inv_txt =
+        std::fs::read_to_string(&inv_path).unwrap_or_else(|_| spec_txt.clone());
     let inv = inv_txt.lines().find(|l| l.starts_with(&format!("{invariant}:")))
         .ok_or_else(|| format!("{invariant} not declared in {} -- a test for an invariant that does not exist encodes an unstated rule", inv_path.display()))?
         .to_string();
@@ -562,7 +747,8 @@ pub fn drive_from(root: &Path, node: &Path, owner: &Path, invariant: &str,
          not by failing to compile. It MUST include data that actually violates the \
          invariant, and assert that the violation is reported. Use only items that \
          already exist, plus the ONE new public function you expect to be written. \
-         Reply with a single ```rust fenced block containing only the test function.");
+         Reply with a single ```rust fenced block containing only the test function."
+    );
 
     let mut test_fn = String::new();
     let mut accepted = false;
@@ -571,11 +757,17 @@ pub fn drive_from(root: &Path, node: &Path, owner: &Path, invariant: &str,
         let prompt = if attempt == 0 {
             base.clone()
         } else {
-            format!("{base}\n\nYour previous attempt was REJECTED by review:\n\
+            format!(
+                "{base}\n\nYour previous attempt was REJECTED by review:\n\
                      ```rust\n{test_fn}\n```\nReason: {objection}\n\
-                     Write a corrected test that answers that objection.")
+                     Write a corrected test that answers that objection."
+            )
         };
-        let label: &'static str = if attempt == 0 { "1 red-test" } else { "1 red-retry" };
+        let label: &'static str = if attempt == 0 {
+            "1 red-test"
+        } else {
+            "1 red-retry"
+        };
         test_fn = ollama::rust_block(&run(&prompt, label, &mut log)?);
 
         // Deterministic, before the judge, at zero tokens: if the row names
@@ -584,18 +776,22 @@ pub fn drive_from(root: &Path, node: &Path, owner: &Path, invariant: &str,
         // judge said YES, and step 2 then had no new function to write so it
         // rewrote the old one. 10 round-trips, 25,991 tokens, 4 compile errors
         // including a redefinition (B23).
-        if let Some(name) = named_fn(task) {
-            if !test_fn.contains(&format!("{name}(")) {
-                objection = format!(
-                    "the task names `{name}` and this test never calls it. \
-                     Write a test that calls `{name}` directly.");
-                eprintln!("  contract: test does not call `{name}` -- rejected locally");
-                continue;
-            }
+        if let Some(name) = named_fn(task)
+            && !test_fn.contains(&format!("{name}("))
+        {
+            objection = format!(
+                "the task names `{name}` and this test never calls it. \
+                     Write a test that calls `{name}` directly."
+            );
+            eprintln!(
+                "  contract: test does not call `{name}` -- rejected locally"
+            );
+            continue;
         }
 
-        let verdict = run(&format!(
-            "{NOTATION}\n--- data model ---\n{surface}\n\nInvariant:\n  {inv}\n\n\
+        let verdict = run(
+            &format!(
+                "{NOTATION}\n--- data model ---\n{surface}\n\nInvariant:\n  {inv}\n\n\
              Proposed test:\n```rust\n{test_fn}\n```\n\n\
              Answer YES only if BOTH hold: (a) the test exercises the quantity the \
              invariant is actually about -- check the field names against the data model \
@@ -604,38 +800,66 @@ pub fn drive_from(root: &Path, node: &Path, owner: &Path, invariant: &str,
              DETECTS something, the test MUST include input that should be detected \
              and assert it IS -- a test asserting only that nothing was found is \
              satisfied by a function that always finds nothing. Exhaustiveness is NOT \
-             required. Answer YES or NO on the first line, then one sentence."),
-            if attempt == 0 { "1b judge" } else { "1b re-judge" }, &mut log)?;
+             required. Answer YES or NO on the first line, then one sentence."
+            ),
+            if attempt == 0 {
+                "1b judge"
+            } else {
+                "1b re-judge"
+            },
+            &mut log,
+        )?;
         let first = verdict.trim().lines().next().unwrap_or("").to_string();
         eprintln!("  judge: {}", first.chars().take(78).collect::<String>());
-        if is_yes(&verdict) { accepted = true; break }
+        if is_yes(&verdict) {
+            accepted = true;
+            break;
+        }
         objection = verdict.trim().to_string();
     }
     if !accepted {
-        return Err(format!("judge rejected the test 3 times -- last objection: {objection}"));
+        return Err(format!(
+            "judge rejected the test 3 times -- last objection: {objection}"
+        ));
     }
 
-    std::fs::write(&mod_path, insert_test(&original, &test_fn)).map_err(|e| e.to_string())?;
+    std::fs::write(&mod_path, insert_test(&original, &test_fn))
+        .map_err(|e| e.to_string())?;
     let (red_ok, red_out) = gate(root)?;
     if red_ok {
-        return Err("test passes already -- not a red test, nothing to drive".into());
+        return Err(
+            "test passes already -- not a red test, nothing to drive".into()
+        );
     }
     eprintln!("  gate: RED as required");
 
     // 2 -- GREEN. Sees the one test and the implementation, not the whole spec.
     let wanted = expected_calls(&test_fn, &surface);
-    let contract = if wanted.is_empty() { String::new() } else {
-        format!("--- the test calls these; define EXACTLY these names and signatures ---\n{}\n\n",
-                wanted.join("\n"))
+    let contract = if wanted.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "--- the test calls these; define EXACTLY these names and signatures ---\n{}\n\n",
+            wanted.join("\n")
+        )
     };
-    eprintln!("  contract: {}", if wanted.is_empty() { "(none detected)".into() } else { wanted.join(", ") });
+    eprintln!(
+        "  contract: {}",
+        if wanted.is_empty() {
+            "(none detected)".into()
+        } else {
+            wanted.join(", ")
+        }
+    );
     let green_prompt = format!(
         "--- existing API (signatures; call these, do not reimplement) ---\n{surface}\n\n--- failing test ---\n```rust\n{test_fn}\n```\n\n\
          {contract}\
          --- failure ---\n{}\n\n\
          Write ONLY the new function(s) to ADD to the implementation so this test passes. \
          Do not restate existing code. \
-         Do not modify the test. Reply with a single ```rust fenced block.", tail(&red_out, 1500));
+         Do not modify the test. Reply with a single ```rust fenced block.",
+        tail(&red_out, 1500)
+    );
 
     // 3 -- the competition. N candidates, each judged on the same evidence,
     // best kept. At N=1 this is exactly the old single call: candidate 0 is
@@ -643,15 +867,23 @@ pub fn drive_from(root: &Path, node: &Path, owner: &Path, invariant: &str,
     let n = candidate_count();
     let mut cands: Vec<Candidate> = Vec::new();
     let mut results: Vec<(bool, String)> = Vec::new();
-    let with_test = std::fs::read_to_string(&mod_path).map_err(|e| e.to_string())?;
+    let with_test =
+        std::fs::read_to_string(&mod_path).map_err(|e| e.to_string())?;
     for k in 0..n {
-        let label: &'static str = if k == 0 { "2 green" } else { "2 green-alt" };
-        let code = ollama::rust_block(&run_sampled(&green_prompt, label,
-                                                   ollama::Sampling::candidate(k), &mut log)?);
-        std::fs::write(&mod_path, insert_impl(&with_test, &code)).map_err(|e| e.to_string())?;
+        let label: &'static str =
+            if k == 0 { "2 green" } else { "2 green-alt" };
+        let code = ollama::rust_block(&run_sampled(
+            &green_prompt,
+            label,
+            ollama::Sampling::candidate(k),
+            &mut log,
+        )?);
+        std::fs::write(&mod_path, insert_impl(&with_test, &code))
+            .map_err(|e| e.to_string())?;
         let (g, o) = gate(root)?;
         let added = crate::review::public_fns(&code);
-        let cur = std::fs::read_to_string(&mod_path).map_err(|e| e.to_string())?;
+        let cur =
+            std::fs::read_to_string(&mod_path).map_err(|e| e.to_string())?;
         let (ci, ct) = split_module(&cur);
         let mut found = crate::review::unwired(ci, ct, &added);
         found.extend(crate::review::negative_only(ct, &added));
@@ -659,32 +891,50 @@ pub fn drive_from(root: &Path, node: &Path, owner: &Path, invariant: &str,
         if n > 1 {
             // Name them. Three candidates scoring "1 finding" told me nothing
             // about whether it was one shared defect or three different ones.
-            eprintln!("  candidate {k}: {} · {}",
-                      if g { "gate GREEN" } else { "gate red" },
-                      if found.is_empty() { "clean".to_string() }
-                      else { found.iter().map(|f| f.rule.to_string())
-                                  .collect::<Vec<_>>().join(", ") });
+            eprintln!(
+                "  candidate {k}: {} · {}",
+                if g { "gate GREEN" } else { "gate red" },
+                if found.is_empty() {
+                    "clean".to_string()
+                } else {
+                    found
+                        .iter()
+                        .map(|f| f.rule.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                }
+            );
         }
-        cands.push(Candidate { code, green: g, findings: found.len() });
+        cands.push(Candidate {
+            code,
+            green: g,
+            findings: found.len(),
+        });
         results.push((g, o));
     }
 
     let pick = match select(&cands) {
         Pick::Merit(i) => {
-            if n > 1 { eprintln!("  merit: candidate {i} of {n} kept"); }
+            if n > 1 {
+                eprintln!("  merit: candidate {i} of {n} kept");
+            }
             i
         }
         Pick::Unfinished(i) => {
-            if n > 1 { eprintln!("  merit: all {n} red -- repairing candidate {i}"); }
+            if n > 1 {
+                eprintln!("  merit: all {n} red -- repairing candidate {i}");
+            }
             i
         }
         Pick::NoWinner => {
             return Err(format!(
                 "{n} candidate(s) green but carrying findings -- reverted. repair \
-                 polishes a stub, it does not fix one"));
+                 polishes a stub, it does not fix one"
+            ));
         }
     };
-    std::fs::write(&mod_path, insert_impl(&with_test, &cands[pick].code)).map_err(|e| e.to_string())?;
+    std::fs::write(&mod_path, insert_impl(&with_test, &cands[pick].code))
+        .map_err(|e| e.to_string())?;
     // Track exactly what we added, so repair REPLACES it rather than guessing
     // at a name prefix or rewriting the whole region (B5).
     let mut last_added = cands[pick].code.clone();
@@ -692,20 +942,29 @@ pub fn drive_from(root: &Path, node: &Path, owner: &Path, invariant: &str,
     let (mut ok, mut out) = (results[pick].0, results[pick].1.clone());
     // 4 -- repair, capped. On exhaustion, report what was tried.
     for i in 0..max_repair {
-        if ok { break }
+        if ok {
+            break;
+        }
         eprintln!("  gate: FAIL -- repair {}/{}", i + 1, max_repair);
-        let cur = std::fs::read_to_string(&mod_path).map_err(|e| e.to_string())?;
+        let cur =
+            std::fs::read_to_string(&mod_path).map_err(|e| e.to_string())?;
         let (cur_impl, cur_tests) = split_module(&cur);
         let cur_surface = signatures(cur_impl);
-        let label: &'static str = if i == 0 { "4 repair-1" } else { "4 repair-n" };
-        let fixed = ollama::rust_block(&run(&format!(
-            "--- existing API (signatures) ---\n{cur_surface}\n\n--- your current attempt ---\n{last_added}\n\n--- test ---\n```rust\n{test_fn}\n```\n\n\
+        let label: &'static str =
+            if i == 0 { "4 repair-1" } else { "4 repair-n" };
+        let fixed = ollama::rust_block(&run(
+            &format!(
+                "--- existing API (signatures) ---\n{cur_surface}\n\n--- your current attempt ---\n{last_added}\n\n--- test ---\n```rust\n{test_fn}\n```\n\n\
              --- failure ---\n{}\n\n\
              Reply with ONLY the corrected version of the function(s) you previously \
              added, in one ```rust block. Do not restate unrelated code, do not remove \
              module documentation, and do not change the behaviour of functions that \
              already existed. Do not modify the test.",
-            tail(&out, 2000)), label, &mut log)?);
+                tail(&out, 2000)
+            ),
+            label,
+            &mut log,
+        )?);
         let replaced = if cur_impl.contains(last_added.trim()) {
             cur_impl.replace(last_added.trim(), fixed.trim())
         } else {
@@ -714,8 +973,11 @@ pub fn drive_from(root: &Path, node: &Path, owner: &Path, invariant: &str,
             return Err("repair lost track of the previous insertion -- refusing to                         guess where it went".into());
         };
         last_added = fixed.clone();
-        std::fs::write(&mod_path, format!("{}\n\n{}", replaced.trim_end(), cur_tests))
-            .map_err(|e| e.to_string())?;
+        std::fs::write(
+            &mod_path,
+            format!("{}\n\n{}", replaced.trim_end(), cur_tests),
+        )
+        .map_err(|e| e.to_string())?;
         let g = gate(root)?;
         ok = g.0;
         out = g.1;
@@ -724,26 +986,34 @@ pub fn drive_from(root: &Path, node: &Path, owner: &Path, invariant: &str,
     // 5 -- the second lens. Only when the gate is green: a red gate has already
     // said no, and asking a judge to confirm it costs a call to learn nothing.
     if ok {
-        let verdict = run(&blind_prompt(&inv, &last_added), "5 blind judge", &mut log)?;
+        let verdict =
+            run(&blind_prompt(&inv, &last_added), "5 blind judge", &mut log)?;
         let first = verdict.trim().lines().next().unwrap_or("").to_string();
         eprintln!("  blind: {}", first.chars().take(78).collect::<String>());
         if !is_yes(&verdict) {
             return Err(format!(
                 "gates green, second lens says NO -- reverted. objection: {}",
-                verdict.trim()));
+                verdict.trim()
+            ));
         }
     }
 
     let sent: u64 = log.iter().map(|s| s.prompt_tokens).sum();
     let max = log.iter().map(|s| s.prompt_tokens).max().unwrap_or(0);
-    eprintln!("\n  {} round-trips · {sent} tok sent · max single call {max}", log.len());
+    eprintln!(
+        "\n  {} round-trips · {sent} tok sent · max single call {max}",
+        log.len()
+    );
     if ok {
         eprintln!("  VERDICT: MERGEABLE -- gates green + second lens");
         guard.keep();
         Ok(log)
     } else {
         eprintln!("{}", tail(&out, 2000));
-        Err("NOT mergeable -- gates red after repair budget, module restored".into())
+        Err(
+            "NOT mergeable -- gates red after repair budget, module restored"
+                .into(),
+        )
     }
 }
 /// Classify a failure report as a compile‑time error.
@@ -766,8 +1036,12 @@ mod tests {
     fn a_task_that_names_a_function_names_it_with_parens() {
         // The row that cost 25,991 tokens: it named the function to write and
         // the test drove a different one.
-        assert_eq!(named_fn("`post_with_retry(&dyn Transport, url, body)` -- a NEW fn"),
-                   Some("post_with_retry".into()));
+        assert_eq!(
+            named_fn(
+                "`post_with_retry(&dyn Transport, url, body)` -- a NEW fn"
+            ),
+            Some("post_with_retry".into())
+        );
         // A function mentioned WITHOUT an argument list is a reference to
         // something that exists, not an instruction to write it. The same row
         // said "do not touch `generate_via`" and that must not become the
@@ -775,7 +1049,10 @@ mod tests {
         assert_eq!(named_fn("wire `generate_via` to the retry path"), None);
         assert_eq!(named_fn("record per-request template overhead"), None);
         // First named wins, and prose in backticks is not a function.
-        assert_eq!(named_fn("`§F` rows, then `depth(edges)`"), Some("depth".into()));
+        assert_eq!(
+            named_fn("`§F` rows, then `depth(edges)`"),
+            Some("depth".into())
+        );
     }
 
     #[test]
@@ -788,10 +1065,14 @@ mod tests {
         // The exhausted-repair path: generated code written, run gives up.
         {
             let _g = Restore::arm(&f, "fn original() {}\n");
-            std::fs::write(&f, "fn generated( {  // does not compile\n").unwrap();
+            std::fs::write(&f, "fn generated( {  // does not compile\n")
+                .unwrap();
         }
-        assert_eq!(std::fs::read_to_string(&f).unwrap(), "fn original() {}\n",
-                   "a run that keeps nothing must leave nothing behind");
+        assert_eq!(
+            std::fs::read_to_string(&f).unwrap(),
+            "fn original() {}\n",
+            "a run that keeps nothing must leave nothing behind"
+        );
 
         // And a run that earns it keeps what it wrote.
         {
@@ -804,7 +1085,11 @@ mod tests {
     }
 
     fn cand(green: bool, findings: usize) -> Candidate {
-        Candidate { code: format!("fn c{findings}() {{}}"), green, findings }
+        Candidate {
+            code: format!("fn c{findings}() {{}}"),
+            green,
+            findings,
+        }
     }
 
     #[test]
@@ -812,7 +1097,10 @@ mod tests {
         // The failure this rule exists to stop: ranking always returns
         // something, so the least-bad stub wins by default. Disqualification
         // does not.
-        assert_eq!(best(&[cand(false, 0), cand(true, 2), cand(false, 9)]), None);
+        assert_eq!(
+            best(&[cand(false, 0), cand(true, 2), cand(false, 9)]),
+            None
+        );
         assert_eq!(best(&[]), None);
     }
 
@@ -821,8 +1109,11 @@ mod tests {
         // MEASURED, N=3: all three candidates came back red, the first rule
         // disqualified all three, and asking for more candidates therefore
         // removed repair. More competition made the loop strictly worse.
-        assert_eq!(select(&[cand(false, 1), cand(false, 1), cand(false, 1)]),
-                   Pick::Unfinished(0), "repair is what answers a red gate");
+        assert_eq!(
+            select(&[cand(false, 1), cand(false, 1), cand(false, 1)]),
+            Pick::Unfinished(0),
+            "repair is what answers a red gate"
+        );
         // and it repairs candidate 0, so N>1 can never do worse than N=1
         assert_eq!(select(&[cand(false, 9)]), Pick::Unfinished(0));
     }
@@ -857,12 +1148,19 @@ mod tests {
         // The mechanism IS the blindness. If the test leaks into this prompt,
         // both judges see both sides and test-implementation collusion --
         // every stub in §B -- becomes invisible again.
-        let p = blind_prompt("V1: report every dir with no owner",
-                             "pub fn orphans(_d: &[Dir]) -> Vec<Dir> { Vec::new() }");
+        let p = blind_prompt(
+            "V1: report every dir with no owner",
+            "pub fn orphans(_d: &[Dir]) -> Vec<Dir> { Vec::new() }",
+        );
         assert!(p.contains("orphans"), "must carry the implementation");
-        assert!(p.contains("V1: report every dir"), "must carry the invariant");
-        assert!(!p.to_lowercase().contains("#[test]"),
-                "the test must not reach the second lens: {p}");
+        assert!(
+            p.contains("V1: report every dir"),
+            "must carry the invariant"
+        );
+        assert!(
+            !p.to_lowercase().contains("#[test]"),
+            "the test must not reach the second lens: {p}"
+        );
         assert!(!p.contains("assert"), "no test body may leak in: {p}");
     }
 
@@ -877,16 +1175,26 @@ mod tests {
     #[ignore]
     fn blind_lens_vs_the_recorded_stubs() {
         let corpus: [(&str, &str); 5] = [
-            ("V9: report every cycle in the federation graph",
-             "pub fn detect_cycles(_edges: &[Edge]) -> Vec<Vec<String>> {\n    // stub -- satisfies the current test suite\n    Vec::new()\n}"),
-            ("V8: a node over its ceiling gets a split hint",
-             "pub fn check_split_hint(root: &Path, _budget: u64) -> Vec<PathBuf> {\n    vec![root.join(\"hint\")]\n}"),
-            ("V10: report nodes whose declared tokens differ from measured",
-             "pub fn find_token_mismatches(p: &Path) -> Vec<String> {\n    let n = std::fs::read_to_string(p).unwrap_or_default().len();\n    if n > 0 { vec![format!(\"{n}\")] } else { vec![] }\n}"),
-            ("V4: retry is driven by the transport, not by a constant",
-             "fn _generate_stub(_url: &str) -> Result<String, String> {\n    Ok(String::from(\"{\\\"response\\\":\\\"ok\\\"}\"))\n}"),
-            ("V6: trim old rows of one kind from the state file",
-             "fn count_kind(_lines: &[String], _kind: &str) -> usize { 0 }"),
+            (
+                "V9: report every cycle in the federation graph",
+                "pub fn detect_cycles(_edges: &[Edge]) -> Vec<Vec<String>> {\n    // stub -- satisfies the current test suite\n    Vec::new()\n}",
+            ),
+            (
+                "V8: a node over its ceiling gets a split hint",
+                "pub fn check_split_hint(root: &Path, _budget: u64) -> Vec<PathBuf> {\n    vec![root.join(\"hint\")]\n}",
+            ),
+            (
+                "V10: report nodes whose declared tokens differ from measured",
+                "pub fn find_token_mismatches(p: &Path) -> Vec<String> {\n    let n = std::fs::read_to_string(p).unwrap_or_default().len();\n    if n > 0 { vec![format!(\"{n}\")] } else { vec![] }\n}",
+            ),
+            (
+                "V4: retry is driven by the transport, not by a constant",
+                "fn _generate_stub(_url: &str) -> Result<String, String> {\n    Ok(String::from(\"{\\\"response\\\":\\\"ok\\\"}\"))\n}",
+            ),
+            (
+                "V6: trim old rows of one kind from the state file",
+                "fn count_kind(_lines: &[String], _kind: &str) -> usize { 0 }",
+            ),
         ];
         let mut rejected = 0;
         for (inv, code) in &corpus {
@@ -894,12 +1202,19 @@ mod tests {
                 .expect("endpoint unreachable -- BBX_ENDPOINT");
             let no = !is_yes(&r.text);
             rejected += usize::from(no);
-            println!("{} {} tok · {}", if no { "REJECT" } else { "ACCEPT" },
-                     r.prompt_tokens, r.text.trim().lines().next().unwrap_or(""));
+            println!(
+                "{} {} tok · {}",
+                if no { "REJECT" } else { "ACCEPT" },
+                r.prompt_tokens,
+                r.text.trim().lines().next().unwrap_or("")
+            );
         }
         println!("blind lens rejected {rejected}/5 recorded stubs");
-        assert!(rejected >= 4, "measured {rejected}/5 -- record the real number in §B, \
-                                do not weaken the corpus");
+        assert!(
+            rejected >= 4,
+            "measured {rejected}/5 -- record the real number in §B, \
+                                do not weaken the corpus"
+        );
     }
 
     /// The control half. A judge that answers NO to everything scores 5/5 on
@@ -912,16 +1227,26 @@ mod tests {
     #[ignore]
     fn blind_lens_vs_working_code() {
         let corpus: [(&str, &str); 5] = [
-            ("V46: a budget subtracts entry cost; a negative budget is `does not fit`, not a huge one",
-             "pub const fn working(window: u64) -> u64 {\n    window.saturating_sub(ENTRY_COST)\n}"),
-            ("V6: the ceiling for a path is the longest matching prefix, else the default",
-             "pub fn for_path(&self, path: &str) -> u64 {\n    self.rows.iter()\n        .filter(|(p, _)| path.starts_with(p.as_str()))\n        .max_by_key(|(p, _)| p.len())\n        .map_or(self.default, |(_, v)| *v)\n}"),
-            ("V14: prefill rate is a function of SIZE, so it is bucketed, not one scalar",
-             "pub fn bucket(prompt_tokens: u64) -> &'static str {\n    match prompt_tokens {\n        0..=1_999 => \"b0\",\n        2_000..=7_999 => \"b2\",\n        8_000..=31_999 => \"b8\",\n        _ => \"b32\",\n    }\n}"),
-            ("V4: a verdict states DIRECTION and DISTANCE, never a bare bool",
-             "pub fn verdict(cost: u64, budget: u64) -> Verdict {\n    if cost <= budget {\n        Verdict::Fits { slack: budget - cost }\n    } else {\n        Verdict::Over { by: cost - budget }\n    }\n}"),
-            ("V22: a judge's verdict is YES on the first line, or it is not a yes",
-             "pub fn is_yes(verdict: &str) -> bool {\n    verdict.trim().lines().next().unwrap_or(\"\").trim().to_uppercase().starts_with(\"YES\")\n}"),
+            (
+                "V46: a budget subtracts entry cost; a negative budget is `does not fit`, not a huge one",
+                "pub const fn working(window: u64) -> u64 {\n    window.saturating_sub(ENTRY_COST)\n}",
+            ),
+            (
+                "V6: the ceiling for a path is the longest matching prefix, else the default",
+                "pub fn for_path(&self, path: &str) -> u64 {\n    self.rows.iter()\n        .filter(|(p, _)| path.starts_with(p.as_str()))\n        .max_by_key(|(p, _)| p.len())\n        .map_or(self.default, |(_, v)| *v)\n}",
+            ),
+            (
+                "V14: prefill rate is a function of SIZE, so it is bucketed, not one scalar",
+                "pub fn bucket(prompt_tokens: u64) -> &'static str {\n    match prompt_tokens {\n        0..=1_999 => \"b0\",\n        2_000..=7_999 => \"b2\",\n        8_000..=31_999 => \"b8\",\n        _ => \"b32\",\n    }\n}",
+            ),
+            (
+                "V4: a verdict states DIRECTION and DISTANCE, never a bare bool",
+                "pub fn verdict(cost: u64, budget: u64) -> Verdict {\n    if cost <= budget {\n        Verdict::Fits { slack: budget - cost }\n    } else {\n        Verdict::Over { by: cost - budget }\n    }\n}",
+            ),
+            (
+                "V22: a judge's verdict is YES on the first line, or it is not a yes",
+                "pub fn is_yes(verdict: &str) -> bool {\n    verdict.trim().lines().next().unwrap_or(\"\").trim().to_uppercase().starts_with(\"YES\")\n}",
+            ),
         ];
         let mut accepted = 0;
         for (inv, code) in &corpus {
@@ -929,21 +1254,30 @@ mod tests {
                 .expect("endpoint unreachable -- BBX_ENDPOINT");
             let yes = is_yes(&r.text);
             accepted += usize::from(yes);
-            println!("{} {} tok · {}", if yes { "ACCEPT" } else { "REJECT" },
-                     r.prompt_tokens, r.text.trim().lines().next().unwrap_or(""));
+            println!(
+                "{} {} tok · {}",
+                if yes { "ACCEPT" } else { "REJECT" },
+                r.prompt_tokens,
+                r.text.trim().lines().next().unwrap_or("")
+            );
         }
         println!("blind lens accepted {accepted}/5 working functions");
-        assert!(accepted >= 4, "measured {accepted}/5 -- a lens that rejects working code \
+        assert!(
+            accepted >= 4,
+            "measured {accepted}/5 -- a lens that rejects working code \
                                 is a lens that rejects everything, and its 5/5 on the stub \
-                                corpus proves nothing");
+                                corpus proves nothing"
+        );
     }
 
     #[test]
     fn a_verdict_is_yes_only_on_the_first_line() {
         assert!(is_yes("YES\nit reads its input"));
         assert!(is_yes("  yes -- fine  "));
-        assert!(!is_yes("NO\nreturns YES for everything"),
-                "a YES in the explanation is not assent");
+        assert!(
+            !is_yes("NO\nreturns YES for everything"),
+            "a YES in the explanation is not assent"
+        );
         assert!(!is_yes(""));
     }
 
@@ -960,7 +1294,11 @@ mod tests {
     #[test]
     fn expected_calls_skips_macros_and_methods() {
         let t = "assert_eq!(a, b); x.len(); vec![1];";
-        assert!(expected_calls(t, "").is_empty(), "{:?}", expected_calls(t, ""));
+        assert!(
+            expected_calls(t, "").is_empty(),
+            "{:?}",
+            expected_calls(t, "")
+        );
     }
 
     #[test]
@@ -968,13 +1306,26 @@ mod tests {
         // The supervisor command tells an agent to revert, halt, plant
         // anchors. A 20B asked to write one function must never see it (V13).
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let spec = std::fs::read_to_string(root.join("src/fed/SPEC.md")).unwrap();
+        let spec =
+            std::fs::read_to_string(root.join("src/fed/SPEC.md")).unwrap();
         let src = std::fs::read_to_string(root.join("src/fed/mod.rs")).unwrap();
         let (impl_r, tests_r) = split_module(&src);
-        let prompt = format!("{NOTATION}{}{}{}", rule_depth(&spec), signatures(impl_r), tests_r);
-        for marker in ["/introspect", "git revert", "halt(introspect)", "maintenance mode"] {
-            assert!(!prompt.contains(marker),
-                    "supervisor instruction `{marker}` reached a worker prompt");
+        let prompt = format!(
+            "{NOTATION}{}{}{}",
+            rule_depth(&spec),
+            signatures(impl_r),
+            tests_r
+        );
+        for marker in [
+            "/introspect",
+            "git revert",
+            "halt(introspect)",
+            "maintenance mode",
+        ] {
+            assert!(
+                !prompt.contains(marker),
+                "supervisor instruction `{marker}` reached a worker prompt"
+            );
         }
     }
 
@@ -985,7 +1336,10 @@ mod tests {
         assert!(r.contains("V1: a"), "rules must survive: {r}");
         assert!(!r.contains("B1|"), "§B must be dropped: {r}");
         let s2 = "## \u{a7}T TASKS\nT1|.|do the thing|V1\n\n## \u{a7}B BUGS\nB1|x|c|f\n";
-        assert!(rule_depth(s2).contains("T1|"), "§T is the plan and must survive");
+        assert!(
+            rule_depth(s2).contains("T1|"),
+            "§T is the plan and must survive"
+        );
         assert!(!r.contains("BUGS"), "§B header must be dropped: {r}");
     }
 
@@ -993,10 +1347,22 @@ mod tests {
     fn signatures_keep_shape_and_drop_bodies() {
         let src = "/// what it owns\npub struct E {\n    /// a path\n    pub dir: String,\n}\n\n/// does the thing\npub fn go(a: u8) -> bool {\n    secret();\n    true\n}\n";
         let s = signatures(src);
-        assert!(s.contains("/// a path"), "doc comments ARE the semantics: {s}");
-        assert!(s.contains("/// does the thing"), "fn docs must survive: {s}");
-        assert!(s.contains("pub dir: String"), "field shape must survive: {s}");
-        assert!(s.contains("pub fn go(a: u8) -> bool"), "signature must survive: {s}");
+        assert!(
+            s.contains("/// a path"),
+            "doc comments ARE the semantics: {s}"
+        );
+        assert!(
+            s.contains("/// does the thing"),
+            "fn docs must survive: {s}"
+        );
+        assert!(
+            s.contains("pub dir: String"),
+            "field shape must survive: {s}"
+        );
+        assert!(
+            s.contains("pub fn go(a: u8) -> bool"),
+            "signature must survive: {s}"
+        );
         assert!(!s.contains("secret()"), "body must NOT survive: {s}");
     }
 
@@ -1019,7 +1385,11 @@ mod tests {
     fn insert_impl_never_touches_the_test_region() {
         let out = insert_impl(SRC, "pub fn b() {}");
         let (_, t) = split_module(&out);
-        assert_eq!(t, split_module(SRC).1, "test region must be byte-identical");
+        assert_eq!(
+            t,
+            split_module(SRC).1,
+            "test region must be byte-identical"
+        );
         assert!(out.contains("pub fn b"));
     }
 
@@ -1029,28 +1399,28 @@ mod tests {
         assert!(split_module(&out).1.contains("fn u()"));
     }
 
-#[test]
-fn classify_failure_works() {
-    // A typical compiler error – represents a red test that fails to build.
-    let compile_report = r#"error[E0425]: cannot find value `foo` in this scope"#;
+    #[test]
+    fn classify_failure_works() {
+        // A typical compiler error – represents a red test that fails to build.
+        let compile_report =
+            r#"error[E0425]: cannot find value `foo` in this scope"#;
 
-    // An assertion failure message – represents a red test that runs but panics.
-    let assert_report =
-        "thread 'main' panicked at 'assertion failed: x == y', src/main.rs:10:5";
+        // An assertion failure message – represents a red test that runs but panics.
+        let assert_report = "thread 'main' panicked at 'assertion failed: x == y', src/main.rs:10:5";
 
-    // The new public function we expect to be written:
-    //   pub fn classify_failure(report: &str) -> bool
-    //
-    // It should return true for compile‑time failures and false otherwise.
-    assert!(
-        classify_failure(compile_report),
-        "Compile error should be classified as a compile failure"
-    );
+        // The new public function we expect to be written:
+        //   pub fn classify_failure(report: &str) -> bool
+        //
+        // It should return true for compile‑time failures and false otherwise.
+        assert!(
+            classify_failure(compile_report),
+            "Compile error should be classified as a compile failure"
+        );
 
-    // A red test that merely panics must NOT be treated as a compile failure.
-    assert!(
-        !classify_failure(assert_report),
-        "Assertion failure should not be classified as a compile failure"
-    );
-}
+        // A red test that merely panics must NOT be treated as a compile failure.
+        assert!(
+            !classify_failure(assert_report),
+            "Assertion failure should not be classified as a compile failure"
+        );
+    }
 }

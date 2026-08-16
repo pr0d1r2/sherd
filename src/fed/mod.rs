@@ -102,13 +102,19 @@ fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
     if dir.join("SPEC.md").is_file() {
         out.push(dir.to_path_buf());
     }
-    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
     for e in entries.flatten() {
         let p = e.path();
         if !p.is_dir() {
             continue;
         }
-        let name = p.file_name().unwrap_or_default().to_string_lossy().to_string();
+        let name = p
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
         if is_ignored_dir(&name) {
             continue;
         }
@@ -129,7 +135,10 @@ pub fn depth_violations(edges: &[Edge]) -> Vec<&Edge> {
 ///
 /// An edge violates V3 if its `not_owns` field is empty (or contains only whitespace).
 pub fn missing_not_owns(edges: &[Edge]) -> Vec<&Edge> {
-    edges.iter().filter(|e| e.not_owns.trim().is_empty()).collect()
+    edges
+        .iter()
+        .filter(|e| e.not_owns.trim().is_empty())
+        .collect()
 }
 
 /// The federation as a mermaid graph, derived from `§F`.
@@ -149,14 +158,16 @@ pub fn mermaid(root: &Path) -> String {
     for node in discover(root) {
         let rel = node.strip_prefix(root).unwrap_or(&node);
         let from = label(rel);
-        if !seen.iter().any(|s| *s == from) {
+        if !seen.contains(&from) {
             seen.push(from.clone());
             defs.push_str(&format!("    {from}[{}]\n", ident(&disp(rel))));
         }
-        let Ok(text) = std::fs::read_to_string(node.join("SPEC.md")) else { continue };
+        let Ok(text) = std::fs::read_to_string(node.join("SPEC.md")) else {
+            continue;
+        };
         for e in edges(&text) {
             let id = label(&rel.join(&e.dir));
-            if !seen.iter().any(|s| *s == id) {
+            if !seen.contains(&id) {
                 seen.push(id.clone());
                 defs.push_str(&format!("    {id}[{}]\n", ident(&e.dir)));
             }
@@ -171,13 +182,20 @@ pub fn mermaid(root: &Path) -> String {
 /// plain markdown renders everywhere, and carries more than a node label can.
 #[must_use]
 pub fn table(root: &Path) -> String {
-    let mut out = String::from("| node | owns | does not own |\n|---|---|---|\n");
+    let mut out =
+        String::from("| node | owns | does not own |\n|---|---|---|\n");
     for node in discover(root) {
         let rel = node.strip_prefix(root).unwrap_or(&node);
-        let Ok(text) = std::fs::read_to_string(node.join("SPEC.md")) else { continue };
+        let Ok(text) = std::fs::read_to_string(node.join("SPEC.md")) else {
+            continue;
+        };
         for e in edges(&text) {
-            out.push_str(&format!("| `{}` | {} | {} |\n",
-                rel.join(&e.dir).display(), cell(&e.owns), cell(&e.not_owns)));
+            out.push_str(&format!(
+                "| `{}` | {} | {} |\n",
+                rel.join(&e.dir).display(),
+                cell(&e.owns),
+                cell(&e.not_owns)
+            ));
         }
     }
     out
@@ -191,8 +209,15 @@ fn cell(s: &str) -> String {
 /// A mermaid node label with no character that any mermaid version treats as
 /// syntax: letters, digits, spaces, hyphens and underscores only.
 fn ident(s: &str) -> String {
-    let t: String = s.chars()
-        .map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { ' ' })
+    let t: String = s
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                ' '
+            }
+        })
         .collect();
     let t = t.split_whitespace().collect::<Vec<_>>().join(" ");
     if t.is_empty() { "root".into() } else { t }
@@ -206,12 +231,20 @@ fn ident(s: &str) -> String {
 pub fn tree(root: &Path) -> String {
     let mut out = String::from(".\n");
     fn walk_tree(root: &Path, rel: &Path, prefix: &str, out: &mut String) {
-        let Ok(text) = std::fs::read_to_string(root.join(rel).join("SPEC.md")) else { return };
+        let Ok(text) = std::fs::read_to_string(root.join(rel).join("SPEC.md"))
+        else {
+            return;
+        };
         let es = edges(&text);
         for (i, e) in es.iter().enumerate() {
             let last = i + 1 == es.len();
-            out.push_str(&format!("{prefix}{}{}\n", if last { "`-- " } else { "|-- " }, e.dir));
-            let deeper = format!("{prefix}{}", if last { "    " } else { "|   " });
+            out.push_str(&format!(
+                "{prefix}{}{}\n",
+                if last { "`-- " } else { "|-- " },
+                e.dir
+            ));
+            let deeper =
+                format!("{prefix}{}", if last { "    " } else { "|   " });
             walk_tree(root, &rel.join(&e.dir), &deeper, out);
         }
     }
@@ -222,12 +255,20 @@ pub fn tree(root: &Path) -> String {
 /// The same graph in graphviz `dot`.
 #[must_use]
 pub fn dot(root: &Path) -> String {
-    let mut out = String::from("digraph federation {\n  rankdir=TB;\n  node [shape=box];\n");
+    let mut out = String::from(
+        "digraph federation {\n  rankdir=TB;\n  node [shape=box];\n",
+    );
     for node in discover(root) {
         let rel = node.strip_prefix(root).unwrap_or(&node);
-        let Ok(text) = std::fs::read_to_string(node.join("SPEC.md")) else { continue };
+        let Ok(text) = std::fs::read_to_string(node.join("SPEC.md")) else {
+            continue;
+        };
         for e in edges(&text) {
-            out.push_str(&format!("  \"{}\" -> \"{}\";\n", disp(rel), rel.join(&e.dir).display()));
+            out.push_str(&format!(
+                "  \"{}\" -> \"{}\";\n",
+                disp(rel),
+                rel.join(&e.dir).display()
+            ));
         }
     }
     out.push_str("}\n");
@@ -249,13 +290,15 @@ fn disp(p: &Path) -> String {
 /// source tree and should never be traversed: `target`, `.git`,
 /// `node_modules`, and `.direnv`.  All other names are considered valid.
 pub fn is_ignored_dir(name: &str) -> bool {
-    matches!(name,
+    matches!(
+        name,
         "target" | ".git" | "node_modules" | ".direnv"
         // SUPERVISOR assets: instructions for the higher agent. They must
         // never become federation nodes, because a node's SPEC.md reaches the
         // local model's prompt and supervisor instructions are not for it
         // (V13). Excluded by discovery, not by convention.
-        | ".claude" | ".github" | ".codex" | ".githooks")
+        | ".claude" | ".github" | ".codex" | ".githooks"
+    )
 }
 pub fn find_exhaustive_violations<'a>(
     edges: &'a [Edge],
@@ -283,12 +326,12 @@ pub fn find_exhaustive_violations<'a>(
     if let Ok(entries) = std::fs::read_dir(root) {
         for entry in entries.flatten() {
             let path = entry.path();
-            if path.is_dir() {
-                if let Some(name) = path.file_name().and_then(|s| s.to_str()) {
-                    if !edge_dirs.contains_key(name) && !is_ignored_dir(name) {
-                        missing.push(path);
-                    }
-                }
+            if path.is_dir()
+                && let Some(name) = path.file_name().and_then(|s| s.to_str())
+                && !edge_dirs.contains_key(name)
+                && !is_ignored_dir(name)
+            {
+                missing.push(path);
             }
         }
     }
@@ -326,8 +369,12 @@ mod tests {
             assert!(is_ignored_dir(d), "{d} must never be walked");
         }
         let found = discover(Path::new(env!("CARGO_MANIFEST_DIR")));
-        assert!(!found.iter().any(|p| p.to_string_lossy().contains("/.claude")),
-                "supervisor assets leaked into discovery: {found:?}");
+        assert!(
+            !found
+                .iter()
+                .any(|p| p.to_string_lossy().contains("/.claude")),
+            "supervisor assets leaked into discovery: {found:?}"
+        );
     }
 
     #[test]
@@ -336,18 +383,28 @@ mod tests {
         let m = mermaid(root);
         assert!(m.starts_with("graph TD"), "{m}");
         assert!(m.contains("root --> src\n"), "root must point at src: {m}");
-        assert!(m.contains("src --> src_tdd"), "src must point at its children: {m}");
+        assert!(
+            m.contains("src --> src_tdd"),
+            "src must point at its children: {m}"
+        );
     }
 
     #[test]
     fn mermaid_uses_the_widely_supported_directive() {
         let m = mermaid(Path::new(env!("CARGO_MANIFEST_DIR")));
-        assert!(m.starts_with("graph TD"), "`flowchart` is not in older mermaid: {m}");
+        assert!(
+            m.starts_with("graph TD"),
+            "`flowchart` is not in older mermaid: {m}"
+        );
         for l in m.lines().filter(|l| l.contains('[')) {
             let inner = l.split_once('[').unwrap().1.trim_end_matches(']');
-            assert!(inner.chars().all(|c| c.is_ascii_alphanumeric()
-                        || c == ' ' || c == '-' || c == '_'),
-                    "label has syntax-significant chars: {l}");
+            assert!(
+                inner.chars().all(|c| c.is_ascii_alphanumeric()
+                    || c == ' '
+                    || c == '-'
+                    || c == '_'),
+                "label has syntax-significant chars: {l}"
+            );
         }
     }
 
@@ -356,8 +413,10 @@ mod tests {
         let tr = tree(Path::new(env!("CARGO_MANIFEST_DIR")));
         assert!(tr.starts_with(".\n"), "{tr}");
         assert!(tr.contains("-- src\n"), "root child: {tr}");
-        assert!(tr.contains("    |-- tokens") || tr.contains("|   |-- tokens"),
-                "grandchild must be indented: {tr}");
+        assert!(
+            tr.contains("    |-- tokens") || tr.contains("|   |-- tokens"),
+            "grandchild must be indented: {tr}"
+        );
         assert!(tr.is_ascii(), "must be ascii: {tr}");
     }
 
@@ -381,8 +440,12 @@ mod tests {
     #[test]
     fn mermaid_declares_each_node_once() {
         let m = mermaid(Path::new(env!("CARGO_MANIFEST_DIR")));
-        let mut ids: Vec<&str> = m.lines().filter(|l| l.contains('['))
-            .filter_map(|l| l.trim().split_once('[')).map(|(i, _)| i).collect();
+        let mut ids: Vec<&str> = m
+            .lines()
+            .filter(|l| l.contains('['))
+            .filter_map(|l| l.trim().split_once('['))
+            .map(|(i, _)| i)
+            .collect();
         let n = ids.len();
         ids.sort_unstable();
         ids.dedup();
@@ -391,161 +454,166 @@ mod tests {
 
     #[test]
     fn header_row_is_not_an_edge() {
-        assert!(edges("## \u{a7}F FEDERATION\ndir|owns|\u{22a5}owns|tokens\n").is_empty());
+        assert!(
+            edges("## \u{a7}F FEDERATION\ndir|owns|\u{22a5}owns|tokens\n")
+                .is_empty()
+        );
     }
 
-#[test]
-fn depth_invariant_violated() {
-    // An edge that is two levels deep (`src/subdir`) violates V2.
-    let t = "\
+    #[test]
+    fn depth_invariant_violated() {
+        // An edge that is two levels deep (`src/subdir`) violates V2.
+        let t = "\
 ## \u{a7}F FEDERATION\
 \ndir|owns|\u{22a5}owns|tokens\
 \nsrc/subdir|code nodes|scripts, docs|1200\
 ";
-    // Parse the edges from the federation table.
-    let e = edges(t);
-    assert_eq!(e.len(), 1, "Expected exactly one edge in the test data");
+        // Parse the edges from the federation table.
+        let e = edges(t);
+        assert_eq!(e.len(), 1, "Expected exactly one edge in the test data");
 
-    // The new public function that checks V2 should return the offending rows.
-    // It is expected to be implemented elsewhere in this module.
-    let violations = depth_violations(&e);
+        // The new public function that checks V2 should return the offending rows.
+        // It is expected to be implemented elsewhere in this module.
+        let violations = depth_violations(&e);
 
-    // The current implementation does not perform this check,
-    // so `violations` will be empty and the assertion below will fail.
-    assert!(
-        !violations.is_empty(),
-        "Expected a violation for edge with dir 'src/subdir', but none were reported"
-    );
-    assert_eq!(violations[0].dir, "src/subdir");
-}
-
-#[test]
-fn missing_not_owns_detected() {
-    // Federation table with an edge that has an empty ⊥owns cell.
-    let t = "## \u{a7}F FEDERATION\ndir|owns|\u{22a5}owns|tokens\nsrc|code nodes||1200\n";
-    let e = edges(t);
-    assert_eq!(e.len(), 1, "Expected exactly one edge in the test data");
-
-    // The new public function that checks V3 should return the offending rows.
-    let violations = missing_not_owns(&e);
-
-    // Current implementation does not perform this check,
-    // so `violations` will be empty and the assertion below will fail.
-    assert!(
-        !violations.is_empty(),
-        "Expected a violation for edge with empty ⊥owns, but none were reported"
-    );
-    assert_eq!(violations[0].dir, "src");
-}
-
-#[test]
-fn discover_ignores_globs() {
-    // The root of the repository (where the tests run).
-    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    // Run the walker.
-    let discovered = discover(root);
-
-    // Directory names that must be skipped by the walker.
-    let ignored_names = ["target", ".git", "node_modules", ".direnv"];
-
-    for name in &ignored_names {
-        // The new public helper should report these as ignored.
+        // The current implementation does not perform this check,
+        // so `violations` will be empty and the assertion below will fail.
         assert!(
-            is_ignored_dir(name),
-            "is_ignored_dir should return true for '{}'",
-            name
+            !violations.is_empty(),
+            "Expected a violation for edge with dir 'src/subdir', but none were reported"
         );
+        assert_eq!(violations[0].dir, "src/subdir");
+    }
 
-        // Verify that the walker never returned a path ending with an ignored dir.
-        let contains = discovered.iter().any(|p| {
-            p.file_name()
-                .and_then(|s| s.to_str())
-                .map_or(false, |s| s == *name)
-        });
+    #[test]
+    fn missing_not_owns_detected() {
+        // Federation table with an edge that has an empty ⊥owns cell.
+        let t = "## \u{a7}F FEDERATION\ndir|owns|\u{22a5}owns|tokens\nsrc|code nodes||1200\n";
+        let e = edges(t);
+        assert_eq!(e.len(), 1, "Expected exactly one edge in the test data");
+
+        // The new public function that checks V3 should return the offending rows.
+        let violations = missing_not_owns(&e);
+
+        // Current implementation does not perform this check,
+        // so `violations` will be empty and the assertion below will fail.
         assert!(
-            !contains,
-            "discovered paths contain ignored directory '{}': {:?}",
-            name,
-            discovered
+            !violations.is_empty(),
+            "Expected a violation for edge with empty ⊥owns, but none were reported"
+        );
+        assert_eq!(violations[0].dir, "src");
+    }
+
+    #[test]
+    fn discover_ignores_globs() {
+        // The root of the repository (where the tests run).
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        // Run the walker.
+        let discovered = discover(root);
+
+        // Directory names that must be skipped by the walker.
+        let ignored_names = ["target", ".git", "node_modules", ".direnv"];
+
+        for name in &ignored_names {
+            // The new public helper should report these as ignored.
+            assert!(
+                is_ignored_dir(name),
+                "is_ignored_dir should return true for '{}'",
+                name
+            );
+
+            // Verify that the walker never returned a path ending with an ignored dir.
+            let contains = discovered
                 .iter()
-                .filter(|p| p.file_name().and_then(|s| s.to_str()) == Some(*name))
-                .collect::<Vec<_>>()
+                .any(|p| p.file_name().and_then(|s| s.to_str()) == Some(*name));
+            assert!(
+                !contains,
+                "discovered paths contain ignored directory '{}': {:?}",
+                name,
+                discovered
+                    .iter()
+                    .filter(|p| p.file_name().and_then(|s| s.to_str())
+                        == Some(*name))
+                    .collect::<Vec<_>>()
+            );
+        }
+
+        // A normal directory should not be reported as ignored.
+        assert!(
+            !is_ignored_dir("src"),
+            "normal directory 'src' incorrectly marked as ignored"
         );
     }
 
-    // A normal directory should not be reported as ignored.
-    assert!(
-        !is_ignored_dir("src"),
-        "normal directory 'src' incorrectly marked as ignored"
-    );
-}
+    #[test]
+    fn exhaustive_invariant_detects_duplicates_and_missing() {
+        use std::fs;
+        use std::path::PathBuf;
+        use std::time::{SystemTime, UNIX_EPOCH};
 
+        // Create a unique temporary directory inside the OS temp dir.
+        let mut tmp = std::env::temp_dir();
+        let suffix = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis();
+        tmp.push(format!("exhaustive_test_{}", suffix));
+        fs::create_dir_all(&tmp).expect("failed to create temp dir");
 
-#[test]
-fn exhaustive_invariant_detects_duplicates_and_missing() {
-    use std::fs;
-    use std::path::PathBuf;
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    // Create a unique temporary directory inside the OS temp dir.
-    let mut tmp = std::env::temp_dir();
-    let suffix = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_millis();
-    tmp.push(format!("exhaustive_test_{}", suffix));
-    fs::create_dir_all(&tmp).expect("failed to create temp dir");
-
-    // Ensure the directory is cleaned up even if an assertion panics.
-    // (The generated code reached for `scopeguard`, which is not a dependency
-    // here; four lines of Drop is cheaper than a crate.)
-    struct Cleanup(PathBuf);
-    impl Drop for Cleanup {
-        fn drop(&mut self) {
-            let _ = fs::remove_dir_all(&self.0);
+        // Ensure the directory is cleaned up even if an assertion panics.
+        // (The generated code reached for `scopeguard`, which is not a dependency
+        // here; four lines of Drop is cheaper than a crate.)
+        struct Cleanup(PathBuf);
+        impl Drop for Cleanup {
+            fn drop(&mut self) {
+                let _ = fs::remove_dir_all(&self.0);
+            }
         }
-    }
-    let _guard = Cleanup(tmp.clone());
+        let _guard = Cleanup(tmp.clone());
 
-    // Create two child directories: one that will be duplicated in the table,
-    // and another that will be missing from the table.
-    let child1 = tmp.join("child1");
-    let child2 = tmp.join("child2");
-    fs::create_dir_all(&child1).expect("failed to create child1");
-    fs::create_dir_all(&child2).expect("failed to create child2");
+        // Create two child directories: one that will be duplicated in the table,
+        // and another that will be missing from the table.
+        let child1 = tmp.join("child1");
+        let child2 = tmp.join("child2");
+        fs::create_dir_all(&child1).expect("failed to create child1");
+        fs::create_dir_all(&child2).expect("failed to create child2");
 
-    // Federation table with two identical rows for `child1` and no row for `child2`.
-    let f_text = "## \u{a7}F FEDERATION\ndir|owns|\u{22a5}owns|tokens\n\
+        // Federation table with two identical rows for `child1` and no row for `child2`.
+        let f_text = "## \u{a7}F FEDERATION\ndir|owns|\u{22a5}owns|tokens\n\
                   child1|code||-\n\
                   child1|code||-\n";
 
-    // Parse the edges from the table.
-    let edges_vec = edges(f_text);
+        // Parse the edges from the table.
+        let edges_vec = edges(f_text);
 
-    // Call the new public function that checks V11.
-    // It is expected to return a tuple of (duplicate_edges, missing_dirs).
-    let (duplicates, missing) = find_exhaustive_violations(&edges_vec, &tmp);
+        // Call the new public function that checks V11.
+        // It is expected to return a tuple of (duplicate_edges, missing_dirs).
+        let (duplicates, missing) =
+            find_exhaustive_violations(&edges_vec, &tmp);
 
-    // Verify that at least one duplicate was reported for `child1`.
-    assert!(
-        !duplicates.is_empty(),
-        "Expected duplicate rows for 'child1', but none were reported"
-    );
-    assert!(
-        duplicates.iter().any(|e| e.dir == "child1"),
-        "Duplicate row for 'child1' not found in the report: {:?}",
-        duplicates
-    );
+        // Verify that at least one duplicate was reported for `child1`.
+        assert!(
+            !duplicates.is_empty(),
+            "Expected duplicate rows for 'child1', but none were reported"
+        );
+        assert!(
+            duplicates.iter().any(|e| e.dir == "child1"),
+            "Duplicate row for 'child1' not found in the report: {:?}",
+            duplicates
+        );
 
-    // Verify that `child2` was reported as missing from the table.
-    assert!(
-        !missing.is_empty(),
-        "Expected a missing entry for 'child2', but none were reported"
-    );
-    assert!(
-        missing.iter().any(|p| p.file_name().and_then(|s| s.to_str()) == Some("child2")),
-        "Missing child directory 'child2' not found in the report: {:?}",
-        missing
-    );
-}
+        // Verify that `child2` was reported as missing from the table.
+        assert!(
+            !missing.is_empty(),
+            "Expected a missing entry for 'child2', but none were reported"
+        );
+        assert!(
+            missing
+                .iter()
+                .any(|p| p.file_name().and_then(|s| s.to_str())
+                    == Some("child2")),
+            "Missing child directory 'child2' not found in the report: {:?}",
+            missing
+        );
+    }
 }

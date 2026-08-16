@@ -34,7 +34,11 @@ pub fn stamp(secs: u64) -> String {
     let d = doy - (153 * mp + 2) / 5 + 1;
     let m = if mp < 10 { mp + 3 } else { mp - 9 };
     let y = yoe as i64 + era * 400 + i64::from(m <= 2);
-    format!("{y:04}-{m:02}-{d:02}--{:02}-{:02}", rem / 3600, (rem % 3600) / 60)
+    format!(
+        "{y:04}-{m:02}-{d:02}--{:02}-{:02}",
+        rem / 3600,
+        (rem % 3600) / 60
+    )
 }
 
 /// The branch a run's work belongs on.
@@ -87,14 +91,16 @@ pub fn landable(e: &Evidence) -> Result<(), String> {
     if e.findings > 0 {
         return Err(format!(
             "{} review finding(s) -- the gate and review disagree, and review wins here",
-            e.findings));
+            e.findings
+        ));
     }
     if e.nodes == 0 {
         // No `pub fn` attributable to a node. Unknown believability, and an
         // unmeasured node must not read as a perfect one -- the same rule as
         // `.:V48`, where an unreadable file is a failure and never a quiet zero.
         return Err("cannot attribute this branch to a node -- believability \
-                    unknown, so it does not land unattended".into());
+                    unknown, so it does not land unattended"
+            .into());
     }
     if e.believability < LAND_MIN {
         // Say what would change it. "Not believable enough" without the
@@ -103,14 +109,18 @@ pub fn landable(e: &Evidence) -> Result<(), String> {
             "believability {:.2} < {LAND_MIN:.2} -- this node has not earned an \
              unattended merge. `bbx outcome <node> kept` after review is what \
              raises it; five consecutive keeps clears the bar",
-            e.believability));
+            e.believability
+        ));
     }
     Ok(())
 }
 
 fn git(root: &Path, args: &[&str]) -> Result<String, String> {
-    let o = std::process::Command::new("git").args(args).current_dir(root)
-        .output().map_err(|e| e.to_string())?;
+    let o = std::process::Command::new("git")
+        .args(args)
+        .current_dir(root)
+        .output()
+        .map_err(|e| e.to_string())?;
     if o.status.success() {
         Ok(String::from_utf8_lossy(&o.stdout).trim().to_string())
     } else {
@@ -125,8 +135,11 @@ fn git(root: &Path, args: &[&str]) -> Result<String, String> {
 /// place to run, it just gets no CI.
 #[must_use]
 pub fn remote(root: &Path) -> Option<String> {
-    git(root, &["remote"]).ok()?
-        .lines().find(|r| *r == "gitlab").map(ToString::to_string)
+    git(root, &["remote"])
+        .ok()?
+        .lines()
+        .find(|r| *r == "gitlab")
+        .map(ToString::to_string)
 }
 
 /// Push `branch` to the remote, if there is one. Best-effort by design.
@@ -158,14 +171,20 @@ pub fn current_branch(root: &Path) -> Result<String, String> {
 ///
 /// # Errors
 /// Propagates git failure.
-pub fn evidence(root: &Path, branch: &str, gate_ok: bool) -> Result<Evidence, String> {
+pub fn evidence(
+    root: &Path,
+    branch: &str,
+    gate_ok: bool,
+) -> Result<Evidence, String> {
     let shas = git(root, &["rev-list", &format!("main..{branch}")])?;
     let shas: Vec<&str> = shas.lines().filter(|l| !l.is_empty()).collect();
     let mut findings = 0;
     let mut lowest = 1.0_f64;
     let mut nodes = std::collections::BTreeSet::new();
     for sha in &shas {
-        findings += crate::review::commit(root, sha).map_err(|e| e.to_string())?.len();
+        findings += crate::review::commit(root, sha)
+            .map_err(|e| e.to_string())?
+            .len();
         for (node, _) in crate::review::added_in_commit(root, sha) {
             // The node is the directory holding the file the commit touched.
             if let Some(dir) = node.parent() {
@@ -174,7 +193,13 @@ pub fn evidence(root: &Path, branch: &str, gate_ok: bool) -> Result<Evidence, St
             }
         }
     }
-    Ok(Evidence { commits: shas.len(), gate_ok, findings, nodes: nodes.len(), believability: lowest })
+    Ok(Evidence {
+        commits: shas.len(),
+        gate_ok,
+        findings,
+        nodes: nodes.len(),
+        believability: lowest,
+    })
 }
 
 /// Fast-forward `main` to `branch`, or refuse and say why.
@@ -191,13 +216,20 @@ pub fn land(root: &Path, push: bool) -> Result<String, String> {
         return Err(format!("already on {branch} -- nothing to land"));
     }
     if !git(root, &["status", "--porcelain"])?.is_empty() {
-        return Err("working tree dirty -- land moves committed work only".into());
+        return Err(
+            "working tree dirty -- land moves committed work only".into()
+        );
     }
     let gate_ok = crate::tdd::gate(root)?.0;
     let e = evidence(root, &branch, gate_ok)?;
-    eprintln!("land: {} commit(s) on {branch} · gate {} · {} finding(s) · {} node(s) · believability {:.2}",
-              e.commits, if e.gate_ok { "green" } else { "RED" }, e.findings,
-              e.nodes, e.believability);
+    eprintln!(
+        "land: {} commit(s) on {branch} · gate {} · {} finding(s) · {} node(s) · believability {:.2}",
+        e.commits,
+        if e.gate_ok { "green" } else { "RED" },
+        e.findings,
+        e.nodes,
+        e.believability
+    );
     landable(&e)?;
 
     git(root, &["checkout", "main"])?;
@@ -206,13 +238,18 @@ pub fn land(root: &Path, push: bool) -> Result<String, String> {
         git(root, &["checkout", &branch])?;
         return Err(format!("not a fast-forward -- main moved. {err}"));
     }
-    if push {
-        if let Some(r) = remote(root) {
-            git(root, &["push", "-q", &r, "main"])?;
-            return Ok(format!("{branch} landed on main and pushed to {r}"));
-        }
+    if push && let Some(r) = remote(root) {
+        git(root, &["push", "-q", &r, "main"])?;
+        return Ok(format!("{branch} landed on main and pushed to {r}"));
     }
-    Ok(format!("{branch} landed on main{}", if push { " (no remote)" } else { " (local only)" }))
+    Ok(format!(
+        "{branch} landed on main{}",
+        if push {
+            " (no remote)"
+        } else {
+            " (local only)"
+        }
+    ))
 }
 
 #[cfg(test)]
@@ -237,15 +274,32 @@ mod tests {
         assert_eq!(run_branch(&first, 1_785_681_300 + 9_000), first);
     }
 
-    fn ev(commits: usize, gate_ok: bool, findings: usize, believability: f64) -> Evidence {
-        Evidence { commits, gate_ok, findings, nodes: 1, believability }
+    fn ev(
+        commits: usize,
+        gate_ok: bool,
+        findings: usize,
+        believability: f64,
+    ) -> Evidence {
+        Evidence {
+            commits,
+            gate_ok,
+            findings,
+            nodes: 1,
+            believability,
+        }
     }
 
     #[test]
     fn an_unattributable_branch_is_unknown_not_trustworthy() {
         // The default `lowest` is 1.0, so a branch touching no node would
         // otherwise read as a PERFECT record. Absence is not evidence.
-        let e = Evidence { commits: 1, gate_ok: true, findings: 0, nodes: 0, believability: 1.0 };
+        let e = Evidence {
+            commits: 1,
+            gate_ok: true,
+            findings: 0,
+            nodes: 0,
+            believability: 1.0,
+        };
         assert!(landable(&e).unwrap_err().contains("cannot attribute"));
     }
 
@@ -264,9 +318,21 @@ mod tests {
     fn a_perfect_record_does_not_excuse_a_finding_or_a_red_gate() {
         // Believability is a track record, not a pass. It cannot outvote the
         // evidence about THIS branch.
-        assert!(landable(&ev(1, false, 0, 1.0)).unwrap_err().contains("gate"));
-        assert!(landable(&ev(1, true, 1, 1.0)).unwrap_err().contains("finding"));
-        assert!(landable(&ev(0, true, 0, 1.0)).unwrap_err().contains("nothing to land"));
+        assert!(
+            landable(&ev(1, false, 0, 1.0))
+                .unwrap_err()
+                .contains("gate")
+        );
+        assert!(
+            landable(&ev(1, true, 1, 1.0))
+                .unwrap_err()
+                .contains("finding")
+        );
+        assert!(
+            landable(&ev(0, true, 0, 1.0))
+                .unwrap_err()
+                .contains("nothing to land")
+        );
     }
 
     #[test]

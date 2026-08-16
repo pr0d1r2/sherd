@@ -31,12 +31,16 @@ impl Rule {
     /// Unknown rule name, or a missing argument.
     pub fn parse(s: &str) -> Result<Self, String> {
         match s.split_once(':') {
-            Some(("lead", n)) => n.parse().map(Rule::Lead)
+            Some(("lead", n)) => n
+                .parse()
+                .map(Rule::Lead)
                 .map_err(|_| format!("lead: expected a number, got `{n}`")),
             Some(("section", h)) => Ok(Rule::Section(h.into())),
             Some(("fence", a)) => Ok(Rule::Fence(a.into())),
             Some(("prefix", p)) => Ok(Rule::Prefix(p.into())),
-            _ => Err(format!("unknown rule `{s}` -- want lead:N, section:X, fence:X or prefix:X")),
+            _ => Err(format!(
+                "unknown rule `{s}` -- want lead:N, section:X, fence:X or prefix:X"
+            )),
         }
     }
 
@@ -45,32 +49,51 @@ impl Rule {
     #[must_use]
     pub fn apply(&self, text: &str) -> String {
         match self {
-            Rule::Lead(n) => text.split("\n\n")
-                .filter(|p| !p.trim().is_empty() && !p.trim_start().starts_with('#'))
-                .take(*n).map(str::trim).collect::<Vec<_>>().join("\n\n"),
+            Rule::Lead(n) => text
+                .split("\n\n")
+                .filter(|p| {
+                    !p.trim().is_empty() && !p.trim_start().starts_with('#')
+                })
+                .take(*n)
+                .map(str::trim)
+                .collect::<Vec<_>>()
+                .join("\n\n"),
             Rule::Section(h) => {
                 let mut out = Vec::new();
                 let mut inside = false;
                 for line in text.lines() {
                     if line.starts_with('#') {
-                        if inside { break }
+                        if inside {
+                            break;
+                        }
                         inside = line.contains(h.as_str());
                         continue;
                     }
-                    if inside { out.push(line) }
+                    if inside {
+                        out.push(line)
+                    }
                 }
                 out.join("\n").trim().to_string()
             }
             Rule::Fence(after) => {
-                let Some(pos) = text.find(after.as_str()) else { return String::new() };
+                let Some(pos) = text.find(after.as_str()) else {
+                    return String::new();
+                };
                 let rest = &text[pos..];
-                let Some(open) = rest.find("```") else { return String::new() };
+                let Some(open) = rest.find("```") else {
+                    return String::new();
+                };
                 let body = &rest[open + 3..];
                 let start = body.find('\n').map_or(0, |i| i + 1);
-                body[start..].find("```").map_or_else(String::new, |end| body[start..start + end].trim_end().to_string())
+                body[start..].find("```").map_or_else(String::new, |end| {
+                    body[start..start + end].trim_end().to_string()
+                })
             }
-            Rule::Prefix(p) => text.lines().filter(|l| l.trim_start().starts_with(p.as_str()))
-                .collect::<Vec<_>>().join("\n"),
+            Rule::Prefix(p) => text
+                .lines()
+                .filter(|l| l.trim_start().starts_with(p.as_str()))
+                .collect::<Vec<_>>()
+                .join("\n"),
         }
     }
 }
@@ -98,12 +121,16 @@ pub fn parse_decls(text: &str) -> Result<Vec<Decl>, String> {
         }
         let f: Vec<&str> = l.split_whitespace().collect();
         if f.len() != 3 {
-            return Err(format!(".bbx-slices:{}: expected `<output> <source> <rule>`", n + 1));
+            return Err(format!(
+                ".bbx-slices:{}: expected `<output> <source> <rule>`",
+                n + 1
+            ));
         }
         out.push(Decl {
             output: PathBuf::from(f[0]),
             source: f[1].to_string(),
-            rule: Rule::parse(f[2]).map_err(|e| format!(".bbx-slices:{}: {e}", n + 1))?,
+            rule: Rule::parse(f[2])
+                .map_err(|e| format!(".bbx-slices:{}: {e}", n + 1))?,
         });
     }
     Ok(out)
@@ -111,7 +138,6 @@ pub fn parse_decls(text: &str) -> Result<Vec<Decl>, String> {
 
 /// Expand a source pattern to files. Supports one trailing `*` segment; a
 /// path with no glob is itself.
-#[must_use]
 /// Every declared slice whose file on disk differs from what its source
 /// renders to now.
 ///
@@ -127,7 +153,9 @@ pub fn drifted(root: &Path) -> Result<Vec<PathBuf>, String> {
     let mut out = Vec::new();
     for d in parse_decls(&text)? {
         let rendered = render(root, &d)?;
-        if std::fs::read_to_string(root.join(&d.output)).unwrap_or_default() != rendered {
+        if std::fs::read_to_string(root.join(&d.output)).unwrap_or_default()
+            != rendered
+        {
             out.push(d.output.clone());
         }
     }
@@ -135,15 +163,25 @@ pub fn drifted(root: &Path) -> Result<Vec<PathBuf>, String> {
 }
 
 pub fn sources(root: &Path, pattern: &str) -> Vec<PathBuf> {
-    let p = if Path::new(pattern).is_absolute() { PathBuf::from(pattern) } else { root.join(pattern) };
+    let p = if Path::new(pattern).is_absolute() {
+        PathBuf::from(pattern)
+    } else {
+        root.join(pattern)
+    };
     let s = p.to_string_lossy().to_string();
-    let Some((dir, pat)) = s.rsplit_once('/') else { return vec![p] };
+    let Some((dir, pat)) = s.rsplit_once('/') else {
+        return vec![p];
+    };
     if !pat.contains('*') {
         return vec![p];
     }
     let suffix = pat.trim_start_matches('*');
-    let Ok(rd) = std::fs::read_dir(dir) else { return Vec::new() };
-    let mut v: Vec<PathBuf> = rd.flatten().map(|e| e.path())
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return Vec::new();
+    };
+    let mut v: Vec<PathBuf> = rd
+        .flatten()
+        .map(|e| e.path())
         .filter(|q| q.is_file() && q.to_string_lossy().ends_with(suffix))
         .collect();
     v.sort();
@@ -158,23 +196,35 @@ pub fn sources(root: &Path, pattern: &str) -> Vec<PathBuf> {
 pub fn render(root: &Path, d: &Decl) -> Result<String, String> {
     let files = sources(root, &d.source);
     if files.is_empty() {
-        return Err(format!("{}: `{}` matched no files", d.output.display(), d.source));
+        return Err(format!(
+            "{}: `{}` matched no files",
+            d.output.display(),
+            d.source
+        ));
     }
     let mut parts = Vec::new();
     for f in &files {
-        let text = std::fs::read_to_string(f).map_err(|e| format!("{}: {e}", f.display()))?;
+        let text = std::fs::read_to_string(f)
+            .map_err(|e| format!("{}: {e}", f.display()))?;
         let got = d.rule.apply(&text);
         if !got.trim().is_empty() {
             parts.push(got);
         }
     }
     if parts.is_empty() {
-        return Err(format!("{}: rule {:?} matched nothing in {} file(s) -- \
+        return Err(format!(
+            "{}: rule {:?} matched nothing in {} file(s) -- \
                             an empty slice is a silent failure",
-                           d.output.display(), d.rule, files.len()));
+            d.output.display(),
+            d.rule,
+            files.len()
+        ));
     }
-    Ok(format!("# GENERATED by `bbx slice` from {} -- do not edit.\n\n{}\n",
-               d.source, parts.join("\n\n")))
+    Ok(format!(
+        "# GENERATED by `bbx slice` from {} -- do not edit.\n\n{}\n",
+        d.source,
+        parts.join("\n\n")
+    ))
 }
 
 #[cfg(test)]
@@ -196,7 +246,8 @@ mod tests {
 
     #[test]
     fn fence_takes_the_block_after_its_anchor() {
-        let doc = "intro\n\n**Symbols**\n\n```\n! must\n⊥ never\n```\n\nafter\n";
+        let doc =
+            "intro\n\n**Symbols**\n\n```\n! must\n⊥ never\n```\n\nafter\n";
         assert_eq!(Rule::Fence("Symbols".into()).apply(doc), "! must\n⊥ never");
     }
 

@@ -1,0 +1,12 @@
+# Layout. Root-only, no per-crate dialect -- the fleet's number, not a default.
+#
+# 80 columns is REVIEWED, not inherited: rustfmt's own default is 100. Narrow
+# lines keep a side-by-side diff readable and stop a signature drifting off the
+# right edge of a review pane.
+#
+# MUST track `edition` in Cargo.toml. rustfmt takes its edition from HERE, not
+# from the manifest, so a mismatch means the formatter and the compiler read
+# two different dialects and `cargo fmt --check` reports a diff nobody asked
+# for. This repo moved to 2024 with the fleet pin; so does this file.
+max_width = 80
+edition = "2024"

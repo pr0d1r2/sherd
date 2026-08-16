@@ -59,7 +59,9 @@ impl Kind {
             Kind::MultiFile => "writes files beyond its own module",
             Kind::NotCode => "research or reporting, not code",
             Kind::Replaces => "replaces existing code -- the loop only appends",
-            Kind::NotAFunction => "no new function to add -- edits specs or wiring",
+            Kind::NotAFunction => {
+                "no new function to add -- edits specs or wiring"
+            }
             Kind::NoModule => "root row -- no mod.rs to add to",
         }
     }
@@ -76,11 +78,14 @@ pub fn classify(node: &Path, text: &str) -> Kind {
     let has = |ks: &[&str]| ks.iter().any(|k| t.contains(k));
     // WORD match, because "report" contains "port" and a substring list
     // classified every `report ...` row as a replacement (B5).
-    let words: Vec<&str> = t.split(|c: char| !c.is_ascii_alphanumeric())
-        .filter(|w| !w.is_empty()).collect();
+    let words: Vec<&str> = t
+        .split(|c: char| !c.is_ascii_alphanumeric())
+        .filter(|w| !w.is_empty())
+        .collect();
     // STEM match: "wiring" did not match "wire" and a row needing wiring
     // counted as actionable (B8).
-    let word = |ks: &[&str]| ks.iter().any(|k| words.iter().any(|w| w.starts_with(k)));
+    let word =
+        |ks: &[&str]| ks.iter().any(|k| words.iter().any(|w| w.starts_with(k)));
     // WHITELIST, not blacklist. A row is actionable when it says "add one
     // function", not merely when it fails to match known-bad shapes. The
     // blacklist marked "replace the hand-rolled walk" actionable, and the loop
@@ -90,14 +95,29 @@ pub fn classify(node: &Path, text: &str) -> Kind {
     // only appends, so these are replacements however the row is phrased --
     // "retry with bounded backoff AROUND `Transport::post`" reads as adding
     // one function and cannot be done by adding one function (B9).
-    if word(&["replace", "remove", "port", "migrate", "rewrite", "delete", "supersede",
-              "around", "wrap", "inside"]) {
+    if word(&[
+        "replace",
+        "remove",
+        "port",
+        "migrate",
+        "rewrite",
+        "delete",
+        "supersede",
+        "around",
+        "wrap",
+        "inside",
+    ]) {
         Kind::Replaces
-    } else if word(&["blocked", "needs", "promote", "wire", "move", "record", "flip", "plant"]) {
+    } else if word(&[
+        "blocked", "needs", "promote", "wire", "move", "record", "flip",
+        "plant",
+    ]) {
         Kind::NotAFunction
     } else if has(&["cmd", "cli", "verb", "`bbx ", "flag", "--"]) {
         Kind::Cli
-    } else if word(&["upstream", "audit", "corpus", "fixture"]) || has(&["ci ", "gate:"]) {
+    } else if word(&["upstream", "audit", "corpus", "fixture"])
+        || has(&["ci ", "gate:"])
+    {
         Kind::NotCode
     } else if has(&["\u{a7}n", "sync", "baseline", ".md`", "write own"]) {
         // Word-order independent, because the first version looked for
@@ -115,7 +135,9 @@ pub fn classify(node: &Path, text: &str) -> Kind {
 pub fn open_tasks(root: &Path) -> Vec<Task> {
     let mut out = Vec::new();
     for node in fed::discover(root) {
-        let Ok(text) = std::fs::read_to_string(node.join("SPEC.md")) else { continue };
+        let Ok(text) = std::fs::read_to_string(node.join("SPEC.md")) else {
+            continue;
+        };
         let mut in_t = false;
         for line in text.lines() {
             if line.starts_with("## \u{a7}") {
@@ -145,7 +167,9 @@ pub fn open_tasks(root: &Path) -> Vec<Task> {
     // Shallow before deep: a node's dependencies sit above it in the chain.
     // This is the ONLY ordering signal available -- §T's `cites` points at §V,
     // never at another §T -- so it is stated as weak rather than dressed up.
-    out.sort_by_key(|t| (t.node.components().count(), t.node.clone(), t.id.clone()));
+    out.sort_by_key(|t| {
+        (t.node.components().count(), t.node.clone(), t.id.clone())
+    });
     out
 }
 
@@ -182,12 +206,15 @@ impl Confidence {
     #[must_use]
     pub fn invalidated_by(self) -> &'static str {
         match self {
-            Confidence::Next =>
-                "judge rejects the test 3x · gate still red after 3 repairs",
-            Confidence::Likely =>
-                "step 1 adds a §B row to this node, changing its authoring prompt (tdd B9)",
-            Confidence::Tentative =>
-                "any §T row added by steps above it; ordering has no declared `needs`",
+            Confidence::Next => {
+                "judge rejects the test 3x · gate still red after 3 repairs"
+            }
+            Confidence::Likely => {
+                "step 1 adds a §B row to this node, changing its authoring prompt (tdd B9)"
+            }
+            Confidence::Tentative => {
+                "any §T row added by steps above it; ordering has no declared `needs`"
+            }
         }
     }
 }
@@ -210,7 +237,8 @@ pub fn row_hash(t: &Task) -> String {
 /// still open") and only its author can judge that.
 #[must_use]
 pub fn already_applied(st: &crate::state::State, t: &Task) -> bool {
-    st.get("applied", &row_key(t)).is_some_and(|v| v.starts_with(&row_hash(t)))
+    st.get("applied", &row_key(t))
+        .is_some_and(|v| v.starts_with(&row_hash(t)))
 }
 
 #[derive(Debug)]
@@ -243,12 +271,22 @@ pub fn plan(root: &Path) -> Plan {
     // Most-believable node first. A node that has failed three times running
     // should not keep supplying step 1, which is what depth-ordering did.
     candidates.sort_by(|a, b| {
-        believability(&b.node).total_cmp(&believability(&a.node))
-            .then_with(|| a.node.components().count().cmp(&b.node.components().count()))
+        believability(&b.node)
+            .total_cmp(&believability(&a.node))
+            .then_with(|| {
+                a.node
+                    .components()
+                    .count()
+                    .cmp(&b.node.components().count())
+            })
             .then_with(|| a.id.cmp(&b.id))
     });
     steps.extend(candidates.into_iter().take(HORIZON));
-    Plan { steps, unmanaged, total_open }
+    Plan {
+        steps,
+        unmanaged,
+        total_open,
+    }
 }
 
 /// The first `§V` a row cites, as `(where it is declared, id)`.
@@ -265,10 +303,13 @@ pub fn cited_invariant(t: &Task) -> Option<(std::path::PathBuf, String)> {
             Some((path, id)) => (path, id),
             None => ("", c),
         };
-        if id.starts_with('V') && id.len() > 1 && id[1..].chars().all(|d| d.is_ascii_digit()) {
+        if id.starts_with('V')
+            && id.len() > 1
+            && id[1..].chars().all(|d| d.is_ascii_digit())
+        {
             let node = match owner {
-                "" => t.node.clone(),                       // bare: this node
-                "." => std::path::PathBuf::new(),           // root
+                "" => t.node.clone(),             // bare: this node
+                "." => std::path::PathBuf::new(), // root
                 p => std::path::PathBuf::from(p),
             };
             return Some((node, id.to_string()));
@@ -289,8 +330,10 @@ mod tests {
     #[test]
     fn every_confidence_states_how_it_fails() {
         for c in [Confidence::Next, Confidence::Likely, Confidence::Tentative] {
-            assert!(!c.invalidated_by().is_empty(),
-                    "a plan that cannot say how it fails is a promise");
+            assert!(
+                !c.invalidated_by().is_empty(),
+                "a plan that cannot say how it fails is a promise"
+            );
         }
     }
 
@@ -315,7 +358,10 @@ mod tests {
         // "replace the hand-rolled walk with itok::walk" -- insert_impl only
         // appends, so the loop would add a SECOND walk (B4).
         let n = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/fed");
-        assert_eq!(classify(&n, "replace the hand-rolled walk with `itok::walk`"), Kind::Replaces);
+        assert_eq!(
+            classify(&n, "replace the hand-rolled walk with `itok::walk`"),
+            Kind::Replaces
+        );
         assert!(!Kind::Replaces.actionable());
     }
 
@@ -326,14 +372,25 @@ mod tests {
         // existing function" means editing that function's call site, which
         // the loop cannot do (B9).
         let n = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/ollama");
-        for row in ["retry w/ bounded backoff around `Transport::post`",
-                    "wrap the transport in a retrying decorator",
-                    "cache lookups inside `generate_via`"] {
-            assert_eq!(classify(&n, row), Kind::Replaces, "should not be drivable: {row}");
+        for row in [
+            "retry w/ bounded backoff around `Transport::post`",
+            "wrap the transport in a retrying decorator",
+            "cache lookups inside `generate_via`",
+        ] {
+            assert_eq!(
+                classify(&n, row),
+                Kind::Replaces,
+                "should not be drivable: {row}"
+            );
         }
         // Still whitelist, not blacklist: adding a free function stays actionable.
-        assert_eq!(classify(&n, "`backoff_delay(attempt)` returns the delay before one retry"),
-                   Kind::NodeFn);
+        assert_eq!(
+            classify(
+                &n,
+                "`backoff_delay(attempt)` returns the delay before one retry"
+            ),
+            Kind::NodeFn
+        );
     }
 
     #[test]
@@ -341,28 +398,45 @@ mod tests {
         // Marking a row BLOCKED in its text did nothing -- plan handed it
         // straight back as step 1 (plan B7).
         let n = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/fed");
-        assert!(!classify(&n, "BLOCKED — needs Rust source, ⊥ §F data").actionable());
+        assert!(
+            !classify(&n, "BLOCKED — needs Rust source, ⊥ §F data")
+                .actionable()
+        );
     }
 
     #[test]
     fn a_spec_editing_row_is_not_actionable() {
         let n = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/fed");
-        assert_eq!(classify(&n, "promote an invariant from a leaf to the common ancestor"),
-                   Kind::NotAFunction);
+        assert_eq!(
+            classify(
+                &n,
+                "promote an invariant from a leaf to the common ancestor"
+            ),
+            Kind::NotAFunction
+        );
     }
 
     #[test]
     fn adding_a_function_stays_actionable() {
         let n = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/fed");
-        assert_eq!(classify(&n, "report `§F` rows naming a dir twice"), Kind::NodeFn);
+        assert_eq!(
+            classify(&n, "report `§F` rows naming a dir twice"),
+            Kind::NodeFn
+        );
     }
 
     #[test]
     fn classify_is_word_order_independent() {
         // Both phrasings describe writing §N into other nodes' specs.
         let n = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/fed");
-        assert_eq!(classify(&n, "derive `§N` from parent `§F`"), Kind::MultiFile);
-        assert_eq!(classify(&n, "`§N` derive from parent `§F`"), Kind::MultiFile);
+        assert_eq!(
+            classify(&n, "derive `§N` from parent `§F`"),
+            Kind::MultiFile
+        );
+        assert_eq!(
+            classify(&n, "`§N` derive from parent `§F`"),
+            Kind::MultiFile
+        );
     }
 
     #[test]
@@ -382,8 +456,14 @@ mod tests {
 
     #[test]
     fn propose_moves_a_single_node_row() {
-        assert_eq!(propose("orphan check: SPEC w/o parent §F row"), Proposal::Move("fed"));
-        assert_eq!(propose("tier select from bbx.toml"), Proposal::Move("tokens"));
+        assert_eq!(
+            propose("orphan check: SPEC w/o parent §F row"),
+            Proposal::Move("fed")
+        );
+        assert_eq!(
+            propose("tier select from bbx.toml"),
+            Proposal::Move("tokens")
+        );
     }
 
     #[test]
@@ -396,7 +476,10 @@ mod tests {
 
     #[test]
     fn propose_keeps_a_row_with_no_node_vocabulary() {
-        assert_eq!(propose("report the caveman finding upstream"), Proposal::Keep);
+        assert_eq!(
+            propose("report the caveman finding upstream"),
+            Proposal::Keep
+        );
     }
 
     #[test]
@@ -404,8 +487,12 @@ mod tests {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
         for (t, _, p) in triage(root) {
             if let Proposal::Move(n) = p {
-                assert!(!t.node.file_name().is_some_and(|f| f == n),
-                        "{} {} proposed to move to its own node", t.node.display(), t.id);
+                assert!(
+                    t.node.file_name().is_none_or(|f| f != n),
+                    "{} {} proposed to move to its own node",
+                    t.node.display(),
+                    t.id
+                );
             }
         }
     }
@@ -414,33 +501,62 @@ mod tests {
     fn triage_returns_only_unmanaged_rows() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
         for (t, k, _) in triage(root) {
-            assert!(!k.actionable(), "{} {} is actionable, should not be triaged", t.node.display(), t.id);
+            assert!(
+                !k.actionable(),
+                "{} {} is actionable, should not be triaged",
+                t.node.display(),
+                t.id
+            );
         }
     }
 
     #[test]
     fn cited_invariant_takes_the_first_v_id() {
-        let mk = |c: &str| Task { node: PathBuf::from("src/fed"), id: "T4".into(),
-            status: '.', text: "x".into(), cites: c.into() };
+        let mk = |c: &str| Task {
+            node: PathBuf::from("src/fed"),
+            id: "T4".into(),
+            status: '.',
+            text: "x".into(),
+            cites: c.into(),
+        };
         assert_eq!(cited_invariant(&mk("V2,V4")).unwrap().1, "V2");
         assert_eq!(cited_invariant(&mk("I,V7")).unwrap().1, "V7");
         assert_eq!(cited_invariant(&mk("-")), None);
-        assert_eq!(cited_invariant(&mk("B9")), None, "a §B cite is not an invariant");
+        assert_eq!(
+            cited_invariant(&mk("B9")),
+            None,
+            "a §B cite is not an invariant"
+        );
         // bare -> this node; `.:` -> root; `path:` -> that node (B6)
-        assert_eq!(cited_invariant(&mk("V2")).unwrap().0, PathBuf::from("src/fed"));
+        assert_eq!(
+            cited_invariant(&mk("V2")).unwrap().0,
+            PathBuf::from("src/fed")
+        );
         let (owner, id) = cited_invariant(&mk("`.:V73`")).unwrap();
         assert_eq!((owner, id.as_str()), (PathBuf::new(), "V73"));
-        assert_eq!(cited_invariant(&mk("`src/lens:V4`")).unwrap().0, PathBuf::from("src/lens"));
+        assert_eq!(
+            cited_invariant(&mk("`src/lens:V4`")).unwrap().0,
+            PathBuf::from("src/lens")
+        );
     }
 
     #[test]
     fn row_identity_follows_its_text() {
-        let a = Task { node: PathBuf::from("src/fed"), id: "T4".into(), status: '.',
-                       text: "do a thing".into(), cites: "V2".into() };
+        let a = Task {
+            node: PathBuf::from("src/fed"),
+            id: "T4".into(),
+            status: '.',
+            text: "do a thing".into(),
+            cites: "V2".into(),
+        };
         let mut b = a.clone();
         b.text = "do a different thing".into();
         assert_eq!(row_key(&a), row_key(&b), "key is node+id");
-        assert_ne!(row_hash(&a), row_hash(&b), "editing the text makes it new work");
+        assert_ne!(
+            row_hash(&a),
+            row_hash(&b),
+            "editing the text makes it new work"
+        );
     }
 
     #[test]
@@ -492,7 +608,9 @@ pub fn believability(node: &Path) -> f64 {
     let tried = st.get_u64("score", &format!("{key}.tried")).unwrap_or(0);
     let kept = st.get_u64("score", &format!("{key}.kept")).unwrap_or(0);
     #[allow(clippy::cast_precision_loss)]
-    { (kept as f64 + 1.0) / (tried as f64 + 2.0) }
+    {
+        (kept as f64 + 1.0) / (tried as f64 + 2.0)
+    }
 }
 
 /// `(tried, kept)` for a node, for reporting.
@@ -500,8 +618,10 @@ pub fn believability(node: &Path) -> f64 {
 pub fn record(node: &Path) -> (u64, u64) {
     let st = crate::state::State::load();
     let key = node.to_string_lossy().to_string();
-    (st.get_u64("score", &format!("{key}.tried")).unwrap_or(0),
-     st.get_u64("score", &format!("{key}.kept")).unwrap_or(0))
+    (
+        st.get_u64("score", &format!("{key}.tried")).unwrap_or(0),
+        st.get_u64("score", &format!("{key}.kept")).unwrap_or(0),
+    )
 }
 
 // ---- triage: where does an unmanaged row belong? ----
@@ -510,15 +630,29 @@ pub fn record(node: &Path) -> (u64, u64) {
 /// to that node. ADVISORY -- prose classification is wrong-by-default (V4,
 /// B1), so this proposes and a reader decides.
 const VOCAB: [(&str, &[&str]); 9] = [
-    ("fed",    &["§f", "§n", "edge", "dag", "cycle", "chain", "discover", "graph", "orphan", "promotion"]),
-    ("lens",   &["lens", "pack", "budget", "depth", "why", "facet"]),
+    (
+        "fed",
+        &[
+            "§f",
+            "§n",
+            "edge",
+            "dag",
+            "cycle",
+            "chain",
+            "discover",
+            "graph",
+            "orphan",
+            "promotion",
+        ],
+    ),
+    ("lens", &["lens", "pack", "budget", "depth", "why", "facet"]),
     ("tokens", &["token", "tier", "itok", "count", "ceiling"]),
-    ("spec",   &["microlith", "section", "record", "format", "fmt"]),
+    ("spec", &["microlith", "section", "record", "format", "fmt"]),
     ("ollama", &["ollama", "endpoint", "retry", "model"]),
-    ("tdd",    &["tdd", "judge", "red", "green", "repair"]),
-    ("plan",   &["plan", "apply", "horizon", "needs", "actionable"]),
+    ("tdd", &["tdd", "judge", "red", "green", "repair"]),
+    ("plan", &["plan", "apply", "horizon", "needs", "actionable"]),
     ("review", &["review", "unwired", "negative"]),
-    ("state",  &["state", "cache", "idempot"]),
+    ("state", &["state", "cache", "idempot"]),
 ];
 
 /// What triage proposes for one row.
@@ -536,7 +670,8 @@ pub enum Proposal {
 #[must_use]
 pub fn propose(text: &str) -> Proposal {
     let t = text.to_lowercase();
-    let hits: Vec<&'static str> = VOCAB.iter()
+    let hits: Vec<&'static str> = VOCAB
+        .iter()
         .filter(|(_, ks)| ks.iter().any(|k| t.contains(k)))
         .map(|(n, _)| *n)
         .collect();
@@ -550,15 +685,16 @@ pub fn propose(text: &str) -> Proposal {
 /// Every unmanaged row with a proposal and the reason it is unmanaged.
 #[must_use]
 pub fn triage(root: &Path) -> Vec<(Task, Kind, Proposal)> {
-    open_tasks(root).into_iter()
+    open_tasks(root)
+        .into_iter()
         .map(|t| {
             let k = classify(&root.join(&t.node), &t.text);
             let mut p = propose(&t.text);
             // A row already living in the node it names is not a move.
-            if let Proposal::Move(n) = p {
-                if t.node.file_name().is_some_and(|f| f == n) {
-                    p = Proposal::Keep;
-                }
+            if let Proposal::Move(n) = p
+                && t.node.file_name().is_some_and(|f| f == n)
+            {
+                p = Proposal::Keep;
             }
             (t, k, p)
         })
@@ -574,27 +710,41 @@ pub fn triage(root: &Path) -> Vec<(Task, Kind, Proposal)> {
 /// was clean beforehand and the branch is not the trunk.
 fn preflight(root: &Path) -> Result<String, String> {
     let git = |args: &[&str]| {
-        std::process::Command::new("git").args(args).current_dir(root).output().ok()
+        std::process::Command::new("git")
+            .args(args)
+            .current_dir(root)
+            .output()
+            .ok()
             .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
     };
-    let branch = git(&["rev-parse", "--abbrev-ref", "HEAD"]).unwrap_or_default();
+    let branch =
+        git(&["rev-parse", "--abbrev-ref", "HEAD"]).unwrap_or_default();
     if branch.is_empty() {
         return Err("not a git repo -- apply commits, so it needs one".into());
     }
-    if !git(&["status", "--porcelain"]).unwrap_or_default().is_empty() {
+    if !git(&["status", "--porcelain"])
+        .unwrap_or_default()
+        .is_empty()
+    {
         return Err("working tree dirty -- commit or stash first, so the \
-                    generated diff is the only thing in the commit".into());
+                    generated diff is the only thing in the commit"
+            .into());
     }
     // Generated code never lands on the trunk directly. This used to REFUSE
     // on main; refusing is the right requirement expressed as an obstacle, so
     // it now satisfies the requirement instead -- the run gets a branch. What
     // moves that branch onto main is `bbx land`, which asks for evidence.
     let secs = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH).map_err(|e| e.to_string())?.as_secs();
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|e| e.to_string())?
+        .as_secs();
     let want = crate::land::run_branch(&branch, secs);
     if want != branch {
-        std::process::Command::new("git").args(["checkout", "-q", "-b", &want])
-            .current_dir(root).status().map_err(|e| e.to_string())?;
+        std::process::Command::new("git")
+            .args(["checkout", "-q", "-b", &want])
+            .current_dir(root)
+            .status()
+            .map_err(|e| e.to_string())?;
         eprintln!("apply: on {branch} -- generated code goes to {want}");
         return Ok(want);
     }
@@ -613,17 +763,36 @@ pub fn apply(root: &Path, max_repair: usize) -> Result<String, String> {
     let branch = preflight(root)?;
     let p = plan(root);
     let step = p.steps.first().ok_or("nothing actionable to apply")?;
-    let (owner, inv) = cited_invariant(step).ok_or_else(|| format!(
-        "{} {} cites no §V id ({}) -- apply drives an INVARIANT, not prose",
-        step.node.display(), step.id, step.cites))?;
+    let (owner, inv) = cited_invariant(step).ok_or_else(|| {
+        format!(
+            "{} {} cites no §V id ({}) -- apply drives an INVARIANT, not prose",
+            step.node.display(),
+            step.id,
+            step.cites
+        )
+    })?;
 
-    eprintln!("apply: {} {} on {branch}\n  invariant {inv} (declared in {})\n  task {}",
-              step.node.display(), step.id,
-              if owner.as_os_str().is_empty() { ".".into() } else { owner.display().to_string() },
-              step.text);
+    eprintln!(
+        "apply: {} {} on {branch}\n  invariant {inv} (declared in {})\n  task {}",
+        step.node.display(),
+        step.id,
+        if owner.as_os_str().is_empty() {
+            ".".into()
+        } else {
+            owner.display().to_string()
+        },
+        step.text
+    );
 
     let node = root.join(&step.node);
-    let log = match crate::tdd::drive_from(root, &node, &root.join(&owner), &inv, &step.text, max_repair) {
+    let log = match crate::tdd::drive_from(
+        root,
+        &node,
+        &root.join(&owner),
+        &inv,
+        &step.text,
+        max_repair,
+    ) {
         Ok(l) => l,
         Err(e) => {
             record_outcome(&step.node, false);
@@ -642,22 +811,41 @@ pub fn apply(root: &Path, max_repair: usize) -> Result<String, String> {
          Generated code. Read the diff -- a green gate is not correctness\n\
          (.:tdd V11), and this loop has twice produced code that passed both\n\
          gates while testing the wrong thing.\n",
-        step.node.file_name().and_then(|s| s.to_str()).unwrap_or("bbx"),
-        step.text, step.node.display(), step.id, log.len(),
-        "cargo test + bbx check");
+        step.node
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("bbx"),
+        step.text,
+        step.node.display(),
+        step.id,
+        log.len(),
+        "cargo test + bbx check"
+    );
 
-    let git = |args: &[&str]| std::process::Command::new("git")
-        .args(args).current_dir(root).status().map_err(|e| e.to_string());
+    let git = |args: &[&str]| {
+        std::process::Command::new("git")
+            .args(args)
+            .current_dir(root)
+            .status()
+            .map_err(|e| e.to_string())
+    };
     git(&["add", "-A"])?;
     let st = std::process::Command::new("git")
-        .args(["commit", "-q", "-m", &body]).current_dir(root)
-        .status().map_err(|e| e.to_string())?;
+        .args(["commit", "-q", "-m", &body])
+        .current_dir(root)
+        .status()
+        .map_err(|e| e.to_string())?;
     if !st.success() {
-        return Err("commit refused by the gate -- generated code is still in \
-                    the tree, uncommitted".into());
+        return Err(
+            "commit refused by the gate -- generated code is still in \
+                    the tree, uncommitted"
+                .into(),
+        );
     }
     let sha = std::process::Command::new("git")
-        .args(["rev-parse", "--short", "HEAD"]).current_dir(root).output()
+        .args(["rev-parse", "--short", "HEAD"])
+        .current_dir(root)
+        .output()
         .map_err(|e| e.to_string())?;
     let sha = String::from_utf8_lossy(&sha.stdout).trim().to_string();
 
@@ -668,11 +856,16 @@ pub fn apply(root: &Path, max_repair: usize) -> Result<String, String> {
     match crate::review::commit(root, &sha) {
         Ok(f) if f.is_empty() => eprintln!("  review: no findings"),
         Ok(f) => {
-            eprintln!("\n  REVIEW DISAGREES WITH THE GATE -- {} finding(s):", f.len());
+            eprintln!(
+                "\n  REVIEW DISAGREES WITH THE GATE -- {} finding(s):",
+                f.len()
+            );
             for (file, x) in &f {
                 eprintln!("    {}: {}: {}", file.display(), x.rule, x.detail);
             }
-            eprintln!("  advisory (review V3). Read the diff before `bbx outcome ... kept`.");
+            eprintln!(
+                "  advisory (review V3). Read the diff before `bbx outcome ... kept`."
+            );
         }
         Err(e) => eprintln!("  review: could not run -- {e}"),
     }
@@ -688,7 +881,11 @@ pub fn apply(root: &Path, max_repair: usize) -> Result<String, String> {
     // `bbx outcome`. A commit is not survival -- three stubs have committed.
     record_outcome(&step.node, false);
     let mut state = crate::state::State::load();
-    state.set("applied", &row_key(step), format!("{} {sha}", row_hash(step)));
+    state.set(
+        "applied",
+        &row_key(step),
+        format!("{} {sha}", row_hash(step)),
+    );
     state.clear_kind("plan"); // the plan that produced this is now stale
     state.save();
     Ok(sha)

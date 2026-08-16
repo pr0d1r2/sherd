@@ -46,7 +46,12 @@ pub fn pack(root: &Path, dir: &Path, depth: Depth) -> std::io::Result<Pack> {
     let own = chain.last().map_or(String::new(), |p| {
         std::fs::read_to_string(p).unwrap_or_default()
     });
-    Ok(Pack { chain, children: fed::edges(&own), cost: tokens::count(&text), text })
+    Ok(Pack {
+        chain,
+        children: fed::edges(&own),
+        cost: tokens::count(&text),
+        text,
+    })
 }
 
 /// The chain ceiling for a node, from `.context-limits`.
@@ -60,7 +65,11 @@ pub fn pack(root: &Path, dir: &Path, depth: Depth) -> std::io::Result<Pack> {
 /// error, not a silent default.
 pub fn ceiling_for(root: &Path, node: &Path) -> Result<u64, String> {
     let rel = node.strip_prefix(root).unwrap_or(node);
-    let key = if rel.as_os_str().is_empty() { "SPEC.md".into() } else { rel.to_string_lossy().to_string() };
+    let key = if rel.as_os_str().is_empty() {
+        "SPEC.md".into()
+    } else {
+        rel.to_string_lossy().to_string()
+    };
     Ok(tokens::Ceilings::load(root)?.for_path(&key))
 }
 
@@ -74,7 +83,9 @@ pub enum Verdict {
 #[must_use]
 pub fn verdict(cost: u64, budget: u64) -> Verdict {
     if cost <= budget {
-        Verdict::Fits { slack: budget - cost }
+        Verdict::Fits {
+            slack: budget - cost,
+        }
     } else {
         Verdict::Over { by: cost - budget }
     }
@@ -89,14 +100,21 @@ mod tests {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
         // .context-limits names src/tdd; the value is read, not assumed.
         let tdd = ceiling_for(root, &root.join("src/tdd")).unwrap();
-        assert!(tdd > tokens::DEFAULT_NODE,
-                "src/tdd is listed and should not fall back to the default: {tdd}");
+        assert!(
+            tdd > tokens::DEFAULT_NODE,
+            "src/tdd is listed and should not fall back to the default: {tdd}"
+        );
         // A new node under src inherits src's ceiling -- prefix matching, so
         // adding a node does not silently drop it to the global default.
-        assert_eq!(ceiling_for(root, &root.join("src/nope")).unwrap(),
-                   ceiling_for(root, &root.join("src")).unwrap());
+        assert_eq!(
+            ceiling_for(root, &root.join("src/nope")).unwrap(),
+            ceiling_for(root, &root.join("src")).unwrap()
+        );
         // A path sharing no listed prefix falls back, which is NOT "no limit".
-        assert_eq!(ceiling_for(root, &root.join("docs")).unwrap(), tokens::DEFAULT_NODE);
+        assert_eq!(
+            ceiling_for(root, &root.join("docs")).unwrap(),
+            tokens::DEFAULT_NODE
+        );
     }
 
     #[test]
@@ -108,6 +126,9 @@ mod tests {
     #[test]
     fn chain_of_repo_root_is_at_least_the_root_spec() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-        assert!(!fed::chain(root, root).is_empty(), "root SPEC.md must exist (V5)");
+        assert!(
+            !fed::chain(root, root).is_empty(),
+            "root SPEC.md must exist (V5)"
+        );
     }
 }
