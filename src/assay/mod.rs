@@ -115,6 +115,65 @@ pub fn test_prompt(inv: &str, sig: &str, preamble: &str) -> String {
     )
 }
 
+/// A deliberately WRONG implementation that still compiles.
+///
+/// The mutant a test must kill. `.:V111` says a self-authored test cannot
+/// grade its own author; this is how that gets a mechanical remedy instead of
+/// a warning -- run the test against a known-wrong body and require it to
+/// FAIL. A test that passes this measured nothing, which is `src/fed:B6`
+/// (`detect_cycles` returning `Vec::new()` under a comment reading "satisfies
+/// the current test suite") caught before it lands rather than after.
+///
+/// Each is the plausible-stub shape: compiles, reads its inputs or ignores
+/// them quietly, returns a fixed or passthrough value.
+///
+/// Returns `None` for an unknown signature rather than a guess -- a mutant
+/// nobody chose would make the measurement meaningless.
+#[must_use]
+pub fn stub_for(sig: &str) -> Option<&'static str> {
+    let name = sig.split('(').next().unwrap_or("").trim();
+    STUBS.iter().find(|(n, _)| *n == name).map(|(_, s)| *s)
+}
+
+/// The mutants, as data. One per corpus signature.
+const STUBS: &[(&str, &str)] = &[
+    ("pub fn working", "pub fn working(_w: u64) -> u64 { 0 }"),
+    (
+        "pub fn bucket",
+        "pub fn bucket(_n: u64) -> &'static str { \"b0\" }",
+    ),
+    ("pub fn is_yes", "pub fn is_yes(_v: &str) -> bool { true }"),
+    (
+        "pub fn verdict",
+        "pub fn verdict(_c: u64, _b: u64) -> Verdict { Verdict::Fits { slack: 0 } }",
+    ),
+    (
+        "pub fn for_path",
+        "pub fn for_path(_r: &[(String, u64)], default: u64, _p: &str) -> u64 { default }",
+    ),
+    (
+        "pub fn checked_working",
+        "pub fn checked_working(_w: u64) -> Option<u64> { Some(0) }",
+    ),
+    ("pub fn sign", "pub fn sign(_n: i64) -> Sign { Sign::Zero }"),
+    (
+        "pub fn abort_budget_ms",
+        "pub fn abort_budget_ms(eta_ms: u64) -> u64 { eta_ms }",
+    ),
+    (
+        "pub fn is_cached",
+        "pub fn is_cached(_t: u64, _m: u64) -> bool { false }",
+    ),
+    (
+        "pub fn parse_limit",
+        "pub fn parse_limit(_l: &str) -> Option<(String, u64)> { None }",
+    ),
+    (
+        "pub fn escape_cell",
+        "pub fn escape_cell(s: &str) -> String { s.to_string() }",
+    ),
+];
+
 /// The same request, prefixed with a real node's lens pack.
 ///
 /// T82, variable 1 of 3 (`.:V108`). R44 measured writing from a ~500 token
@@ -1189,5 +1248,195 @@ mod authorship {
             "a compiling wrong answer is FAIL, never NoCompile"
         );
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod mutants {
+    use super::*;
+
+    /// Every corpus item needs a mutant, or the sweep silently skips it and
+    /// reports a rate over a smaller denominator than it claims (`.:B4`).
+    #[test]
+    fn every_item_has_a_stub() {
+        for it in GEN_CORPUS {
+            assert!(
+                stub_for(it.sig).is_some(),
+                "no mutant for {} -- a skipped item shrinks the denominator",
+                it.sig
+            );
+        }
+    }
+
+    /// THE CONTROL. Each stub must actually be wrong: the hidden tests --
+    /// which are correct by construction -- must FAIL it.
+    ///
+    /// Without this, "the model's test did not kill the stub" is unreadable:
+    /// a stub nothing rejects is not a mutant, it is a second right answer.
+    #[test]
+    fn the_hidden_tests_kill_every_stub() {
+        assert_eq!(control(), Ok(()));
+    }
+
+    fn control() -> Result<(), String> {
+        for it in GEN_CORPUS {
+            let stub = stub_for(it.sig).ok_or("missing stub")?;
+            let g = grade_detail(stub, it.preamble, it.tests, "rustc")?;
+            assert_eq!(
+                g,
+                Grade::Fail,
+                "{} -- a stub the real tests accept is not a mutant",
+                it.sig
+            );
+        }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod kills {
+    use super::*;
+
+    /// Did the model's own test kill a known-wrong implementation?
+    #[derive(Clone, Copy)]
+    struct Kill {
+        /// The authored test FAILED the stub -- it discriminates.
+        killed: bool,
+        /// The authored test would not compile against the stub.
+        broken: bool,
+    }
+
+    fn one(it: &GenItem) -> Result<Kill, String> {
+        let stub = stub_for(it.sig).ok_or("no mutant")?;
+        let t = crate::ollama::generate(&test_prompt(
+            it.sharp,
+            it.sig,
+            it.preamble,
+        ))
+        .map(|r| crate::ollama::rust_block(&r.text))?;
+        // Keep the test itself: T83 discarded its raw material and the next
+        // question could not be asked without re-running (`B1`).
+        log_test(it.sig, &t);
+        let g = grade_detail(stub, it.preamble, &t, "rustc")?;
+        Ok(Kill {
+            killed: g == Grade::Fail,
+            broken: g == Grade::NoCompile,
+        })
+    }
+
+    fn log_test(sig: &str, body: &str) {
+        use std::io::Write;
+        let p = std::path::Path::new("target").join("authored-tests.txt");
+        if let Ok(mut f) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(p)
+        {
+            let _ = writeln!(f, "=== {sig}\n{body}");
+        }
+    }
+
+    fn report(ks: &[Kill]) {
+        let n = ks.len();
+        let killed = ks.iter().filter(|k| k.killed).count();
+        let broken = ks.iter().filter(|k| k.broken).count();
+        let survived = n.saturating_sub(killed).saturating_sub(broken);
+        println!("\nMUTATION SWEEP ({n} authored tests)");
+        println!("  killed the stub   {killed}/{n}  (the test discriminates)");
+        println!(
+            "  stub SURVIVED     {survived}/{n}  (the test measured nothing)"
+        );
+        println!("  test no-compile   {broken}/{n}  (graded nothing at all)");
+    }
+
+    /// Can a self-authored test kill a known-wrong implementation?
+    ///
+    /// `.:V111` says such a test cannot grade its own author. This asks
+    /// whether a MECHANICAL check would have caught that -- run the test
+    /// against a mutant and require RED. If most tests let the stub through,
+    /// the check is the remedy; if most kill it, the fault is elsewhere.
+    #[test]
+    #[ignore]
+    fn authored_tests_vs_mutants() {
+        const RUNS: usize = 3;
+        let mut ks = Vec::new();
+        for run in 1..=RUNS {
+            for it in GEN_CORPUS {
+                measure(run, it, &mut ks);
+            }
+        }
+        report(&ks);
+    }
+
+    /// One item, recorded. An endpoint failure is an ERROR line, never a
+    /// verdict -- a transient must not read as a test that failed to
+    /// discriminate (`src/tdd:V27`).
+    fn measure(run: usize, it: &GenItem, ks: &mut Vec<Kill>) {
+        let name = it.sig.split('(').next().unwrap_or("");
+        match one(it) {
+            Ok(k) => {
+                println!("run {run} · {} · {name}", word(k));
+                ks.push(k);
+            }
+            Err(e) => println!("run {run} · ERROR · {name} · {e}"),
+        }
+    }
+
+    const fn word(k: Kill) -> &'static str {
+        if k.broken {
+            "BROKE"
+        } else if k.killed {
+            "killed"
+        } else {
+            "SURVIVED"
+        }
+    }
+
+    /// Shorthand: `k` killed, `s` survived, `x` did not compile.
+    ///
+    /// Two bool parameters trips `fn_params_excessive_bools`, and the lint
+    /// is right -- `k(false, true)` at a call site says nothing about which
+    /// flag is which, and these two are exactly the pair that must not be
+    /// confused.
+    fn k(spec: char) -> Kill {
+        Kill {
+            killed: spec == 'k',
+            broken: spec == 'x',
+        }
+    }
+
+    #[test]
+    fn the_three_outcomes_are_named_distinctly() {
+        // SURVIVED and BROKE must never read alike: a test that would not
+        // compile graded nothing, while one that let the stub live graded
+        // it and got it wrong. Collapsing them would flatter the model.
+        assert_eq!(word(k('k')), "killed");
+        assert_eq!(word(k('s')), "SURVIVED");
+        assert_eq!(word(k('x')), "BROKE");
+    }
+
+    #[test]
+    fn report_counts_survivors_as_the_remainder() {
+        // `survived` is derived, so an off-by-one here would misstate the
+        // headline. Saturating, because a miscount must not wrap.
+        report(&[k('k'), k('s'), k('x')]);
+        report(&[]);
+    }
+
+    #[test]
+    fn a_vacuous_test_lets_the_stub_live() {
+        // The measurement's own control: a test asserting nothing must be
+        // recorded as SURVIVED, never as a kill.
+        let Some(it) = GEN_CORPUS.first() else {
+            return;
+        };
+        let Some(stub) = stub_for(it.sig) else { return };
+        let vacuous =
+            "#[cfg(test)]\nmod t { #[test] fn a() { assert!(true); } }";
+        assert_eq!(
+            grade_detail(stub, it.preamble, vacuous, "rustc"),
+            Ok(Grade::Pass),
+            "a test that asserts nothing passes a stub -- that is SURVIVED"
+        );
     }
 }
