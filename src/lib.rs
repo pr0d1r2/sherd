@@ -5,6 +5,7 @@
 //! implement (V51).
 
 pub mod cli;
+pub mod code;
 pub mod fed;
 pub mod land;
 pub mod lens;

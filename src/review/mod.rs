@@ -6,7 +6,9 @@
 //!
 //! Each check exists because it would have caught a real commit on this branch.
 
-use crate::tdd::split_module;
+// Source reading lives in `crate::code` -- one owner for both this node and
+// `src/tdd` (`.:B13`). `unwired`'s call detection went with it as `is_called`.
+use crate::code::{is_called, split_module};
 use std::path::Path;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -36,11 +38,7 @@ pub fn unwired(
         // once and read as uncalled (B2).
         // Skip only THIS function's declaration -- not every line starting
         // with `fn`, since a one-line body declares and calls on one line.
-        let declares_f = |l: &str| {
-            l.contains(&format!("fn {f}(")) || l.contains(&format!("fn {f}<"))
-        };
-        let called = crate_src.lines()
-            .any(|l| l.contains(&format!("{f}(")) && !declares_f(l));
+        let called = is_called(crate_src, f);
         let called_in_tests = tests_src.contains(&format!("{f}("));
         (!called && called_in_tests).then(|| Finding {
             rule: "unwired",
@@ -107,17 +105,6 @@ pub fn ignored_input(impl_src: &str, new_fns: &[String]) -> Vec<Finding> {
                              input is usually a stub", ignored.join(", ")),
         })
     }).collect()
-}
-
-/// Public fn names declared in a source region.
-#[must_use]
-pub fn public_fns(src: &str) -> Vec<String> {
-    src.lines()
-        .filter_map(|l| {
-            let t = l.trim().strip_prefix("pub fn ")?;
-            Some(t.split(['(', '<']).next()?.trim().to_string())
-        })
-        .collect()
 }
 
 /// Review one node's module against the checks above.
@@ -299,13 +286,5 @@ mod tests {
     fn accepts_a_fn_that_uses_every_input() {
         let src = "pub fn hint(root: &Path, budget: u64) -> Vec<PathBuf> { vec![] }\n";
         assert!(ignored_input(src, &["hint".into()]).is_empty());
-    }
-
-    #[test]
-    fn public_fns_reads_declarations_only() {
-        let v = public_fns(
-            "pub fn a(x: u8) {}\n// pub fn b() {}\nfn c() {}\npub fn d<T>() {}\n",
-        );
-        assert_eq!(v, vec!["a".to_string(), "d".to_string()]);
     }
 }

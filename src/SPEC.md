@@ -19,6 +19,7 @@ state|one idempotent cached store — pace, telemetry, applied rows|everything e
 slice|distil a document to the part needed to ACT, generated|judging what the slice says|-
 land|run branch → `main` when believability earns it|writing code, judging it, reading the diff|-
 cli|arg dispatch, usage, exit codes|every verb's logic|-
+code|read Rust source as text — split, public fns, call detection, signatures|judging what it reads, `SPEC.md` structure|-
 
 ## §C CONSTRAINTS
 

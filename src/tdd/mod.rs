@@ -34,91 +34,14 @@ pub struct Step {
     pub ms: u128,
 }
 
-/// Calls a test makes that do not exist yet -- the contract step 2 must fill.
-///
-/// Deterministic parse, no model (`.:V18`). A run failed when the test called
-/// `check_edge_depths(root, &edges)` and step 2 invented a different name, which
-/// three repairs could not recover (B12): step 2 was never told what to define.
-#[must_use]
-pub fn expected_calls(test_src: &str, existing: &str) -> Vec<String> {
-    const SKIP: [&str; 18] = [
-        "fn",
-        "if",
-        "for",
-        "while",
-        "match",
-        "let",
-        "return",
-        "assert",
-        "assert_eq",
-        "assert_ne",
-        "panic",
-        "println",
-        "format",
-        "vec",
-        "write",
-        "read",
-        "Some",
-        "Ok",
-    ];
-    let b = test_src.as_bytes();
-    let mut out: Vec<String> = Vec::new();
-    let mut i = 0;
-    while i < b.len() {
-        if !(b[i].is_ascii_alphabetic() || b[i] == b'_') {
-            i += 1;
-            continue;
-        }
-        let start = i;
-        while i < b.len() && (b[i].is_ascii_alphanumeric() || b[i] == b'_') {
-            i += 1
-        }
-        let name = &test_src[start..i];
-        // a call is `name(`; a macro is `name!(`; a method is `.name(`
-        if i >= b.len() || b[i] != b'(' {
-            continue;
-        }
-        if start > 0 && (b[start - 1] == b'.' || b[start - 1] == b'!') {
-            continue;
-        }
-        // `fn name(` is a DEFINITION, not a call -- including the test's own
-        let mut k = start;
-        while k > 0 && (b[k - 1] == b' ' || b[k - 1] == b'\t') {
-            k -= 1
-        }
-        if k >= 2 && &test_src[k - 2..k] == "fn" {
-            continue;
-        }
-        if SKIP.contains(&name) || existing.contains(&format!("fn {name}")) {
-            continue;
-        }
-        // keep the call verbatim, arguments included -- the signature is the point
-        let mut depth = 0usize;
-        let mut j = i;
-        while j < b.len() {
-            if b[j] == b'(' {
-                depth += 1
-            } else if b[j] == b')' {
-                depth -= 1;
-                if depth == 0 {
-                    break;
-                }
-            }
-            j += 1;
-        }
-        let call =
-            test_src[start..(j + 1).min(test_src.len())].replace('\n', " ");
-        let call = call.split_whitespace().collect::<Vec<_>>().join(" ");
-        if !out.contains(&call) {
-            out.push(call)
-        }
-    }
-    out
-}
 /// Moved to `crate::spec`, which owns `SPEC.md` structure. It lived here,
 /// reachable only from the worker path, while `lens::pack` shipped whole
 /// files to every context pack and every budget (`.:B8`).
 pub use crate::spec::rule_depth;
+
+/// Reading Rust source moved to `crate::code`, which owns it for BOTH this
+/// node and `src/review` (`.:B13`). Re-exported so the loop reads unchanged.
+pub use crate::code::{expected_calls, signatures, split_module};
 
 /// Which channel carries an invariant to the writer (`.:R43`, `.:V107`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -357,83 +280,6 @@ pub const GEN_CORPUS: &[GenItem] = &[
         tests: "#[cfg(test)]\nmod t {\n use super::*;\n #[test]\n fn a() { assert_eq!(escape_cell(\" a|b \"), \"a\\\\|b\"); }\n #[test]\n fn b() { assert_eq!(escape_cell(\"plain\"), \"plain\"); }\n #[test]\n fn c() { assert_eq!(escape_cell(\"a|b|c\"), \"a\\\\|b\\\\|c\"); }\n}",
     },
 ];
-
-/// Split a Rust source file at the `#[cfg(test)]` boundary.
-///
-/// One definition, because the code ceiling (root V50) needs exactly this
-/// split -- code and tests counted separately -- and two readings of one rule
-/// is the defect this project exists to end.
-#[must_use]
-pub fn split_module(src: &str) -> (&str, &str) {
-    match src.find("\n#[cfg(test)]") {
-        Some(i) => (&src[..i + 1], &src[i + 1..]),
-        None => (src, ""),
-    }
-}
-
-/// The public SURFACE of an implementation: signatures and type shapes, no
-/// bodies. Step 1 needs this and must not have the bodies -- it is `§I`, not
-/// `§V`. Written after a run where the test author, given only the spec, could
-/// not see `Edge`'s fields and reached for the wrong one (B1 here).
-#[must_use]
-pub fn signatures(impl_src: &str) -> String {
-    let mut out = String::new();
-    let mut depth = 0usize;
-    let mut pending: Vec<&str> = Vec::new();
-    for line in impl_src.lines() {
-        let s = line.trim();
-        // Doc comments ARE the semantics. Bare field names cannot tell a judge
-        // whether `not_owns` holds a path or prose, and that is precisely the
-        // question it has to answer (B4).
-        if s.starts_with("///") {
-            // Inside a type body a doc belongs to the FIELD below it, so emit
-            // it in place; at top level it belongs to the item still to come.
-            if depth > 0 {
-                out.push_str(line);
-                out.push('\n');
-            } else {
-                pending.push(line);
-            }
-            continue;
-        }
-        let is_sig = s.starts_with("pub fn")
-            || s.starts_with("pub struct")
-            || s.starts_with("pub enum")
-            || s.starts_with("pub const");
-        if depth > 0 {
-            // inside a type body: keep field lines, they are part of the shape
-            if s == "}" {
-                depth = 0;
-                out.push_str("}\n");
-            } else if !s.is_empty() {
-                out.push_str(line);
-                out.push('\n');
-            }
-            continue;
-        }
-        if !is_sig {
-            pending.clear();
-        }
-        if is_sig {
-            for d in pending.drain(..) {
-                out.push_str(d);
-                out.push('\n');
-            }
-            if s.starts_with("pub fn") {
-                let sig = s.split('{').next().unwrap_or(s).trim_end();
-                out.push_str(sig);
-                out.push_str(" { /* ... */ }\n");
-            } else {
-                out.push_str(line);
-                out.push('\n');
-                if s.ends_with('{') {
-                    depth = 1;
-                }
-            }
-        }
-    }
-    out
-}
 
 /// Append a test into the tests module. The ONLY function that writes there --
 /// steps 2 and 4 structurally cannot touch the test, which is the guard
@@ -1386,7 +1232,7 @@ pub fn drive_from(
         std::fs::write(&mod_path, insert_impl(&with_test, &code))
             .map_err(|e| e.to_string())?;
         let (g, o) = gate(root)?;
-        let added = crate::review::public_fns(&code);
+        let added = crate::code::public_fns(&code);
         let cur =
             std::fs::read_to_string(&mod_path).map_err(|e| e.to_string())?;
         let (ci, ct) = split_module(&cur);
@@ -2072,24 +1918,6 @@ mod tests {
     const SRC: &str = "pub fn a() {}\n\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn t() {}\n}\n";
 
     #[test]
-    fn expected_calls_finds_the_undefined_one_only() {
-        let t = "#[test]\nfn x() {\n    let e = edges(\"a\");\n    let v = check_edge_depths(root, &e);\n    assert!(v.is_empty());\n    e.len();\n}";
-        let existing = "pub fn edges(text: &str) -> Vec<Edge> { }";
-        let c = expected_calls(t, existing);
-        assert_eq!(c, vec!["check_edge_depths(root, &e)"], "got {c:?}");
-    }
-
-    #[test]
-    fn expected_calls_skips_macros_and_methods() {
-        let t = "assert_eq!(a, b); x.len(); vec![1];";
-        assert!(
-            expected_calls(t, "").is_empty(),
-            "{:?}",
-            expected_calls(t, "")
-        );
-    }
-
-    #[test]
     fn a_worker_prompt_carries_no_supervisor_text() {
         // The supervisor command tells an agent to revert, halt, plant
         // anchors. A 20B asked to write one function must never see it (V13).
@@ -2124,44 +1952,6 @@ mod tests {
             "§T is the plan and must survive"
         );
         assert!(!r.contains("BUGS"), "§B header must be dropped: {r}");
-    }
-
-    #[test]
-    fn signatures_keep_shape_and_drop_bodies() {
-        let src = "/// what it owns\npub struct E {\n    /// a path\n    pub dir: String,\n}\n\n/// does the thing\npub fn go(a: u8) -> bool {\n    secret();\n    true\n}\n";
-        let s = signatures(src);
-        assert!(
-            s.contains("/// a path"),
-            "doc comments ARE the semantics: {s}"
-        );
-        assert!(
-            s.contains("/// does the thing"),
-            "fn docs must survive: {s}"
-        );
-        assert!(
-            s.contains("pub dir: String"),
-            "field shape must survive: {s}"
-        );
-        assert!(
-            s.contains("pub fn go(a: u8) -> bool"),
-            "signature must survive: {s}"
-        );
-        assert!(!s.contains("secret()"), "body must NOT survive: {s}");
-    }
-
-    #[test]
-    fn split_finds_the_test_boundary() {
-        let (i, t) = split_module(SRC);
-        assert!(i.contains("pub fn a"));
-        assert!(!i.contains("cfg(test)"));
-        assert!(t.starts_with("#[cfg(test)]"));
-    }
-
-    #[test]
-    fn split_of_a_file_with_no_tests_is_all_impl() {
-        let (i, t) = split_module("pub fn a() {}\n");
-        assert_eq!(i, "pub fn a() {}\n");
-        assert_eq!(t, "");
     }
 
     #[test]
