@@ -12,16 +12,27 @@
 # threshold raised reflexively trains the reflex instead of catching the
 # problem. Raises belong in a commit with their reason.
 #
-# Measured 2026-08-01, `bbx budget`: root 9,164 · src 9,544 · deepest
-# src/tdd 13,137. Ceilings sit ~20% above each.
-SPEC.md        11000
-src            11500
-src/tdd        16000
-src/fed        14000
-src/ollama     13000
-src/plan       13000
-src/review     12500
-src/lens       12000
-src/tokens     12000
-src/spec       12000
-src/cli        12000
+# RESET 2026-08-19 (T75), ~25% above measured, after T41 made `--depth rule`
+# select and every chain fell ~35%. The numbers these replace were set against
+# packs that carried §R and §B, so they gated nothing: `src/tdd` sat at 10,649
+# under a 16,000 ceiling and could have grown by half unnoticed.
+#
+# Every node carries its own row now. `src/land` and `src/slice` inherited
+# `src` by longest prefix, which IS checked (V104) -- but it left them less
+# slack than their parent, which reads as deliberate and was not.
+#
+# Measured 2026-08-19, `bbx budget`: root 8,401 · src 8,527 · deepest
+# src/tdd 10,649.
+SPEC.md        10500
+src            10700
+src/cli        11200
+src/fed        11700
+src/land       11700
+src/lens       11200
+src/ollama     12100
+src/plan       11700
+src/review     11200
+src/slice      11300
+src/spec       11300
+src/tdd        13300
+src/tokens     11200

@@ -183,6 +183,26 @@ mod tests {
     }
 
     #[test]
+    fn every_node_resolves_to_a_real_ceiling() {
+        // V104's second half, made mechanical: absence must never read as
+        // permission. DEFAULT_NODE is 2,000 -- a NODE budget, impossible as a
+        // CHAIN ceiling -- so a node landing on it means no row covers it,
+        // directly or by prefix, and it would be gated against a number
+        // nobody chose.
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        for node in fed::discover(root) {
+            let c = ceiling_for(root, &node).unwrap();
+            assert_ne!(
+                c,
+                tokens::DEFAULT_NODE,
+                "{} fell back to the node default -- give it a row in \
+                 .context-limits, or a prefix that covers it",
+                node.display()
+            );
+        }
+    }
+
+    #[test]
     fn a_ceiling_is_compared_at_the_boundary_not_near_it() {
         // T10 turns this comparison into an exit code, so off-by-one here is
         // a gate that fires on compliant nodes or misses drifting ones.

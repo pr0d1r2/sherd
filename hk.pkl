@@ -73,6 +73,19 @@ local fast = new Mapping<String, Step> {
     depends = List("slice")
     check = "cargo run -q --bin bbx -- check || { echo 'hk: bbx check found a structural violation -- it names the file, line and rule. Ids are monotonic and never reused: COMPUTE the next one, do not read `tail -1`. Rows sort by id within a section, so append IN ORDER.' >&2; exit 1; }"
   }
+  // V104: a declared limit needs a runner that EXITS NONZERO. `.context-limits`
+  // sat unread from the first commit, and by the time T10 built the comparison
+  // every one of thirteen chains was over (B7). A runner that lives only in a
+  // command someone remembers to type is the same defect one step later.
+  //
+  // The glob is SPEC.md and the limits file, NOT `**/*.rs`: a chain is built
+  // from spec files, so a code-only commit cannot move a budget. Naming the
+  // inputs a step actually reads is V57.
+  ["budget"] {
+    glob = List("**/SPEC.md", ".context-limits")
+    depends = List("check")
+    check = "cargo run -q --bin bbx -- budget || { echo 'hk: a chain is over its ceiling. Every chain pays ROOT, so a row added to the root SPEC.md is billed thirteen times. SPLIT or federate the spec (V50) -- raising the number trains the reflex instead of catching the problem, and a raise belongs in a commit with its reason.' >&2; exit 1; }"
+  }
 }
 
 /// One set today. `all` exists as the name CI and pre-push use, so adding an
