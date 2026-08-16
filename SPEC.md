@@ -216,7 +216,7 @@ T3|.|capability-parity audit `microlith` vs what `bbx` needs. write the comparis
 T4|x|parse `§F` table → (dir, owns, ⊥owns, tokens), escape-aware|I,V1
 T6|x|superseded — edges/chain/discover land; depth & cycle are `src/fed:T4`|V1,V2,V4
 T8|x|bind `itok::estimate`, tier floor `bpe`, method label|V17,V24
-T10|.|`bbx budget` + over-budget exit 1|V6,V7,V8,V104
+T10|x|`bbx budget` + over-budget exit 1|V6,V7,V8,V104
 T12|.|id namespacing + resolver `path:Vn`|V10,V11
 T14|x|`bbx lens` render pack, `--depth rule` default|I,V15,V45
 T16|x|moved — `src/cli:T4`|I

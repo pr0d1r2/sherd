@@ -167,9 +167,18 @@ fn repo_root() -> PathBuf {
     }
 }
 
+/// The `[dir]` argument, resolved AGAINST ROOT.
+///
+/// It used to be handed back verbatim, so `src/tdd` stayed relative while
+/// `fed::discover` returns absolute paths -- the two never compared equal.
+/// `bbx fed` survived that only because the CWD happens to be the repo root;
+/// from a subdirectory it read the wrong `SPEC.md` or none.
+///
+/// `join` leaves an absolute argument alone, so passing a full path still
+/// works.
 fn arg_dir(args: &[String], root: &Path) -> PathBuf {
     args.get(1)
-        .map_or_else(|| root.to_path_buf(), PathBuf::from)
+        .map_or_else(|| root.to_path_buf(), |d| root.join(d))
 }
 
 /// `land`, shared by the verb and by `apply --land`.
@@ -202,7 +211,7 @@ fn usage(msg: &str) -> ExitCode {
 /// 131,072 window, minus measured harness entry cost.
 const WINDOW: u64 = 131_072;
 
-fn budget(root: &Path, _dir: PathBuf) -> ExitCode {
+fn budget(root: &Path, dir: PathBuf) -> ExitCode {
     let work = tokens::working(WINDOW);
     println!(
         "window {WINDOW} · entry {} · working {work}\n",
@@ -210,35 +219,77 @@ fn budget(root: &Path, _dir: PathBuf) -> ExitCode {
     );
     let nodes = fed::discover(root);
     let mut total = 0;
+    let mut examined = 0;
+    let mut over = 0;
     for node in &nodes {
-        match lens::pack(root, node, lens::Depth::Rule) {
-            Ok(p) => {
-                total += p.cost.tokens;
-                let rel = node.strip_prefix(root).unwrap_or(node);
-                let name = if rel.as_os_str().is_empty() {
-                    Path::new(".")
-                } else {
-                    rel
-                };
-                println!(
-                    "  {:<24} chain {:>6} tok  ({} nodes)",
-                    name.display(),
-                    p.cost.tokens,
-                    p.chain.len()
-                );
-            }
+        // §I declares `bbx budget [dir]`. The argument was parsed by
+        // `arg_dir` and then dropped, so every invocation reported the whole
+        // repo -- an interface promised and unread, which is `.:V104`'s own
+        // shape appearing in the command that enforces it.
+        if !node.starts_with(&dir) {
+            continue;
+        }
+        let p = match lens::pack(root, node, lens::Depth::Rule) {
+            Ok(p) => p,
             Err(e) => {
                 eprintln!("bbx: {}: {e}", node.display());
                 return ExitCode::from(1);
             }
-        }
+        };
+        // Re-read per node rather than hoisting the load: the key mapping
+        // lives in `ceiling_for` and copying it here to save twelve reads of
+        // a one-kilobyte file would be two readings of one rule.
+        let ceiling = match lens::ceiling_for(root, node) {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("bbx: {e}");
+                return ExitCode::from(1);
+            }
+        };
+        total += p.cost.tokens;
+        examined += 1;
+        let rel = node.strip_prefix(root).unwrap_or(node);
+        let name = if rel.as_os_str().is_empty() {
+            Path::new(".")
+        } else {
+            rel
+        };
+        // A verdict states direction and distance (`src/lens:V4`): "over"
+        // without "by how much" cannot tell a node that needs splitting from
+        // one that drifted eleven tokens past.
+        let mark = match lens::verdict(p.cost.tokens, ceiling) {
+            lens::Verdict::Fits { .. } => String::new(),
+            lens::Verdict::Over { by } => {
+                over += 1;
+                format!("  OVER by {by}")
+            }
+        };
+        println!(
+            "  {:<24} chain {:>6} tok  ({} nodes)  ceiling {ceiling:>6}{mark}",
+            name.display(),
+            p.cost.tokens,
+            p.chain.len()
+        );
     }
     // V48: say what was examined, not only what failed.
     println!(
-        "\n  {} nodes examined · {total} tok if all chains loaded",
-        nodes.len()
+        "\n  {examined} nodes examined · {total} tok if all chains loaded \
+         · {over} over ceiling"
     );
-    ExitCode::SUCCESS
+    // Examining NOTHING is not passing. A dir naming no node printed an
+    // empty table and exited 0, which is indistinguishable from a clean
+    // repo -- the same vacuous-pass shape as `src/tdd:V26`.
+    if examined == 0 {
+        eprintln!("bbx: {} matched no node", dir.display());
+        return ExitCode::from(2);
+    }
+    // T10/V104: the number exists to be COMPARED. Printing it and exiting 0
+    // is what let the chains drift over unseen (B7).
+    if over > 0 {
+        ExitCode::from(1)
+    } else {
+        ExitCode::SUCCESS
+    }
 }
 
 fn lens_cmd(root: &Path, dir: &Path) -> ExitCode {

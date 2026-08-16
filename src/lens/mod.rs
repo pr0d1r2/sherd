@@ -124,6 +124,28 @@ mod tests {
     }
 
     #[test]
+    fn the_root_ceiling_comes_from_its_spec_row_not_the_default() {
+        // `.context-limits` names the root `SPEC.md`, while a node is
+        // addressed as `.` -- so the lookup has to bridge those two spellings
+        // or the root silently falls to DEFAULT_NODE and reads as 5x over
+        // (`.:V104`: absence must never read as a verdict).
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let c = ceiling_for(root, root).unwrap();
+        assert!(
+            c > tokens::DEFAULT_NODE,
+            "root must resolve to its SPEC.md row, got the default: {c}"
+        );
+    }
+
+    #[test]
+    fn a_ceiling_is_compared_at_the_boundary_not_near_it() {
+        // T10 turns this comparison into an exit code, so off-by-one here is
+        // a gate that fires on compliant nodes or misses drifting ones.
+        assert_eq!(verdict(500, 500), Verdict::Fits { slack: 0 });
+        assert_eq!(verdict(501, 500), Verdict::Over { by: 1 });
+    }
+
+    #[test]
     fn chain_of_repo_root_is_at_least_the_root_spec() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
         assert!(
