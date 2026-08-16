@@ -185,6 +185,31 @@ pub fn gen_prompt(inv: &str, sig: &str, preamble: &str) -> String {
     )
 }
 
+/// The same request, prefixed with a real node's lens pack.
+///
+/// T82, variable 1 of 3 (`.:V108`). R44 measured writing from a ~500 token
+/// prompt; `bbx tdd` sends the node's whole chain, ~10k after T41. R15 and
+/// R16 measured what a fat pack COSTS in wall clock. Whether it makes the
+/// model WORSE at writing is a different question, and the one the `§G`
+/// TARGET line rests on -- federation is only worth having if the context it
+/// assembles does not degrade the work.
+///
+/// Everything after the pack is byte-identical to [`gen_prompt`], so the pack
+/// is the only variable.
+#[must_use]
+pub fn gen_prompt_in_context(
+    pack: &str,
+    inv: &str,
+    sig: &str,
+    preamble: &str,
+) -> String {
+    format!(
+        "Here is the specification of the module you are working in.\n\n\
+         {pack}\n\n---\n\n{}",
+        gen_prompt(inv, sig, preamble)
+    )
+}
+
 /// Compile a candidate against tests it never saw, and run them.
 ///
 /// The grader is `rustc`, never a model. A model grader would confound this
@@ -1855,6 +1880,90 @@ mod tests {
             );
         }
         println!("\n  class predictions correct: {hits}/{}", GEN_CORPUS.len());
+    }
+
+    #[test]
+    fn context_is_the_only_variable_between_the_two_prompts() {
+        // V108: the two conditions must differ in exactly one thing. If the
+        // request itself changed, a difference in score would be
+        // unattributable -- which is the whole reason T82 was split from
+        // T83 and T84.
+        let it = &GEN_CORPUS[0];
+        let bare = gen_prompt(it.sharp, it.sig, it.preamble);
+        let ctx =
+            gen_prompt_in_context("PACK BODY", it.sharp, it.sig, it.preamble);
+        assert!(
+            ctx.ends_with(&bare),
+            "the request must survive verbatim after the pack"
+        );
+        assert!(ctx.contains("PACK BODY"), "the pack must be carried");
+        assert!(
+            ctx.len() > bare.len(),
+            "context condition must actually be larger"
+        );
+    }
+
+    /// T82. Same items, same hidden tests, same sharp wording -- the node's
+    /// real lens pack is the only thing that changes.
+    #[test]
+    #[ignore]
+    fn context_titration() {
+        const RUNS: usize = 3;
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        // A real pack, at the depth a worker actually gets (`.:V45`).
+        let pack = crate::lens::pack(
+            root,
+            &root.join("src/tokens"),
+            crate::lens::Depth::Rule,
+        )
+        .expect("lens pack must build");
+        println!("context pack: {} tok", pack.cost.tokens);
+        let mut bare_ok = 0;
+        let mut ctx_ok = 0;
+        for run in 1..=RUNS {
+            for it in GEN_CORPUS {
+                for with_ctx in [false, true] {
+                    let p = if with_ctx {
+                        gen_prompt_in_context(
+                            &pack.text,
+                            it.sharp,
+                            it.sig,
+                            it.preamble,
+                        )
+                    } else {
+                        gen_prompt(it.sharp, it.sig, it.preamble)
+                    };
+                    let r = crate::ollama::generate(&p)
+                        .expect("endpoint unreachable -- BBX_ENDPOINT");
+                    let code = crate::ollama::rust_block(&r.text);
+                    let pass = grade(&code, it.preamble, it.tests, "rustc")
+                        .expect("rustc must RUN -- V26");
+                    if pass {
+                        if with_ctx {
+                            ctx_ok += 1;
+                        } else {
+                            bare_ok += 1;
+                        }
+                    }
+                    println!(
+                        "run {run} · {:5} · {} · {} tok · {}",
+                        if with_ctx { "ctx" } else { "bare" },
+                        if pass { "PASS" } else { "fail" },
+                        r.prompt_tokens,
+                        it.sig
+                            .split('(')
+                            .next()
+                            .unwrap_or("")
+                            .trim_start_matches("pub fn ")
+                    );
+                }
+            }
+        }
+        let n = RUNS * GEN_CORPUS.len();
+        println!(
+            "\nCONTEXT TITRATION (pack {} tok)\n  bare {bare_ok}/{n}\n  ctx  {ctx_ok}/{n}",
+            pack.cost.tokens
+        );
     }
 
     #[test]
