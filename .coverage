@@ -1,0 +1,21 @@
+# Line coverage, ratcheted. This number may go UP, never down.
+#
+# MEASURED 2026-08-19 at adoption: 64.76% lines, 65.01% regions, 70.80%
+# functions (R50). The floor starts AT the measurement rather than at a
+# target, because a gate nobody can pay down gets bypassed -- which is .:B6,
+# and which the clippy ratchet already avoided by measuring 290 violations
+# before choosing a strategy.
+#
+# 98% is the DESTINATION, recorded in §C. This is the route.
+#
+# A percentage cannot tell a test that ASSERTS behaviour from one that merely
+# EXECUTES lines. `src/review:negative_only` exists because a detector was
+# tested only on the empty case and a function returning `Vec::new()` passed.
+# Raising this number rewards that shape, so it is the SECOND layer: T89's
+# pub-fn pairing check is the first.
+#
+# By node at adoption -- `cli` is the lever, at 445 uncovered lines:
+#   code 98.3 · lens 94.5 · spec 92.5 · tokens 88.9 · state 88.0 · fed 87.1
+#   ollama 70.9 · tdd 69.0 · plan 66.5 · slice 63.6 · review 63.0
+#   land 55.2 · assay 54.0 · cli 0.0
+lines 64.76
