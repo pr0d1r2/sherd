@@ -770,11 +770,21 @@ pub fn drive_run(r: &Run) -> Result<Vec<Step>, String> {
             continue;
         }
 
+        // The row asks for a function that does NOT exist yet -- that is what
+        // a RED test IS. Unsaid, the judge reads the call as a mistake and
+        // says NO to every row that ADDS a function (B28).
+        let red_note = named_fn(task).map_or(String::new(), |n| {
+            format!(
+                "`{n}` does NOT exist yet: this is the RED step, writing it is \
+                 the next one, so a call to it is EXPECTED and is not a reason \
+                 to answer NO. "
+            )
+        });
         let verdict = c.run(
             &format!(
                 "{NOTATION}\n--- data model ---\n{surface}\n--- already available to a test ---\n{in_scope}\n\nInvariant:\n  {inv}\n\n\
              Proposed test:\n```rust\n{test_fn}\n```\n\n\
-             Answer YES only if BOTH hold: (a) the test exercises the quantity the \
+             {red_note}Answer YES only if BOTH hold: (a) the test exercises the quantity the \
              invariant is actually about -- check the field names against the data model \
              above, a test asserting on the wrong field proves nothing; and (b) an \
              implementation violating the invariant would fail it. If the function \
