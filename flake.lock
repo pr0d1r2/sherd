@@ -1,5 +1,30 @@
 {
   "nodes": {
+    "nix-hk": {
+      "inputs": {
+        "nixpkgs": [
+          "nix-hk",
+          "nixpkgs-lock",
+          "nixpkgs"
+        ],
+        "nixpkgs-lock": [
+          "nixpkgs-lock"
+        ]
+      },
+      "locked": {
+        "lastModified": 1786698718,
+        "narHash": "sha256-qNYIs7PaqYNQ362eYzd+7QwCpmDsGixSK2SYQJdlWXE=",
+        "owner": "pr0d1r2",
+        "repo": "nix-hk",
+        "rev": "a687c1404575d67f425e17c6bee9ad75dfa14728",
+        "type": "github"
+      },
+      "original": {
+        "owner": "pr0d1r2",
+        "repo": "nix-hk",
+        "type": "github"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1786535285,
@@ -36,6 +61,7 @@
     },
     "root": {
       "inputs": {
+        "nix-hk": "nix-hk",
         "nixpkgs": [
           "nixpkgs-lock",
           "nixpkgs"

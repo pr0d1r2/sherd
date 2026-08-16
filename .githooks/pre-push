@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# Same rule as pre-commit, one hook later: `hk.pkl`'s `pre-push` set.
+#
+# It exists because `commit` and `push` are separate events and this repo has
+# been burned by treating them as one: B17 chained `commit && push` where the
+# commit ABORTED and the push shipped the OLD head, then B20 repeated it three
+# hours after recording it. A push-side gate checks the thing actually being
+# published, whatever the commit did.
+set -e
+
+if ! command -v hk >/dev/null 2>&1; then
+  echo "" >&2
+  echo "pre-push REFUSED: hk is not on PATH -- refusing to pass unverified" >&2
+  echo "  fix: \`direnv allow\`, or \`nix develop\`, then push from that shell." >&2
+  echo "       A gate that cannot RUN has not passed (tdd V26)." >&2
+  echo "" >&2
+  echo "  Never \`--no-verify\`. The gate refusing is the system working." >&2
+  exit 1
+fi
+
+exec hk run pre-push --from-hook "$@"

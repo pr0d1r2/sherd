@@ -1,0 +1,109 @@
+/// blackbox's gate, defined ONCE.
+///
+/// Every op below is a plain cargo command a human can paste into a shell. hk
+/// decides *when* they run -- which files changed, which hook, in what order --
+/// and never hides *what* runs, so a verdict never rests on the runner's own
+/// logic.
+///
+/// This file REPLACED a hand-written `.githooks/pre-commit` that ran the same
+/// ops unconditionally. What it buys: the ops are now reachable from CI and by
+/// hand (`hk check`), they are file-scoped so a SPEC-only commit skips the
+/// compile, and the fix half (`cargo fmt`) is declared next to the check half
+/// instead of living in a refusal message.
+///
+/// The schema is VENDORED at `pkl/Config.pkl` rather than fetched from a
+/// `package://` URL at eval time: the gate must run with no network, because a
+/// gate that needs one is a gate that goes soft on a plane.
+amends "pkl/Config.pkl"
+
+/// Success is silence. Output that always appears is output nobody reads,
+/// which is how a real failure hides in noise everyone learned to scroll past.
+///
+/// `fail_fast` locally because the loop is cheap, so the FIRST failure is the
+/// most useful thing to surface, and `depends` orders steps cheapest-first so
+/// it arrives fast.
+fail_fast = true
+
+env {
+  ["HK_HIDE_WHEN_DONE"] = "true"
+}
+
+/// `depends` chains the cargo steps deliberately. Cargo takes a lock on the
+/// target directory, so two cargo jobs launched in parallel do not run in
+/// parallel -- the second blocks on "Blocking waiting for file lock on build
+/// directory", which READS AS A HANG.
+local fast = new Mapping<String, Step> {
+  ["fmt"] {
+    glob = List("**/*.rs")
+    check = "cargo fmt --check"
+    fix = "cargo fmt"
+  }
+  // `-D warnings` is passed AFTER `--`, so it applies to this crate and not to
+  // `../itok`. RUSTFLAGS was the old hook's way and it reached every path dep:
+  // itok landing two `dead_code` warnings of its own turned blackbox's gate red
+  // for code blackbox does not own.
+  ["clippy"] {
+    glob = List("**/*.rs")
+    depends = List("fmt")
+    check = "cargo clippy --all-targets -- -D warnings"
+  }
+  ["test"] {
+    // SPEC.md and every node's SPEC.md are inputs: `src/spec`, `src/fed` and
+    // `src/lens` tests READ them, and `src/lib.rs` reads `Cargo.toml`. A step's
+    // glob must name every input its tests read, not just the language they are
+    // written in -- else a spec-only commit skips the tests whose whole subject
+    // is the spec.
+    glob = List("**/*.rs", "**/SPEC.md", "Cargo.toml", ".context-limits")
+    depends = List("clippy")
+    check = "cargo test"
+  }
+  // THE DOGFOOD. blackbox checks its own federated spec with the binary being
+  // built, so a rule this repo cannot pass is a rule it cannot ship.
+  //
+  // `cargo run` rather than `./target/debug/bbx`: `cargo test` does NOT refresh
+  // the binary, so the path form gates a stale build (`src/tdd:B3`).
+  ["slice"] {
+    glob = List("**/*.rs", "**/SPEC.md", ".bbx-slices")
+    depends = List("test")
+    check = "cargo run -q --bin bbx -- slice --check || { echo 'hk: a distilled slice has drifted from its source. Run `bbx slice` to regenerate, then `git add` the result. Never hand-edit a generated slice -- that IS the drift.' >&2; exit 1; }"
+    fix = "cargo run -q --bin bbx -- slice"
+  }
+  ["check"] {
+    glob = List("**/*.rs", "**/SPEC.md", ".spec-records")
+    depends = List("slice")
+    check = "cargo run -q --bin bbx -- check || { echo 'hk: bbx check found a structural violation -- it names the file, line and rule. Ids are monotonic and never reused: COMPUTE the next one, do not read `tail -1`. Rows sort by id within a section, so append IN ORDER.' >&2; exit 1; }"
+  }
+}
+
+/// One set today. `all` exists as the name CI and pre-push use, so adding an
+/// expensive axis later (coverage, a matrix) changes this file and nothing that
+/// calls it.
+local all = (fast) {
+}
+
+hooks {
+  /// `stash = "git"` is correctness, not speed -- without it a partially staged
+  /// file (`git add -p`) is checked as it looks in the WORKTREE, giving a
+  /// verdict about code you are not committing.
+  ///
+  /// The hooks in `.githooks/` are TRACKED FILES, not generated ones, and they
+  /// REFUSE when hk is missing rather than skipping. blackbox's own V26 says a
+  /// gate that cannot run has not passed, and B17/B20/B24 are three recordings
+  /// of that exact failure shape.
+  ["pre-commit"] {
+    fix = true
+    stash = "git"
+    steps = fast
+  }
+  ["pre-push"] {
+    steps = all
+  }
+  /// What `hk check` runs -- the entry point for CI and for a by-hand full run.
+  ["check"] {
+    steps = all
+  }
+  ["fix"] {
+    fix = true
+    steps = all
+  }
+}
