@@ -686,6 +686,114 @@ mod tests {
         }
     }
 
+    /// A transport that answers with a canned NDJSON stream.
+    struct Canned(String);
+
+    impl Transport for Canned {
+        fn post(
+            &self,
+            _u: &str,
+            _b: &str,
+            _t: Duration,
+        ) -> Result<Box<dyn BufRead + Send>, String> {
+            Ok(Box::new(std::io::Cursor::new(self.0.clone().into_bytes())))
+        }
+    }
+
+    /// Generous, so the pace escalation never fires and the test measures
+    /// parsing rather than wall clock.
+    fn slow_eta() -> Eta {
+        Eta {
+            prefill_s: 600.0,
+            decode_s: 600.0,
+            gen_est: 100,
+        }
+    }
+
+    fn drain(t: &dyn Transport) -> Result<Reply, String> {
+        generate_via(
+            t,
+            "p",
+            "test",
+            Sampling::candidate(0),
+            slow_eta(),
+            &mut |_| {},
+        )
+    }
+
+    #[test]
+    fn a_streamed_reply_is_assembled_from_its_chunks() {
+        // The counts arrive ONLY on the final frame, so a parser that stopped
+        // at the first `done` field or ignored the tail would report zero
+        // tokens for a real call -- and `was_cached` and every pace estimate
+        // are computed from them.
+        let body = concat!(
+            "{\"response\":\"pub fn \",\"done\":false}\n",
+            "\n",
+            "{\"response\":\"x() {}\",\"done\":false}\n",
+            "{\"response\":\"\",\"done\":true,\"prompt_eval_count\":1234,\
+             \"eval_count\":56,\"load_duration\":0}\n"
+        );
+        let r = drain(&Canned(body.into()));
+        let Ok(r) = r else {
+            unreachable!("canned stream must parse")
+        };
+        assert_eq!(r.text, "pub fn x() {}", "chunks concatenate in order");
+        assert_eq!(r.prompt_tokens, 1234, "counts come off the final frame");
+        assert_eq!(r.eval_tokens, 56);
+    }
+
+    #[test]
+    fn reasoning_is_kept_apart_from_the_answer() {
+        // `thinking` must never leak into `text`: the answer is fenced code
+        // that gets compiled, and reasoning prose in it would not build.
+        let body = concat!(
+            "{\"thinking\":\"let me think\",\"done\":false}\n",
+            "{\"response\":\"fn a(){}\",\"done\":false}\n",
+            "{\"response\":\"\",\"done\":true,\"eval_count\":2}\n"
+        );
+        let Ok(r) = drain(&Canned(body.into())) else {
+            unreachable!("canned stream must parse")
+        };
+        assert_eq!(r.text, "fn a(){}");
+        assert_eq!(r.thinking, "let me think");
+    }
+
+    #[test]
+    fn a_transport_failure_is_an_error_and_never_an_empty_reply() {
+        // `assay:V1`: a call that did not RUN says nothing. An empty `Reply`
+        // here would be graded as a wrong answer and read as the model
+        // failing, which is `assay:B1` costing forty minutes.
+        let t = Flaky {
+            fail_times: std::cell::Cell::new(1),
+            body: String::new(),
+        };
+        assert!(drain(&t).is_err(), "a dead transport is an ERROR");
+    }
+
+    #[test]
+    fn a_malformed_frame_is_an_error_and_not_a_silent_skip() {
+        // A line that is not JSON means the stream is not what this client
+        // thinks it is. Skipping it would silently truncate the answer.
+        let body = "{\"response\":\"a\",\"done\":false}\nnot json at all\n";
+        assert!(drain(&Canned(body.into())).is_err());
+    }
+
+    #[test]
+    fn the_longest_fenced_block_wins_and_a_bare_reply_survives() {
+        // The model prefixes prose and sometimes emits two blocks -- a short
+        // example and the real answer. Taking the FIRST would compile the
+        // example. Taking none when unfenced would discard a correct reply.
+        assert_eq!(rust_block("no fence here"), "no fence here");
+        assert_eq!(rust_block("pre\n```rust\nfn a(){}\n```\npost"), "fn a(){}");
+        let two =
+            "```\nfn a(){}\n```\ntext\n```rust\nfn long(){ let x = 1; }\n```";
+        assert_eq!(rust_block(two), "fn long(){ let x = 1; }");
+        // An unterminated fence is not a block: fall back to the whole text
+        // rather than returning nothing.
+        assert_eq!(rust_block("```rust\nfn a(){}"), "```rust\nfn a(){}");
+    }
+
     #[test]
     fn a_transport_can_be_substituted_and_made_to_fail() {
         let t = Flaky {
