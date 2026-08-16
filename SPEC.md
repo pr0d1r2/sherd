@@ -94,6 +94,9 @@ R30|quality parity|when the monolith SUCCEEDS its output matches the decomposed 
 R31|scale curve|MONO call grows w/ BODIES, DECOMP max bounded by SIGNATURES. impl 375→5,218 tok: ratio 1.1x · 1.1x · 1.2x · 1.6x · 1.9x · 3.4x (predicted, no inference)|computed over 6 nodes
 R32|scale, measured|large node (impl 5,218): MONO 9,029 tok one call, FAILED `E0425` · DECOMP max 3,155, GREEN = 2.9x on max call. small node (impl 1,118): 2.1x ∴ the gap WIDENS w/ node size|measured
 R33|total ⊥ cheaper|DECOMP total varies w/ retries — 8,558 (5 trips) & 12,909 (7 trips) vs MONO 9,029 ∴ total cost is ⊥ a reliable win. MAX CALL is the consistent one|measured
+R34|target box moved|target = 192.168.0.24, ollama 0.32.1, `gpt-oss:20b` 11.98G resident, `size_vram` = `size` ∴ 100% GPU ⊥ CPU spill, ctx 131,072 ALLOCATED. same residency profile as R10 (.181, 0.32.3) ∴ the KV arithmetic of R11 carries over unchanged|`/api/ps` + `/api/version` @ .24, measured
+R35|prefill is 4x slower here|373 tok/s @ 9,048 · 320 @ 17,846 · 247 @ 36,070 vs R17's 1,519 / 1,233 / 941 ∴ .24 is 3.8-4.1x SLOWER at every size. superlinearity HOLDS: 3.99x tokens costs 6.03x time (R17: 4.09x → 6.59x) ∴ R17's SHAPE generalizes across hardware, its RATE ⊥. a rate is a fact about ONE box|`/api/generate` `prompt_eval_*`, 3 sizes, cache defeated by a unique prefix
+R36|prefill dominance rises|decode 26-33 tok/s (`pace decode` carried 50 from .181). 36k pack = 146.3s prefill vs ~13s for a 400-tok reply = 92% prefill, where R16 measured 83% @ 28k on .181 ∴ SLOWER hardware makes the small-pack thesis STRONGER, ⊥ weaker — the penalty for a fat pack scales with how slow prefill is|derived from R35 + measured `eval_duration`
 
 ## §V INVARIANTS
 
