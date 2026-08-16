@@ -24,6 +24,24 @@ Then install the gate:
 git config core.hooksPath .githooks
 ```
 
+The hooks in `.githooks` delegate to [`hk`](https://hk.jdx.dev); the ops they
+run are declared in `hk.pkl` and nowhere else. `hk` comes from the `nix-hk`
+flake input, because nixos-26.05 ships no `hk` of its own — so **commit and
+push from inside the dev shell**. Outside it the hooks refuse rather than
+skip: this repo has no CI, so they are the gate of record, and a gate that
+cannot run has not passed.
+
+`flake.nix` declares a substituter for the prebuilt `hk`. Nix only honours it
+for users in `trusted-users`; everyone else gets a source build, which works
+but is slow the first time.
+
+To run the whole set by hand, or from CI:
+
+```bash
+hk check --all                   # fmt, clippy -D warnings, test, slice, check
+hk fix                           # the fixable half: cargo fmt, bbx slice
+```
+
 ## The loop
 
 ```bash
