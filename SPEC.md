@@ -252,7 +252,7 @@ T70|x|V101 runner — path deps limited to the one recorded exception (`itok`)|V
 T71|.|publish or public-mirror `itok` ∴ ⊥ path dep left, & `packages.default` becomes buildable|V101,R20
 T72|x|gate → `hk` from `nix-hk`, ops in `hk.pkl`, `pre-commit` + `pre-push`, fmt & clippy gated for the 1st time|V26,V82,V102
 T73|.|`/titrate` machinery — `.bbx-frontier` record, believability re-keyed node → SHAPE, cost ledger w/ the denominator named (`.:B4`)|V103,V60
-T74|.|titrate the JUDGE upward until it FAILS — longer fn, weaker `§V`, ⊥-obvious stub. R38: a corpus that never misses locates no boundary|V103,R37,R38
+T74|x|titrate the JUDGE upward until it FAILS — longer fn, weaker `§V`, ⊥-obvious stub. R38: a corpus that never misses locates no boundary|V103,R37,R38
 
 ## §B BUGS
 
