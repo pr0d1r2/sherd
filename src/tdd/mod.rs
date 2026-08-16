@@ -1363,9 +1363,21 @@ mod loop_tests {
     }
 
     /// Build the scratch repo and hand back its root and node.
-    fn scratch() -> Result<(std::path::PathBuf, std::path::PathBuf), String> {
+    ///
+    /// Unique per INSTANCE, not per process. Keying on the pid alone gave
+    /// every test in the binary the same directory, so the second caller
+    /// raced the first and one `remove_dir_all` deleted a tree the other was
+    /// still reading (B25). `src/review:V6` is the rule and `TestRepo`
+    /// already carried the remedy; this node did not have it because exactly
+    /// one test used the fixture.
+    fn scratch(
+        tag: &str,
+    ) -> Result<(std::path::PathBuf, std::path::PathBuf), String> {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static N: AtomicUsize = AtomicUsize::new(0);
+        let n = N.fetch_add(1, Ordering::Relaxed);
         let dir = std::env::temp_dir()
-            .join(format!("bbx-loop-{}", std::process::id()));
+            .join(format!("bbx-loop-{tag}-{}-{n}", std::process::id()));
         let node = dir.join("node");
         node_fixture(&node)?;
         repo_fixture(&dir)?;
@@ -1373,7 +1385,7 @@ mod loop_tests {
     }
 
     fn drive_a_scripted_run() -> Result<(), String> {
-        let (dir, node) = scratch()?;
+        let (dir, node) = scratch("repair")?;
         let cargo = fake_cargo(&dir, 1)?;
         let t = script();
         let base = Run::new(&dir, &node, "V1", "add double()")
@@ -1386,7 +1398,104 @@ mod loop_tests {
         let after = std::fs::read_to_string(node.join("mod.rs"))
             .map_err(|e| format!("read back: {e}"))?;
         let _ = std::fs::remove_dir_all(&dir);
+        eprintln!("REPAIR OUTCOME: {out:?}");
         check_outcome(&out, &after)
+    }
+
+    /// A run where the candidate's gate goes RED, so step 4 has to repair.
+    ///
+    /// The repair loop was 60 lines nothing had ever executed. It is the part
+    /// of the loop that EDITS code it previously wrote, and `B5` is it
+    /// guessing wrong about where its own insertion went -- so it is the most
+    /// dangerous stretch in the node and it was reachable only with an
+    /// endpoint and a genuinely failing gate.
+    fn repair_script() -> Scripted {
+        Scripted::new(&[
+            "```rust\n#[test]\nfn doubles() { assert_eq!(double(2), 4); }\n```",
+            "YES it exercises the invariant",
+            "```rust\npub fn double(n: u8) -> u8 { n + n }\n```",
+            "```rust\npub fn double(n: u8) -> u8 { n * 2 }\n```",
+            "YES it reads its input",
+        ])
+    }
+
+    #[test]
+    fn a_red_gate_sends_the_loop_through_repair() {
+        assert_eq!(drive_with_one_repair(), Ok(()));
+    }
+
+    /// Build a run over `dir`/`node` with a scripted transport and gate.
+    fn scripted_run<'a>(
+        dir: &'a Path,
+        node: &'a Path,
+        cargo: &str,
+        repairs: usize,
+    ) -> Run<'a> {
+        Run::new(dir, node, "V1", "add double()")
+            .with_cargo(cargo)
+            .repairs(repairs)
+    }
+
+    fn drive_with_one_repair() -> Result<(), String> {
+        let (dir, node) = scratch("repair")?;
+        // RED twice: once for step 3's required red, once for the candidate,
+        // so the repair round-trip is what turns it green.
+        let cargo = fake_cargo(&dir, 2)?;
+        let t = repair_script();
+        let base = scripted_run(&dir, &node, &cargo, 1);
+        let out = drive_run(&Run {
+            transport: &t,
+            ..base
+        });
+        let after = std::fs::read_to_string(node.join("mod.rs"))
+            .map_err(|e| format!("read back: {e}"))?;
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(out.is_ok(), "a repaired run that goes green lands: {out:?}");
+        assert_repaired_body_landed(&after);
+        Ok(())
+    }
+
+    /// The repaired body is what lands, and the first attempt is GONE.
+    fn assert_repaired_body_landed(after: &str) {
+        assert!(
+            after.contains("n * 2"),
+            "the REPAIRED body is what lands, not the first attempt: {after}"
+        );
+        assert!(
+            !after.contains("n + n"),
+            "repair REPLACES its own previous insertion rather than appending \
+             beside it -- appending would duplicate the definition (B5): {after}"
+        );
+    }
+
+    /// The gate never goes green, and repairs run out.
+    ///
+    /// The exhaustion path must REPORT what was tried. Landing a red tree
+    /// because the loop gave up would be the worst of both -- generated code
+    /// on the branch and no verdict about it.
+    #[test]
+    fn repair_exhaustion_reports_rather_than_landing_a_red_tree() {
+        assert_eq!(exhausted_repairs_do_not_pass(), Ok(()));
+    }
+
+    fn exhausted_repairs_do_not_pass() -> Result<(), String> {
+        let (dir, node) = scratch("exhaust")?;
+        // Red for longer than the loop has repairs, so it runs out.
+        let cargo = fake_cargo(&dir, 9)?;
+        let t = repair_script();
+        let base = scripted_run(&dir, &node, &cargo, 1);
+        let out = drive_run(&Run {
+            transport: &t,
+            ..base
+        });
+        let _ = std::fs::remove_dir_all(&dir);
+        // The blind judge is SKIPPED on a red gate -- asking a judge to
+        // confirm a refusal costs a call to learn nothing.
+        assert!(
+            out.is_err(),
+            "an exhausted repair reports, never a silent pass: {out:?}"
+        );
+        Ok(())
     }
 
     /// The loop reached the END: authored a test, judged it, saw the gate go
