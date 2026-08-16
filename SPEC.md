@@ -53,6 +53,8 @@ src|code nodes — tokens, spec, fed, lens facades & logic|inference harness, en
 - file: `.context-limits` — per-path ceilings, `itok` format, reused ⊥ reinvented
 - file: `.spec-records` — closed-option baseline, `microlith --records`
 - file: `.claude/commands/introspect.md` — `/introspect`, ONE oversight cycle. loop-safe, halts w/ a recorded reason
+- file: `.claude/commands/titrate.md` — `/titrate`, granularity descent. attempt → enrich pack | split task. floor = VERIFIABILITY ⊥ size
+- file: `.bbx-frontier` — `shape rung= kind= pack= sig= tests= tried= kept=`. TRACKED, ⊥ `.bbx-state`: learning that dies at the clone boundary ⊥ learning
 - file: `AGENTS.md` — supervisor class. auto-loaded by Codex & Claude, ⊥ reachable by a worker prompt (V97)
 - env: `BBX_MODEL` (`gpt-oss:20b`), `BBX_ENDPOINT` (`http://localhost:11434`)
 - lib: `microlith::check_spec(&text,&records)`, `microlith::fmt`, `::anchors`
@@ -197,6 +199,7 @@ V74: §C claims ! have a runner. `fed::walk` contradicted §C for a whole sessio
 V75: format facts read from the CHECKER's own source, ⊥ a vendored `FORMAT.md`. the local copy was 6 sections while the dep shipped 7 (B2)
 V101: a dep ! resolve to an IMMUTABLE artifact — registry version + lock checksum. a sibling PATH dep is a shared working tree ∴ the gate's green is true only for the INSTANT it ran & expires silently when the sibling moves (B5). a new path dep ! carry a §B-recorded reason
 V102: a gate ! declare its OP SET as data, ⊥ bury it in a hook body. green names only what RAN ∴ an op nobody declared is invisible, ⊥ merely absent — fmt & clippy were missing for the project's whole life & every verdict looked identical (B6)
+V103: the criterion ⊥ WEAKEN as the rung narrows — a rung-4 task judged against the same `§V` as a rung-1 one, else the descent proves nothing. a granularize-until-success loop converges on TRIVIA by construction (`src/tdd:B2` = a judge loosening from "proves the invariant" to "would compile"). success below the verifiability floor is recorded UNVERIFIED, ⊥ kept
 V73: dir promotion has 2 triggers — (a) V50 code ceiling, (b) module owns SPEC worth its own node even under ceiling. vendor facades are (b): few hundred lines carrying V17/V24/V25. ⊥ promote every `.rs` — 30 files → 60 is ceremony
 
 ## §T TASKS
@@ -246,6 +249,7 @@ T69|.|profile declaration — flag > §T row > `bbx.toml` default. ⊥ inference
 T70|x|V101 runner — path deps limited to the one recorded exception (`itok`)|V101
 T71|.|publish or public-mirror `itok` ∴ ⊥ path dep left, & `packages.default` becomes buildable|V101,R20
 T72|x|gate → `hk` from `nix-hk`, ops in `hk.pkl`, `pre-commit` + `pre-push`, fmt & clippy gated for the 1st time|V26,V82,V102
+T73|.|`/titrate` machinery — `.bbx-frontier` record, believability re-keyed node → SHAPE, cost ledger w/ the denominator named (`.:B4`)|V103,V60
 
 ## §B BUGS
 
