@@ -18,10 +18,19 @@
 #   code 98.3 · lens 94.5 · spec 92.5 · tokens 88.9 · state 88.0 · fed 87.1
 #   ollama 70.9 · tdd 69.0 · plan 66.5 · slice 63.6 · review 63.0
 #   land 55.2 · assay 54.0 · cli 0.0
-lines 75.35
+lines 75.26
 #
 # MEASUREMENT VARIANCE, observed rather than assumed: two runs of the same
 # tree reported 71.27% and 71.17%. Three later runs all reported 71.17%. The
 # floor is the LOW observation. If this gate ever flaps, the fix is a STATED
 # margin in the comparison -- not a quietly lowered floor, which would hide
 # the drift this file exists to catch.
+#
+# THE MARGIN IS 0.3, and it is stated in `hk.pkl` rather than hidden by
+# lowering this number. CAUSE, found 2026-08-19: the suite is not hermetic.
+# `.bbx-state` lives in the repo, tests both READ and WRITE it, and
+# `derived_prefill` branches on its contents -- so which lines execute depends
+# on what previous runs left behind. Measured spread 75.26-75.35.
+#
+# The margin is a WORKAROUND. src/ollama:T4 carries the fix: point BBX_STATE
+# at a temp file per test, so coverage stops depending on run order.

@@ -137,7 +137,7 @@ local all = (fast) {
       now=$(printf '%s' "$out" | awk '/^TOTAL/{gsub("%","",$10); print $10}')
       was=$(awk '/^lines /{print $2}' .coverage)
       [ -n "$now" ] || { echo 'hk: could not read a coverage total -- that is an ERROR, not a floor breach (.:tdd:V26)' >&2; exit 1; }
-      awk -v n="$now" -v w="$was" 'BEGIN{exit !(n+0 < w+0)}' && { echo "hk: coverage FELL, $was% -> $now%. A line that stopped being covered is a test that stopped asserting. Cover it, or say why in .coverage with the drop." >&2; exit 1; }
+      awk -v n="$now" -v w="$was" 'BEGIN{exit !(n+0 < w+0 - 0.3)}' && { echo "hk: coverage FELL, $was% -> $now% (margin 0.3). A line that stopped being covered is a test that stopped asserting. Cover it, or say why in .coverage with the drop." >&2; exit 1; }
       awk -v n="$now" -v w="$was" 'BEGIN{exit !(n+0 > w+0)}' && echo "hk: coverage rose $was% -> $now%. Run \\`hk run fix\\` to record it."
       printf 'coverage %s%% (floor %s%%)\\n' "$now" "$was"
       """
