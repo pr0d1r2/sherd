@@ -239,15 +239,31 @@ pub fn predict_for(label: &str, prompt_tokens: u64) -> Eta {
 ///
 /// Used when a call is killed: the observation is a lower bound, not a mean,
 /// so it must not be averaged down with the estimate that was already wrong.
-pub fn raise_gen_floor(label: &str, seen: u64) {
+/// Raise the floor for `label` IN a given store.
+///
+/// The store is a parameter for `V19`: the suite must be HERMETIC, and
+/// `.bbx-state` lives in the repo where every test that writes it changes
+/// which branch the next test takes. `B8` is that flapping the ratchet and
+/// blocking a commit that had changed nothing. `T13` carries the full fix.
+pub fn raise_gen_floor_in(
+    st: &mut crate::state::State,
+    label: &str,
+    seen: u64,
+) {
     if label.is_empty() || seen == 0 {
         return;
     }
-    let mut st = crate::state::State::load();
     if st.get_u64("gen", label).unwrap_or(0) < seen {
         st.set("gen", label, seen.to_string());
-        st.save();
     }
+}
+
+/// A killed call still teaches: record what it managed as a FLOOR, so the
+/// next estimate for this kind is not as low.
+pub fn raise_gen_floor(label: &str, seen: u64) {
+    let mut st = crate::state::State::load();
+    raise_gen_floor_in(&mut st, label, seen);
+    st.save();
 }
 
 /// Was the model cold -- loaded from disk for this call?
@@ -261,15 +277,30 @@ pub fn last_load_ms() -> u64 {
 }
 
 /// Record how much this kind of step actually generated.
-pub fn observe_gen(label: &str, eval_tokens: u64) {
+/// Fold one observed generation length into the model, IN a given store.
+///
+/// Exponential moving average at weight 1/4 -- fast enough to track a change
+/// of endpoint, slow enough that one odd call does not swing the next
+/// prediction. The FIRST observation for a label seeds from itself, so a new
+/// kind of step is not dragged toward zero by a default.
+pub fn observe_gen_in(
+    st: &mut crate::state::State,
+    label: &str,
+    eval_tokens: u64,
+) {
     if label.is_empty() || eval_tokens == 0 {
         return;
     }
-    let mut st = crate::state::State::load();
     let prev = st.get_u64("gen", label).unwrap_or(eval_tokens);
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     let next = (prev as f64 * 0.75 + eval_tokens as f64 * 0.25) as u64;
     st.set("gen", label, next.to_string());
+}
+
+/// Record how much this kind of step actually generated.
+pub fn observe_gen(label: &str, eval_tokens: u64) {
+    let mut st = crate::state::State::load();
+    observe_gen_in(&mut st, label, eval_tokens);
     st.save();
 }
 
@@ -661,6 +692,71 @@ pub fn rust_block(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A store of its own -- `V19`, the suite must be HERMETIC.
+    fn store(tag: &str) -> crate::state::State {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static N: AtomicUsize = AtomicUsize::new(0);
+        let n = N.fetch_add(1, Ordering::Relaxed);
+        crate::state::State::at(
+            std::env::temp_dir()
+                .join(format!("bbx-pace-{tag}-{}-{n}", std::process::id())),
+        )
+    }
+
+    #[test]
+    fn a_floor_only_ever_rises() {
+        // A killed call records what it MANAGED as a floor, so the next
+        // estimate for that kind is not as low. Letting it fall would mean a
+        // short abort teaching the model that this step is small, and the
+        // next run would abort even sooner -- a ratchet running backwards.
+        let mut st = store("floor");
+        raise_gen_floor_in(&mut st, "4 repair-1", 500);
+        assert_eq!(st.get_u64("gen", "4 repair-1"), Some(500));
+        raise_gen_floor_in(&mut st, "4 repair-1", 200);
+        assert_eq!(
+            st.get_u64("gen", "4 repair-1"),
+            Some(500),
+            "a LOWER observation must not lower the floor"
+        );
+        raise_gen_floor_in(&mut st, "4 repair-1", 900);
+        assert_eq!(st.get_u64("gen", "4 repair-1"), Some(900), "higher wins");
+    }
+
+    #[test]
+    fn an_empty_label_or_a_zero_count_records_nothing() {
+        // Both are "no information". Writing them would seed the model with
+        // a zero it then averages against every real observation.
+        let mut st = store("guard");
+        raise_gen_floor_in(&mut st, "", 500);
+        raise_gen_floor_in(&mut st, "label", 0);
+        observe_gen_in(&mut st, "", 500);
+        observe_gen_in(&mut st, "label", 0);
+        assert_eq!(st.get_u64("gen", ""), None);
+        assert_eq!(st.get_u64("gen", "label"), None);
+    }
+
+    #[test]
+    fn the_first_observation_seeds_from_itself_and_later_ones_average() {
+        // Seeding from a default would drag a brand-new kind of step toward
+        // that default; seeding from itself means one call is believed
+        // exactly once, and the weight-1/4 average takes over after that.
+        let mut st = store("ewma");
+        observe_gen_in(&mut st, "1 test", 400);
+        assert_eq!(
+            st.get_u64("gen", "1 test"),
+            Some(400),
+            "the first observation is the estimate"
+        );
+        // 400 * 0.75 + 800 * 0.25 = 500.
+        observe_gen_in(&mut st, "1 test", 800);
+        assert_eq!(st.get_u64("gen", "1 test"), Some(500));
+        // A single odd call must MOVE the estimate without owning it.
+        assert!(
+            st.get_u64("gen", "1 test").is_some_and(|v| v < 800),
+            "weight 1/4: one call does not swing the next prediction"
+        );
+    }
 
     /// Fails `fail_times`, then answers. The thing B7 had no way to build.
     struct Flaky {
