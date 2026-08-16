@@ -59,7 +59,7 @@ T14|.|`bbx tdd` on `src/ollama` T3 failed 2x (8 round-trips, 17,551 tok, 4 compi
 T15|x|`named_fn` + pre-judge contract check|V25
 T16|x|`gate` returns `Result` — unrunnable ⊥ red|V26
 T17|x|thread `&dyn Transport` through `drive`→`drive_from`→`run`→`run_sampled`→`generate_via`. `drive_from` already takes 6 args vs the limit of 4 ∴ bundle into a `Run` struct ⊥ add a 7th (`.:V50`)|V27,`.:V50`
-T18|.|ONE offline test driving the WHOLE loop against a scripted transport: test authored → gate RED → impl written → gate GREEN. the first end-to-end test the loop has ever had, & the precondition for `.:T92`|V27,V26
+T18|x|ONE offline test driving the WHOLE loop against a scripted transport: test authored → gate RED → impl written → gate GREEN. the first end-to-end test the loop has ever had, & the precondition for `.:T92`|V27,V26
 
 ## §B BUGS
 

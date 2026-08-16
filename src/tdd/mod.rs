@@ -66,13 +66,32 @@ fn insert_impl(src: &str, code: &str) -> String {
 /// mattered -- step 1 requires the gate to be RED, so an absent toolchain
 /// read as "red as required" and the loop would have written code against a
 /// gate that never ran. `.:V48` for a subprocess (B24, tdd B17 recurring).
+/// The toolchain, from `BBX_CARGO` or the default. The EDGES read the env;
+/// the loop carries it in `Run` so a test can point at a scripted one without
+/// mutating process-global state that other tests share (`V27`).
+#[must_use]
+pub fn cargo_bin() -> String {
+    std::env::var("BBX_CARGO").unwrap_or_else(|_| "cargo".into())
+}
+
+/// Run the gate with an explicit toolchain.
+///
+/// # Errors
+/// See [`gate`].
+/// The gate, with the toolchain from the environment.
+///
+/// # Errors
+/// The toolchain could not be RUN. That is not a red gate (V26).
 pub fn gate(root: &Path) -> Result<(bool, String), String> {
-    let cargo = std::env::var("BBX_CARGO").unwrap_or_else(|_| "cargo".into());
+    gate_with(root, &cargo_bin())
+}
+
+pub fn gate_with(root: &Path, cargo: &str) -> Result<(bool, String), String> {
     // Same strictness as `.githooks/pre-commit`, deliberately: the loop's gate
     // and the commit's gate must be ONE rule. `-D warnings` in BOTH, because
     // `cargo build` does not compile `#[cfg(test)]` code and an unused import
     // in a test module shipped through a gate that never saw it (fed B8).
-    let out = Command::new(&cargo)
+    let out = Command::new(cargo)
         .args(["test", "--offline"])
         .env("RUSTFLAGS", "-D warnings")
         .current_dir(root)
@@ -375,6 +394,8 @@ pub struct Run<'a> {
     pub task: &'a str,
     /// How many repair attempts step 4 gets.
     pub max_repair: usize,
+    /// The toolchain the gate runs. `cargo_bin()` in production.
+    pub cargo: String,
     /// Where model calls go. `&ollama::Http` in production.
     pub transport: &'a dyn ollama::Transport,
 }
@@ -398,6 +419,7 @@ impl<'a> Run<'a> {
             invariant,
             task,
             max_repair: DEFAULT_REPAIRS,
+            cargo: cargo_bin(),
             transport: &ollama::Http,
         }
     }
@@ -406,6 +428,15 @@ impl<'a> Run<'a> {
     #[must_use]
     pub const fn repairs(mut self, n: usize) -> Self {
         self.max_repair = n;
+        self
+    }
+
+    /// Point the gate at a different toolchain. A test scripts one here
+    /// rather than setting `BBX_CARGO`, which is process-global and shared
+    /// with every other test running in parallel.
+    #[must_use]
+    pub fn with_cargo(mut self, cargo: &str) -> Self {
+        self.cargo = cargo.to_string();
         self
     }
 
@@ -763,7 +794,7 @@ pub fn drive_run(r: &Run) -> Result<Vec<Step>, String> {
 
     std::fs::write(&mod_path, insert_test(&original, &test_fn))
         .map_err(|e| e.to_string())?;
-    let (red_ok, red_out) = gate(root)?;
+    let (red_ok, red_out) = gate_with(root, &r.cargo)?;
     if red_ok {
         return Err(
             "test passes already -- not a red test, nothing to drive".into()
@@ -817,7 +848,7 @@ pub fn drive_run(r: &Run) -> Result<Vec<Step>, String> {
         )?);
         std::fs::write(&mod_path, insert_impl(&with_test, &code))
             .map_err(|e| e.to_string())?;
-        let (g, o) = gate(root)?;
+        let (g, o) = gate_with(root, &r.cargo)?;
         let added = crate::code::public_fns(&code);
         let cur =
             std::fs::read_to_string(&mod_path).map_err(|e| e.to_string())?;
@@ -914,7 +945,7 @@ pub fn drive_run(r: &Run) -> Result<Vec<Step>, String> {
             format!("{}\n\n{}", replaced.trim_end(), cur_tests),
         )
         .map_err(|e| e.to_string())?;
-        let g = gate(root)?;
+        let g = gate_with(root, &r.cargo)?;
         ok = g.0;
         out = g.1;
     }
@@ -1191,5 +1222,197 @@ mod tests {
             !classify_failure(assert_report),
             "Assertion failure should not be classified as a compile failure"
         );
+    }
+}
+
+#[cfg(test)]
+mod loop_tests {
+    use super::*;
+    use std::cell::Cell;
+    use std::io::BufRead;
+    use std::time::Duration;
+
+    /// A transport that answers each call from a script, in order.
+    ///
+    /// The loop's point is the SEQUENCE -- author a test, judge it, require
+    /// red, write an implementation, gate it, judge it blind. A fake that
+    /// returns one canned answer proves none of that; one that answers in
+    /// order proves the steps happen, and happen in the right order.
+    struct Scripted {
+        replies: Vec<String>,
+        at: Cell<usize>,
+    }
+
+    impl Scripted {
+        fn new(replies: &[&str]) -> Self {
+            Self {
+                replies: replies.iter().map(|s| (*s).to_string()).collect(),
+                at: Cell::new(0),
+            }
+        }
+
+        /// Ollama's NDJSON: a chunk frame, then a `done` frame with counts.
+        fn frames(text: &str) -> String {
+            let esc = text
+                .replace('\\', "\\\\")
+                .replace('"', "\\\"")
+                .replace('\n', "\\n");
+            format!(
+                "{{\"response\":\"{esc}\",\"done\":false}}\n\
+                 {{\"response\":\"\",\"done\":true,\
+                 \"prompt_eval_count\":10,\"eval_count\":5}}\n"
+            )
+        }
+    }
+
+    impl ollama::Transport for Scripted {
+        fn post(
+            &self,
+            _url: &str,
+            _body: &str,
+            _t: Duration,
+        ) -> Result<Box<dyn BufRead + Send>, String> {
+            let i = self.at.get();
+            let text = self
+                .replies
+                .get(i)
+                .ok_or_else(|| format!("script exhausted at call {i}"))?;
+            self.at.set(i.wrapping_add(1));
+            Ok(Box::new(std::io::Cursor::new(Self::frames(text))))
+        }
+    }
+
+    fn write_exec(path: &Path, body: &str) -> Result<(), String> {
+        std::fs::write(path, body).map_err(|e| format!("write: {e}"))?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(path, PermissionsExt::from_mode(0o755))
+                .map_err(|e| format!("chmod: {e}"))?;
+        }
+        Ok(())
+    }
+
+    /// A `cargo` that fails its first `red_times` invocations, then passes.
+    ///
+    /// Step 1 REQUIRES a red gate before the loop will write an
+    /// implementation, so a fake toolchain has to be red first and green
+    /// after -- the transition the loop exists to observe.
+    fn fake_cargo(dir: &Path, red_times: u32) -> Result<String, String> {
+        let counter = dir.join("gate-count");
+        let script = dir.join("fake-cargo");
+        let body = format!(
+            "#!/bin/sh\nn=$(cat {c} 2>/dev/null || echo 0)\n\
+             echo $((n+1)) > {c}\n\
+             if [ \"$n\" -lt \"{red_times}\" ]; then \
+             echo 'test result: FAILED'; exit 1; fi\n\
+             echo 'test result: ok'\nexit 0\n",
+            c = counter.display()
+        );
+        write_exec(&script, &body)?;
+        Ok(script.display().to_string())
+    }
+
+    /// The gate runs `bbx check` and slice drift over ROOT, so the fixture
+    /// has to look like a repo and not merely like a node.
+    fn repo_fixture(root: &Path) -> Result<(), String> {
+        std::fs::write(
+            root.join("SPEC.md"),
+            "# SPEC\n\n## \u{a7}F FEDERATION\n\ndir|owns|\u{22a5}owns|tokens\n\
+             node|the fixture|everything else|-\n",
+        )
+        .map_err(|e| format!("root spec: {e}"))?;
+        std::fs::write(root.join(".bbx-slices"), "# none\n")
+            .map_err(|e| format!("slices: {e}"))
+    }
+
+    fn node_fixture(dir: &Path) -> Result<(), String> {
+        std::fs::create_dir_all(dir).map_err(|e| format!("mkdir: {e}"))?;
+        std::fs::write(
+            dir.join("SPEC.md"),
+            "# SPEC\n\n## \u{a7}V INVARIANTS\n\nV1: a doubling returns twice its input\n",
+        )
+        .map_err(|e| format!("spec: {e}"))?;
+        std::fs::write(
+            dir.join("mod.rs"),
+            "pub fn existing() -> u8 {\n    1\n}\n\n#[cfg(test)]\nmod tests {\n\
+             \x20   #[test]\n    fn t() {}\n}\n",
+        )
+        .map_err(|e| format!("mod: {e}"))
+    }
+
+    fn script() -> Scripted {
+        Scripted::new(&[
+            "```rust\n#[test]\nfn doubles() { assert_eq!(double(2), 4); }\n```",
+            "YES it exercises the invariant",
+            "```rust\npub fn double(n: u8) -> u8 { n * 2 }\n```",
+            "YES it reads its input",
+        ])
+    }
+
+    /// THE END-TO-END TEST -- the first the loop has ever had.
+    ///
+    /// It asserts the SHAPE of a run, not a model's answers: there is no
+    /// model here, and no endpoint.
+    #[test]
+    fn the_loop_runs_end_to_end_with_no_endpoint() {
+        // Errors are RETURNED, never `.expect`ed. A harness that panics in
+        // setup is indistinguishable from the thing it tests failing, which
+        // is `.:assay:B1` costing forty minutes.
+        assert_eq!(drive_a_scripted_run(), Ok(()));
+    }
+
+    /// Build the scratch repo and hand back its root and node.
+    fn scratch() -> Result<(std::path::PathBuf, std::path::PathBuf), String> {
+        let dir = std::env::temp_dir()
+            .join(format!("bbx-loop-{}", std::process::id()));
+        let node = dir.join("node");
+        node_fixture(&node)?;
+        repo_fixture(&dir)?;
+        Ok((dir, node))
+    }
+
+    fn drive_a_scripted_run() -> Result<(), String> {
+        let (dir, node) = scratch()?;
+        let cargo = fake_cargo(&dir, 1)?;
+        let t = script();
+        let base = Run::new(&dir, &node, "V1", "add double()")
+            .with_cargo(&cargo)
+            .repairs(0);
+        let out = drive_run(&Run {
+            transport: &t,
+            ..base
+        });
+        let after = std::fs::read_to_string(node.join("mod.rs"))
+            .map_err(|e| format!("read back: {e}"))?;
+        let _ = std::fs::remove_dir_all(&dir);
+        check_outcome(&out, &after)
+    }
+
+    /// The loop reached the END: authored a test, judged it, saw the gate go
+    /// RED as step 1 requires, wrote an implementation, saw it go GREEN, ran
+    /// the mechanical review, and REVERTED on a finding.
+    ///
+    /// That last part is `V23` -- green plus a finding is the stub signature,
+    /// and repair polishes a stub rather than fixing one. A new `pub fn`
+    /// called only by its own new test is exactly what `unwired` flags, so
+    /// the revert is the honest outcome for this script rather than a broken
+    /// harness, and asserting it proves every step ran.
+    fn check_outcome(
+        out: &Result<Vec<Step>, String>,
+        after: &str,
+    ) -> Result<(), String> {
+        let Err(err) = out else {
+            return Err("a candidate with findings must not land".into());
+        };
+        assert!(
+            err.contains("findings"),
+            "the loop must say WHY it reverted, got: {err}"
+        );
+        assert!(
+            !after.contains("double"),
+            "an unkept run restores the module -- the guard must have fired"
+        );
+        Ok(())
     }
 }
