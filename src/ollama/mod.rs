@@ -783,3 +783,77 @@ mod tests {
         assert_eq!(rust_block("```rust\nfn a() {}"), "```rust\nfn a() {}");
     }
 }
+
+#[cfg(test)]
+mod pace_tests {
+    use super::*;
+
+    #[test]
+    fn a_bucket_is_a_size_band_not_a_scalar() {
+        // `.:R17` -- prefill rate falls with size (1,519 tok/s at 7k, 941 at
+        // 28k), so one learned scalar under-predicts the big packs badly
+        // enough to trip the abort on a healthy run.
+        const BANDS: [(u64, &str); 7] = [
+            (0, "b0"),
+            (1_999, "b0"),
+            (2_000, "b2"),
+            (7_999, "b2"),
+            (8_000, "b8"),
+            (31_999, "b8"),
+            (32_000, "b32"),
+        ];
+        for (n, want) in BANDS {
+            assert_eq!(bucket(n), want, "{n} belongs in {want}");
+        }
+    }
+
+    #[test]
+    fn a_cache_hit_is_an_absolute_rate_not_a_multiple_of_the_learned_one() {
+        // The threshold is 3,000 tok/s flat. Relative to the LEARNED rate it
+        // would rise as the rate rose and stop catching hits -- which is what
+        // B4 in this node records.
+        assert!(was_cached(10_000, 1_000), "10k tok/s is a hit");
+        assert!(!was_cached(1_000, 1_000), "1k tok/s is a cold run");
+        assert!(
+            !was_cached(3_000, 1_000),
+            "exactly 3k is NOT over the bound"
+        );
+        // Degenerate inputs must not read as evidence either way.
+        assert!(!was_cached(0, 500), "no prompt is not a cache hit");
+        assert!(was_cached(500, 0), "no measurable prefill is a hit");
+    }
+
+    #[test]
+    fn verbose_is_a_mode_that_can_be_turned_off_again() {
+        let before = verbose();
+        set_verbose(true);
+        assert!(verbose());
+        set_verbose(false);
+        assert!(!verbose());
+        set_verbose(before);
+    }
+
+    #[test]
+    fn an_eta_is_prefill_plus_decode_and_says_what_it_expects() {
+        // A prediction with no gen estimate cannot bound anything, and the
+        // abort ladder is a multiple of this number.
+        let e = predict(10_000);
+        assert!(e.prefill_s > 0.0, "prefill must be predicted: {e:?}");
+        assert!(e.decode_s > 0.0, "decode must be predicted: {e:?}");
+        assert!(e.total() > std::time::Duration::ZERO);
+        assert!(e.gen_est > 0, "an eta of zero tokens bounds nothing");
+    }
+
+    #[test]
+    fn a_bigger_prompt_never_predicts_a_shorter_prefill() {
+        // Monotonicity is the one property an eta must have: R17 measured the
+        // rate FALLING with size, so a bigger pack predicting less time would
+        // be worse than no prediction.
+        let small = predict(1_000);
+        let big = predict(30_000);
+        assert!(
+            big.prefill_s >= small.prefill_s,
+            "{big:?} must not be quicker than {small:?}"
+        );
+    }
+}
