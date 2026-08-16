@@ -1298,7 +1298,15 @@ mod loop_tests {
     /// Step 1 REQUIRES a red gate before the loop will write an
     /// implementation, so a fake toolchain has to be red first and green
     /// after -- the transition the loop exists to observe.
-    fn fake_cargo(dir: &Path, red_times: u32) -> Result<String, String> {
+    /// A `cargo` that goes RED `red_times` times, then green.
+    ///
+    /// SCRIPTED, matching `Scripted` fifty lines above: both are canned
+    /// answers indexed by call number, one for the endpoint and one for the
+    /// gate. Not a mock -- it verifies no expectations. Not a fake -- it is
+    /// no simplified cargo. And deliberately not `stub_`, which in this repo
+    /// names the DEFECT under test: a plausible-but-wrong implementation the
+    /// model wrote (`src/fed:B6`, and the `STUBS` corpus in `src/assay`).
+    fn scripted_cargo(dir: &Path, red_times: u32) -> Result<String, String> {
         let counter = dir.join("gate-count");
         let script = dir.join("fake-cargo");
         let body = format!(
@@ -1386,7 +1394,7 @@ mod loop_tests {
 
     fn drive_a_scripted_run() -> Result<(), String> {
         let (dir, node) = scratch("repair")?;
-        let cargo = fake_cargo(&dir, 1)?;
+        let cargo = scripted_cargo(&dir, 1)?;
         let t = script();
         let base = Run::new(&dir, &node, "V1", "add double()")
             .with_cargo(&cargo)
@@ -1440,7 +1448,7 @@ mod loop_tests {
         let (dir, node) = scratch("repair")?;
         // RED twice: once for step 3's required red, once for the candidate,
         // so the repair round-trip is what turns it green.
-        let cargo = fake_cargo(&dir, 2)?;
+        let cargo = scripted_cargo(&dir, 2)?;
         let t = repair_script();
         let base = scripted_run(&dir, &node, &cargo, 1);
         let out = drive_run(&Run {
@@ -1481,7 +1489,7 @@ mod loop_tests {
     fn exhausted_repairs_do_not_pass() -> Result<(), String> {
         let (dir, node) = scratch("exhaust")?;
         // Red for longer than the loop has repairs, so it runs out.
-        let cargo = fake_cargo(&dir, 9)?;
+        let cargo = scripted_cargo(&dir, 9)?;
         let t = repair_script();
         let base = scripted_run(&dir, &node, &cargo, 1);
         let out = drive_run(&Run {
