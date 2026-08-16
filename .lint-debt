@@ -13,10 +13,10 @@
 # Cargo.toml individually and it stops needing this file.
 #
 # GROUPS, measured 2026-08-19:
-#   structural  83   too_many_lines, cognitive_complexity, excessive_nesting,
+#   structural  ~69  (fell 14 when T17 decomposed the titrations)   too_many_lines, cognitive_complexity, excessive_nesting,
 #                    too_many_arguments -- the decomposition signal (.:V109)
 #   safety     198   indexing_slicing, arithmetic_side_effects, unwrap, expect
 #
 # Lowering this belongs to `.:T92` (split src/tdd) and the pay-down tasks, and
 # a drop should arrive WITH the refactor that earned it.
-total 290
+total 276

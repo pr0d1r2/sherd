@@ -1818,77 +1818,99 @@ mod tests {
         }
     }
 
-    /// T77. Records; asserts nothing about the model, for T74's reason -- a
-    /// test demanding a result from a run built to find one is flaky by
-    /// construction, and the first red would be answered by weakening it.
-    #[test]
-    #[ignore]
-    fn generation_titration() {
-        const RUNS: usize = 3;
-        let mut sharp_ok = 0;
-        let mut vague_ok = 0;
-        let mut per_item = vec![(0usize, 0usize); GEN_CORPUS.len()];
-        for run in 1..=RUNS {
-            for (idx, it) in GEN_CORPUS.iter().enumerate() {
-                for (label, inv) in [("sharp", it.sharp), ("vague", it.vague)] {
-                    let p = gen_prompt(inv, it.sig, it.preamble);
-                    let r = crate::ollama::generate(&p)
-                        .expect("endpoint unreachable -- BBX_ENDPOINT");
-                    let code = crate::ollama::rust_block(&r.text);
-                    let pass = grade(&code, it.preamble, it.tests, "rustc")
-                        .expect("rustc must RUN -- V26");
-                    if pass {
-                        if label == "sharp" {
-                            sharp_ok += 1;
-                            per_item[idx].0 += 1;
-                        } else {
-                            vague_ok += 1;
-                            per_item[idx].1 += 1;
-                        }
-                    }
-                    println!(
-                        "run {run} · {label:5} · {} · {}",
-                        if pass { "PASS" } else { "fail" },
-                        it.sig.split('(').next().unwrap_or("")
-                    );
-                }
-            }
+    /// One call's outcome. ERROR is not FAIL (`src/tdd:V27`): a timed-out
+    /// generation says nothing about whether the model can write the
+    /// function, and counting it as a miss makes a flaky network look like a
+    /// located frontier.
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    enum Outcome {
+        Pass,
+        Fail,
+        Error,
+    }
+
+    /// Append one row the moment it exists, so a crash costs ONE call rather
+    /// than the run. B25 lost 33 completed measurements and forty minutes of
+    /// endpoint time to a single transient.
+    fn log_row(row: &str) {
+        use std::io::Write;
+        let path = std::path::Path::new("target").join("titration.tsv");
+        if let Ok(mut f) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)
+        {
+            let _ = writeln!(f, "{row}");
         }
-        let n = RUNS * GEN_CORPUS.len();
-        println!(
-            "\nGENERATION TITRATION\n  sharp {sharp_ok}/{n}\n  vague {vague_ok}/{n}"
-        );
-        // R43 predicted a three-way split. Scoring the PREDICTION is what
-        // makes it falsifiable -- the totals above would look the same
-        // whether the classes mean anything or not.
-        println!("\n  predicted vs observed, per item:");
-        let mut hits = 0;
-        for (i, it) in GEN_CORPUS.iter().enumerate() {
-            let (ps, pv) = it.predicted.predicts();
-            let (os, ov) = (per_item[i].0 == RUNS, per_item[i].1 == RUNS);
-            let hit = ps == os && pv == ov;
-            hits += usize::from(hit);
+    }
+
+    /// Grade a reply that arrived. A compiler that cannot RUN is an error,
+    /// never a wrong answer -- the same distinction `grade` already draws.
+    fn grade_reply(
+        r: &crate::ollama::Reply,
+        it: &GenItem,
+    ) -> (Outcome, String) {
+        let code = crate::ollama::rust_block(&r.text);
+        match grade(&code, it.preamble, it.tests, "rustc") {
+            Ok(true) => (Outcome::Pass, format!("{} tok", r.prompt_tokens)),
+            Ok(false) => (Outcome::Fail, format!("{} tok", r.prompt_tokens)),
+            Err(e) => (Outcome::Error, e),
+        }
+    }
+
+    /// One measurement, which NEVER panics. A transient belongs in the
+    /// record, not in a stack trace.
+    fn run_one(prompt: &str, it: &GenItem) -> (Outcome, String) {
+        match crate::ollama::generate(prompt) {
+            Err(e) => (Outcome::Error, e),
+            Ok(r) => grade_reply(&r, it),
+        }
+    }
+
+    /// Run one condition and record it, returning the outcome.
+    fn measure(tag: &str, run: usize, prompt: &str, it: &GenItem) -> Outcome {
+        let (o, note) = run_one(prompt, it);
+        let name = it.sig.split('(').next().unwrap_or("");
+        let word = match o {
+            Outcome::Pass => "PASS",
+            Outcome::Fail => "fail",
+            Outcome::Error => "ERROR",
+        };
+        let row = format!("{run}\t{tag}\t{word}\t{name}\t{note}");
+        println!("run {run} · {tag:5} · {word} · {name} · {note}");
+        log_row(&row);
+        o
+    }
+
+    /// `(pass, fail, error)` over a set of outcomes. Counted by filtering
+    /// rather than by `+=`, which `arithmetic_side_effects` rejects.
+    fn tally(os: &[Outcome]) -> (usize, usize, usize) {
+        let n = |w: Outcome| os.iter().filter(|o| **o == w).count();
+        (n(Outcome::Pass), n(Outcome::Fail), n(Outcome::Error))
+    }
+
+    /// Report one condition. An ERROR count above zero means the run is
+    /// INCOMPLETE, and the summary has to say so where a reader will see it.
+    fn report(label: &str, os: &[Outcome]) {
+        let (p, f, e) = tally(os);
+        let total = os.len();
+        println!("  {label:5} pass {p}/{total} · fail {f} · error {e}");
+        if e > 0 {
             println!(
-                "    {:22} {:?}  predict({ps},{pv}) observe({os},{ov}) {}",
-                it.sig
-                    .split('(')
-                    .next()
-                    .unwrap_or("")
-                    .trim_start_matches("pub fn "),
-                it.predicted,
-                if hit { "hit" } else { "MISS" }
+                "    {e} of {total} did not RUN -- this condition is \
+                 incomplete, not measured (V27)"
             );
         }
-        println!("\n  class predictions correct: {hits}/{}", GEN_CORPUS.len());
     }
 
     #[test]
     fn context_is_the_only_variable_between_the_two_prompts() {
         // V108: the two conditions must differ in exactly one thing. If the
         // request itself changed, a difference in score would be
-        // unattributable -- which is the whole reason T82 was split from
-        // T83 and T84.
-        let it = &GEN_CORPUS[0];
+        // unattributable -- which is why T82 was split from T83 and T84.
+        let Some(it) = GEN_CORPUS.first() else {
+            panic!("corpus must not be empty")
+        };
         let bare = gen_prompt(it.sharp, it.sig, it.preamble);
         let ctx =
             gen_prompt_in_context("PACK BODY", it.sharp, it.sig, it.preamble);
@@ -1897,10 +1919,42 @@ mod tests {
             "the request must survive verbatim after the pack"
         );
         assert!(ctx.contains("PACK BODY"), "the pack must be carried");
-        assert!(
-            ctx.len() > bare.len(),
-            "context condition must actually be larger"
+        assert!(ctx.len() > bare.len(), "context must actually be larger");
+    }
+
+    #[test]
+    fn an_error_is_never_counted_as_a_failure() {
+        // V27, and B25 in one assertion: a transient must not read as a miss.
+        let os = [Outcome::Pass, Outcome::Fail, Outcome::Error];
+        assert_eq!(tally(&os), (1, 1, 1), "three outcomes, not two");
+        let all_err = [Outcome::Error, Outcome::Error];
+        assert_eq!(
+            tally(&all_err),
+            (0, 0, 2),
+            "a run that never ran scores zero PASS and zero FAIL"
         );
+    }
+
+    /// T77. Records; asserts nothing about the model, for T74's reason -- a
+    /// test demanding a result from a run built to find one is flaky by
+    /// construction, and the first red would be answered by weakening it.
+    #[test]
+    #[ignore]
+    fn generation_titration() {
+        const RUNS: usize = 3;
+        let mut sharp = Vec::new();
+        let mut vague = Vec::new();
+        for run in 1..=RUNS {
+            for it in GEN_CORPUS {
+                let p = gen_prompt(it.sharp, it.sig, it.preamble);
+                sharp.push(measure("sharp", run, &p, it));
+                let v = gen_prompt(it.vague, it.sig, it.preamble);
+                vague.push(measure("vague", run, &v, it));
+            }
+        }
+        println!("\nGENERATION TITRATION");
+        report("sharp", &sharp);
+        report("vague", &vague);
     }
 
     /// T82. Same items, same hidden tests, same sharp wording -- the node's
@@ -1909,63 +1963,33 @@ mod tests {
     #[ignore]
     fn context_titration() {
         const RUNS: usize = 3;
-        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-        // A real pack, at the depth a worker actually gets (`.:V45`).
-        let pack = crate::lens::pack(
-            root,
-            &root.join("src/tokens"),
-            crate::lens::Depth::Rule,
-        )
-        .expect("lens pack must build");
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let node = root.join("src/tokens");
+        let Ok(pack) = crate::lens::pack(root, &node, crate::lens::Depth::Rule)
+        else {
+            println!("lens pack unavailable -- nothing measured (V27)");
+            return;
+        };
         println!("context pack: {} tok", pack.cost.tokens);
-        let mut bare_ok = 0;
-        let mut ctx_ok = 0;
+        let mut bare = Vec::new();
+        let mut ctx = Vec::new();
         for run in 1..=RUNS {
             for it in GEN_CORPUS {
-                for with_ctx in [false, true] {
-                    let p = if with_ctx {
-                        gen_prompt_in_context(
-                            &pack.text,
-                            it.sharp,
-                            it.sig,
-                            it.preamble,
-                        )
-                    } else {
-                        gen_prompt(it.sharp, it.sig, it.preamble)
-                    };
-                    let r = crate::ollama::generate(&p)
-                        .expect("endpoint unreachable -- BBX_ENDPOINT");
-                    let code = crate::ollama::rust_block(&r.text);
-                    let pass = grade(&code, it.preamble, it.tests, "rustc")
-                        .expect("rustc must RUN -- V26");
-                    if pass {
-                        if with_ctx {
-                            ctx_ok += 1;
-                        } else {
-                            bare_ok += 1;
-                        }
-                    }
-                    println!(
-                        "run {run} · {:5} · {} · {} tok · {}",
-                        if with_ctx { "ctx" } else { "bare" },
-                        if pass { "PASS" } else { "fail" },
-                        r.prompt_tokens,
-                        it.sig
-                            .split('(')
-                            .next()
-                            .unwrap_or("")
-                            .trim_start_matches("pub fn ")
-                    );
-                }
+                let b = gen_prompt(it.sharp, it.sig, it.preamble);
+                bare.push(measure("bare", run, &b, it));
+                let c = gen_prompt_in_context(
+                    &pack.text,
+                    it.sharp,
+                    it.sig,
+                    it.preamble,
+                );
+                ctx.push(measure("ctx", run, &c, it));
             }
         }
-        let n = RUNS * GEN_CORPUS.len();
-        println!(
-            "\nCONTEXT TITRATION (pack {} tok)\n  bare {bare_ok}/{n}\n  ctx  {ctx_ok}/{n}",
-            pack.cost.tokens
-        );
+        println!("\nCONTEXT TITRATION (pack {} tok)", pack.cost.tokens);
+        report("bare", &bare);
+        report("ctx", &ctx);
     }
-
     #[test]
     fn the_bare_prompt_carries_no_tells() {
         let it = &RECORDED[0];
