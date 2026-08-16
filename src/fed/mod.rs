@@ -48,22 +48,44 @@ pub fn edges(text: &str) -> Vec<Edge> {
     out
 }
 
+/// Split a `§F` row on unescaped pipes.
+///
+/// `\` escapes the next character only when that character is `\` or `|`;
+/// before anything else it is literal and kept (V4). Two defects shaped this
+/// and both are in `§B`:
+///
+/// B11 -- the first version consumed `\` before ANY character, so the
+/// backslash vanished out of `C:\path`, and a cell ending in `\\` produced
+/// five cells for a four-column row, which `edges()` then dropped silently.
+///
+/// B12 -- the first fix escaped only before `|`, which left a cell ENDING in
+/// a backslash unrepresentable: `tail\\|` swallowed the column break. An
+/// escape scheme has to be able to express its own escape character.
 fn split_row(line: &str) -> Vec<String> {
     let mut cells = vec![String::new()];
-    let mut esc = false;
-    for ch in line.trim().chars() {
+    let mut chars = line.trim().chars().peekable();
+    while let Some(ch) = chars.next() {
         match ch {
-            '\\' if !esc => esc = true,
-            '|' if !esc => cells.push(String::new()),
-            c => {
-                if let Some(last) = cells.last_mut() {
-                    last.push(c);
+            '\\' if matches!(chars.peek(), Some('\\' | '|')) => {
+                if let Some(c) = chars.next() {
+                    push(&mut cells, c);
                 }
-                esc = false;
             }
+            '|' => cells.push(String::new()),
+            c => push(&mut cells, c),
         }
     }
     cells.iter().map(|c| c.trim().to_string()).collect()
+}
+
+/// Append to the cell being built. The slice is seeded with one `String` and
+/// never shrinks, so the `None` arm is unreachable -- but `indexing_slicing`
+/// is denied and an `expect` here would be a panic in a tool that runs
+/// unattended.
+fn push(cells: &mut [String], c: char) {
+    if let Some(last) = cells.last_mut() {
+        last.push(c);
+    }
 }
 
 /// The chain of `SPEC.md` files from repo root down to `dir`, inclusive.
@@ -355,6 +377,66 @@ mod tests {
         assert_eq!(e[1].tokens, None, "`-` means unrecorded, not zero");
     }
 
+    /// V13: through `edges()`, not through the splitter alone -- the row that
+    /// vanished did so because `edges()` drops anything that is not four
+    /// cells, and a splitter test cannot see that.
+    #[test]
+    fn a_backslash_in_a_cell_survives_the_parse() {
+        // B11. `split_row` consumed `\` before ANY character, so an `owns`
+        // naming a Windows path or a regex lost it silently, and the §F table
+        // read as though the author had written something else.
+        let t = table_with("a", "C:\\path notes");
+        let es = edges(&t);
+        assert_eq!(es.len(), 1, "one row in, one edge out");
+        assert_eq!(
+            es.first().map(|e| e.owns.as_str()),
+            Some("C:\\path notes"),
+            "the backslash is literal here -- V4 escapes only before a pipe"
+        );
+    }
+
+    #[test]
+    fn a_cell_ending_in_a_backslash_still_yields_its_edge() {
+        // The severe half of B11: `tail\\` split the row into five cells,
+        // V1 says four cells or not a row, and `edges()` dropped it -- so a
+        // federation edge disappeared with no error at all.
+        //
+        // B12 is the other side of the same cell, and this assertion is
+        // where it surfaced: the ROW carries `tail\\`, which DECODES to one
+        // backslash. Asserting the encoded form here is what made the first
+        // fix look correct while the column break was being swallowed.
+        let t = table_with("c", "tail\\\\");
+        let es = edges(&t);
+        assert_eq!(es.len(), 1, "the edge must not VANISH");
+        assert_eq!(es.first().map(|e| e.owns.as_str()), Some("tail\\"));
+    }
+    #[test]
+    fn an_escaped_pipe_is_still_one_cell() {
+        // The behaviour V4 always documented, and the one the fix must not
+        // break: `\|` is a literal pipe inside the cell, never a column.
+        let t = table_with("b", "rule\\|why");
+        let es = edges(&t);
+        assert_eq!(es.first().map(|e| e.owns.as_str()), Some("rule|why"));
+    }
+
+    #[test]
+    fn every_row_of_a_mixed_table_survives() {
+        // The POSITIVE case V10 asks for, over all three shapes at once: a
+        // count is what caught B11 (two of three rows survived), and a
+        // per-row assertion would have passed on the two that did.
+        let t = "## \u{a7}F FEDERATION\ndir|owns|\u{22a5}owns|tokens\n\
+                 a|C:\\path|-|10\nb|rule\\|why|-|20\nc|tail\\\\|-|30\n";
+        let dirs: Vec<String> = edges(t).into_iter().map(|e| e.dir).collect();
+        assert_eq!(dirs, vec!["a", "b", "c"], "no row may vanish");
+    }
+
+    /// One §F table with a single row, so each test states only its own cell.
+    fn table_with(dir: &str, owns: &str) -> String {
+        format!(
+            "## \u{a7}F FEDERATION\ndir|owns|\u{22a5}owns|tokens\n\
+             {dir}|{owns}|-|10\n"
+        )
+    }
     #[test]
     fn escaped_pipe_stays_in_the_cell() {
         let t = "## \u{a7}F FEDERATION\ndir|owns|\u{22a5}owns|tokens\na|rule\\|why|-|10\n";

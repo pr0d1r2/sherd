@@ -60,7 +60,7 @@ local fast = new Mapping<String, Step> {
       now=$(cargo clippy --all-targets --message-format=short 2>&1 | grep -cE '^src/.*: warning')
       was=$(awk '/^total /{print $2}' .lint-debt)
       [ "$now" -le "$was" ] || { echo "hk: lint debt ROSE, $was -> $now. The limits in clippy.toml are the shape the target model handles (.:R44); adding to the debt walks away from the §G TARGET. Fix the new sites, or record WHY in .lint-debt with the raise." >&2; exit 1; }
-      [ "$now" -eq "$was" ] || echo "hk: lint debt fell $was -> $now. Run \\`hk run fix\\` to record it."
+      [ "$now" -eq "$was" ] || echo "hk: lint debt fell $was -> $now. Run: hk run fix"
       """
     // `fix` may only LOWER. `pre-commit` runs the fast set in fix mode, so a
     // fix that recorded whatever it measured would file down the ratchet's
@@ -138,7 +138,7 @@ local all = (fast) {
       was=$(awk '/^lines /{print $2}' .coverage)
       [ -n "$now" ] || { echo 'hk: could not read a coverage total -- that is an ERROR, not a floor breach (.:tdd:V26)' >&2; exit 1; }
       awk -v n="$now" -v w="$was" 'BEGIN{exit !(n+0 < w+0 - 0.3)}' && { echo "hk: coverage FELL, $was% -> $now% (margin 0.3). A line that stopped being covered is a test that stopped asserting. Cover it, or say why in .coverage with the drop." >&2; exit 1; }
-      awk -v n="$now" -v w="$was" 'BEGIN{exit !(n+0 > w+0)}' && echo "hk: coverage rose $was% -> $now%. Run \\`hk run fix\\` to record it."
+      awk -v n="$now" -v w="$was" 'BEGIN{exit !(n+0 > w+0)}' && echo "hk: coverage rose $was% -> $now%. Run: hk run fix"
       printf 'coverage %s%% (floor %s%%)\\n' "$now" "$was"
       """
     // Same rule as `lint-debt`, mirrored: this one may only RAISE.

@@ -91,6 +91,111 @@ pub fn gen_prompt(inv: &str, sig: &str, preamble: &str) -> String {
     )
 }
 
+/// Ask for a TEST, never an implementation.
+///
+/// T83, variable 2 of 3 (`.:V108`). The writer is blind here exactly as in
+/// [`gen_prompt`] -- same invariant, same signature, no implementation to
+/// read -- so the only thing differing between the two arms is WHICH TESTS
+/// grade the candidate: hidden ones written before any candidate existed, or
+/// one the model wrote itself.
+///
+/// `src/tdd:B2` and `B12` are both a model writing a test that agrees with
+/// its own wrong implementation, which makes self-authored tests the live
+/// suspect for `src/tdd:T13`'s zero merit wins.
+#[must_use]
+pub fn test_prompt(inv: &str, sig: &str, preamble: &str) -> String {
+    format!(
+        "{NOTATION}\nInvariant:\n  {inv}\n\n\
+         In scope already:\n```rust\n{preamble}\n```\n\n\
+         Write a `#[test]` function that PROVES this invariant holds for:\n\
+         ```rust\n{sig}\n```\n\n\
+         An implementation that violated the invariant must FAIL your test. \
+         Reply with one ```rust block containing `#[cfg(test)] mod t {{ .. }}` \
+         and nothing else. No implementation."
+    )
+}
+
+/// Ask for an implementation with NO signature given.
+///
+/// T84, variable 3 of 3 (`.:V108`). `.:R44` handed the writer a signature;
+/// `bbx tdd` makes it invent one, and `src/tdd:B12` is that going wrong -- a
+/// test calling `check_edge_depths` while step 2 defined a different name,
+/// unrecoverable by three repairs.
+///
+/// Graded against the SAME hidden tests, so a name or arity the tests cannot
+/// call shows up as `Grade::NoCompile` rather than as a wrong answer. That
+/// distinction is the whole measurement.
+#[must_use]
+pub fn gen_prompt_no_sig(inv: &str, preamble: &str) -> String {
+    format!(
+        "{NOTATION}\nInvariant:\n  {inv}\n\n\
+         In scope already:\n```rust\n{preamble}\n```\n\n\
+         Write the public function that satisfies this invariant. Choose its \
+         name and signature yourself.\n\n\
+         Reply with the complete function and nothing else. No tests, no \
+         explanation, no `mod`."
+    )
+}
+
+/// A deliberately WRONG implementation that still compiles.
+///
+/// The mutant a test must kill. `.:V111` says a self-authored test cannot
+/// grade its own author; this is how that gets a mechanical remedy instead of
+/// a warning -- run the test against a known-wrong body and require it to
+/// FAIL. A test that passes this measured nothing, which is `src/fed:B6`
+/// (`detect_cycles` returning `Vec::new()` under a comment reading "satisfies
+/// the current test suite") caught before it lands rather than after.
+///
+/// Each is the plausible-stub shape: compiles, reads its inputs or ignores
+/// them quietly, returns a fixed or passthrough value.
+///
+/// Returns `None` for an unknown signature rather than a guess -- a mutant
+/// nobody chose would make the measurement meaningless.
+#[must_use]
+pub fn stub_for(sig: &str) -> Option<&'static str> {
+    let name = sig.split('(').next().unwrap_or("").trim();
+    STUBS.iter().find(|(n, _)| *n == name).map(|(_, s)| *s)
+}
+
+/// The mutants, as data. One per corpus signature.
+const STUBS: &[(&str, &str)] = &[
+    ("pub fn working", "pub fn working(_w: u64) -> u64 { 0 }"),
+    (
+        "pub fn bucket",
+        "pub fn bucket(_n: u64) -> &'static str { \"b0\" }",
+    ),
+    ("pub fn is_yes", "pub fn is_yes(_v: &str) -> bool { true }"),
+    (
+        "pub fn verdict",
+        "pub fn verdict(_c: u64, _b: u64) -> Verdict { Verdict::Fits { slack: 0 } }",
+    ),
+    (
+        "pub fn for_path",
+        "pub fn for_path(_r: &[(String, u64)], default: u64, _p: &str) -> u64 { default }",
+    ),
+    (
+        "pub fn checked_working",
+        "pub fn checked_working(_w: u64) -> Option<u64> { Some(0) }",
+    ),
+    ("pub fn sign", "pub fn sign(_n: i64) -> Sign { Sign::Zero }"),
+    (
+        "pub fn abort_budget_ms",
+        "pub fn abort_budget_ms(eta_ms: u64) -> u64 { eta_ms }",
+    ),
+    (
+        "pub fn is_cached",
+        "pub fn is_cached(_t: u64, _m: u64) -> bool { false }",
+    ),
+    (
+        "pub fn parse_limit",
+        "pub fn parse_limit(_l: &str) -> Option<(String, u64)> { None }",
+    ),
+    (
+        "pub fn escape_cell",
+        "pub fn escape_cell(s: &str) -> String { s.to_string() }",
+    ),
+];
+
 /// The same request, prefixed with a real node's lens pack.
 ///
 /// T82, variable 1 of 3 (`.:V108`). R44 measured writing from a ~500 token
@@ -116,51 +221,338 @@ pub fn gen_prompt_in_context(
     )
 }
 
-/// Compile a candidate against tests it never saw, and run them.
+/// Four outcomes, not two.
+///
+/// A test that will not COMPILE graded nothing, and folding that into `Fail`
+/// would credit an unusable test with a correct rejection -- `src/tdd:V26`
+/// one level finer. T83 needs it: a model whose own test does not build has
+/// caught nothing, and must not be scored as if it had.
+///
+/// `Hung` is `V6`, and it is the same rule a third time: the MODEL writes
+/// what gets run, so termination is not assumable, and a run that never ends
+/// decided nothing either.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Grade {
+    /// Compiled, every test passed.
+    Pass,
+    /// Compiled, a test failed.
+    Fail,
+    /// Did not compile.
+    NoCompile,
+    /// Compiled, ran, and was still running at [`GRADE_TIMEOUT`].
+    Hung,
+}
+
+/// How long a graded child may run before it is killed and called `Hung`.
+///
+/// The whole corpus compiles and runs in under a second, so this is ~10x
+/// headroom rather than a tuned number, and it bounds a 33-row sweep at five
+/// and a half minutes in the worst case. The number matters far less than
+/// the existence of a bound: without one the wait is unbounded, which is
+/// `B2` -- fifty-five minutes on a single `while eta <= u64::MAX / 4`.
+pub const GRADE_TIMEOUT: std::time::Duration =
+    std::time::Duration::from_secs(10);
+
+/// How often the child is checked. Small enough to be invisible against a
+/// sub-second run, large enough not to spin a core.
+const POLL: std::time::Duration = std::time::Duration::from_millis(25);
+
+/// Compile `candidate` against `tests` and run them, under a clock.
 ///
 /// The grader is `rustc`, never a model. A model grader would confound this
 /// twice: `.:R40` measured the judge as itself precision-sensitive, and
 /// `src/tdd:B2` is a judge loosening under pressure.
 ///
-/// Code that does not COMPILE is a wrong answer, so `Ok(false)`. A toolchain
-/// that could not RUN is an error, so `Err` -- `.:V26`: a missing compiler
-/// scoring zero is indistinguishable from a model that cannot write, and the
-/// whole measurement would read as a located boundary.
-///
 /// # Errors
 /// The compiler could not be executed, or the scratch file could not be
-/// written.
-pub fn grade(
+/// written. Both are ERRORS, never verdicts.
+pub fn grade_detail(
     candidate: &str,
     preamble: &str,
     tests: &str,
     rustc: &str,
-) -> Result<bool, String> {
+) -> Result<Grade, String> {
+    let (src, bin) = scratch_paths();
+    std::fs::write(&src, format!("{preamble}\n{candidate}\n{tests}\n"))
+        .map_err(|e| format!("scratch write: {e}"))?;
+    let built = compile(rustc, &src, &bin)?;
+    let g = if built {
+        run_bounded(&bin)?
+    } else {
+        Grade::NoCompile
+    };
+    let _ = std::fs::remove_file(&src);
+    let _ = std::fs::remove_file(&bin);
+    Ok(g)
+}
+
+/// A unique source and binary path per call, so concurrent grades cannot
+/// overwrite each other's scratch.
+fn scratch_paths() -> (std::path::PathBuf, std::path::PathBuf) {
     use std::sync::atomic::{AtomicUsize, Ordering};
     static N: AtomicUsize = AtomicUsize::new(0);
     let n = N.fetch_add(1, Ordering::Relaxed);
     let dir = std::env::temp_dir();
-    let src = dir.join(format!("bbx_gen_{}_{n}.rs", std::process::id()));
-    let bin = dir.join(format!("bbx_gen_{}_{n}", std::process::id()));
-    std::fs::write(&src, format!("{preamble}\n{candidate}\n{tests}\n"))
-        .map_err(|e| format!("scratch write: {e}"))?;
+    let pid = std::process::id();
+    (
+        dir.join(format!("bbx_gen_{pid}_{n}.rs")),
+        dir.join(format!("bbx_gen_{pid}_{n}")),
+    )
+}
+
+/// `rustc` itself is trusted to terminate -- it is not what the model wrote.
+fn compile(
+    rustc: &str,
+    src: &std::path::Path,
+    bin: &std::path::Path,
+) -> Result<bool, String> {
     let out = Command::new(rustc)
         .args(["--test", "--edition", "2021", "-A", "warnings"])
-        .arg(&src)
+        .arg(src)
         .arg("-o")
-        .arg(&bin)
+        .arg(bin)
         .output()
         .map_err(|e| format!("{rustc} could not run: {e}"))?;
-    if !out.status.success() {
-        let _ = std::fs::remove_file(&src);
-        return Ok(false);
-    }
-    let run = Command::new(&bin)
-        .output()
+    Ok(out.status.success())
+}
+
+/// Run the compiled tests, and stop waiting at [`GRADE_TIMEOUT`].
+///
+/// `Stdio::null()`, deliberately: a piped stream nobody drains DEADLOCKS
+/// once the child fills the buffer, which would reintroduce `B2` through the
+/// other door. Only the exit status was ever read.
+///
+/// A child still alive at the deadline is killed and reported `Hung`. It is
+/// NOT reported `Fail`: a killed process exits non-zero, so folding the two
+/// would record a wrong answer about code that never gave one -- which for
+/// the ambiguity detector means a DISAGREEMENT about a row nothing
+/// disagreed about (`V6`).
+fn run_bounded(bin: &std::path::Path) -> Result<Grade, String> {
+    let mut child = Command::new(bin)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
         .map_err(|e| format!("compiled binary could not run: {e}"))?;
-    let _ = std::fs::remove_file(&src);
-    let _ = std::fs::remove_file(&bin);
-    Ok(run.status.success())
+    let deadline = std::time::Instant::now().checked_add(GRADE_TIMEOUT);
+    while deadline.is_none_or(|d| std::time::Instant::now() < d) {
+        match child.try_wait() {
+            Err(e) => return Err(format!("waiting on the child: {e}")),
+            Ok(Some(s)) if s.success() => return Ok(Grade::Pass),
+            Ok(Some(_)) => return Ok(Grade::Fail),
+            Ok(None) => std::thread::sleep(POLL),
+        }
+    }
+    reap(&mut child);
+    Ok(Grade::Hung)
+}
+
+/// Kill the child and WAIT for it, so the sweep does not accumulate zombies
+/// across thirty-three rows.
+fn reap(child: &mut std::process::Child) {
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
+/// What a test and an implementation, each written BLIND from the SAME `§V`
+/// row, said about each other.
+///
+/// `.:V112`. Two calls and a compile, with no reference answer anywhere: the
+/// question is not whether either half is RIGHT, it is whether they read the
+/// row the same way. R51 measured them disagreeing 7 of 33, and R54 read the
+/// disagreements back -- every one was a rule the row left unstated and the
+/// two halves filled in differently. So a disagreement is evidence about the
+/// ROW, which is what makes this an instrument for the spec rather than for
+/// the model.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Reading {
+    /// The blind test passes the blind implementation. One reading, twice.
+    Agree,
+    /// The blind test REJECTS the blind implementation. Two readings of one
+    /// row, and the gap between them is in the row.
+    Disagree,
+    /// The test could not be compiled against the implementation at all.
+    /// It graded NOTHING, so it is not a disagreement.
+    ///
+    /// `src/tdd:B12`'s name-or-arity mismatch is one cause and was the one
+    /// assumed here; `.:R55` measured the other and it dominates -- `sign`
+    /// failed 3/3 on `let samples: [i64; 10]` holding nine elements. An
+    /// ordinary compile error in the model's test, not a naming problem.
+    Uncallable,
+    /// The pair compiled and then never terminated. `V6`, and `B2` is
+    /// fifty-five minutes of it. Killed at [`GRADE_TIMEOUT`] and reported
+    /// apart: a run that never ended decided nothing about the row either.
+    Hung,
+}
+
+impl Reading {
+    /// Four outcomes, named so no two read alike.
+    #[must_use]
+    pub const fn word(self) -> &'static str {
+        match self {
+            Self::Agree => "agree",
+            Self::Disagree => "DISAGREE",
+            Self::Uncallable => "uncallable",
+            Self::Hung => "hung",
+        }
+    }
+}
+
+/// `NoCompile` and `Hung` are the two that must NOT become verdicts about
+/// the row.
+///
+/// `assay:V1` at the level of a single call. A pair that never compiled says
+/// nothing about the invariant, and folding it into `Disagree` would flag
+/// every row whose signature the writer had to invent -- the model's naming,
+/// reported as the spec's ambiguity.
+///
+/// A pair that never TERMINATED says as little, and `V6` is why folding that
+/// one is worse: a killed child exits non-zero, so `Fail` is exactly what a
+/// hang looks like from the outside, and the fold would be silent.
+#[must_use]
+pub const fn reading(g: Grade) -> Reading {
+    match g {
+        Grade::Pass => Reading::Agree,
+        Grade::Fail => Reading::Disagree,
+        Grade::NoCompile => Reading::Uncallable,
+        Grade::Hung => Reading::Hung,
+    }
+}
+
+/// Compile a blind test against a blind implementation of the same row.
+///
+/// The grader is `rustc`, never a model -- the whole node's first constraint.
+/// Unlike a mutation sweep (REFUTED, R53) this needs no known-wrong stub and
+/// no hidden tests, so it runs on a row nobody has an answer for.
+///
+/// # Errors
+/// The compiler could not be executed, or the scratch file could not be
+/// written. Both are ERRORS, never verdicts (`assay:V1`).
+pub fn cross(
+    code: &str,
+    test: &str,
+    preamble: &str,
+    rustc: &str,
+) -> Result<Reading, String> {
+    grade_detail(code, preamble, test, rustc).map(reading)
+}
+
+/// One `§V` row's readings, accumulated over runs.
+///
+/// Per ROW, never pooled: T83 pooled to grade the model and got one rate,
+/// where R52 shows the signal is per-item and deterministic -- `for_path` and
+/// `escape_cell` disagreed 3/3 each while the rest agreed. Pooling those into
+/// "7 of 33" is exactly the resolution that hides which row to fix.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RowReadings {
+    /// What to call this row in the report.
+    pub label: String,
+    /// Test and implementation read the row the same way.
+    pub agree: usize,
+    /// They read it differently. The count that flags.
+    pub disagree: usize,
+    /// The pair did not compile. Counted APART, never as either.
+    pub uncallable: usize,
+    /// The pair never terminated and was killed. Counted APART for the same
+    /// reason (`V6`), and it is the one the harness must SEE: a row that
+    /// hangs every run is measured zero times while looking measured.
+    pub hung: usize,
+}
+
+impl RowReadings {
+    /// A row with nothing measured yet.
+    #[must_use]
+    pub fn new(label: &str) -> Self {
+        Self {
+            label: label.to_string(),
+            ..Self::default()
+        }
+    }
+
+    /// Record one reading.
+    pub const fn push(&mut self, r: Reading) {
+        let c = match r {
+            Reading::Agree => &mut self.agree,
+            Reading::Disagree => &mut self.disagree,
+            Reading::Uncallable => &mut self.uncallable,
+            Reading::Hung => &mut self.hung,
+        };
+        *c = c.saturating_add(1);
+    }
+
+    /// The DENOMINATOR, and it excludes everything that graded nothing.
+    ///
+    /// `.:B4`: a ratio must name what is in its denominator. A pair that did
+    /// not compile is not a pair that agreed, and neither is one that was
+    /// killed at the clock -- dividing by either would report a row as clean
+    /// in proportion to how often the instrument failed on it.
+    #[must_use]
+    pub const fn measured(&self) -> usize {
+        self.agree.saturating_add(self.disagree)
+    }
+
+    /// A row is UNDERSPECIFIED when the two blind halves ever disagreed.
+    ///
+    /// Ever, not mostly: R52 measured this deterministic per item, so one
+    /// disagreement is a gap the row leaves open, not noise.
+    #[must_use]
+    pub const fn underspecified(&self) -> bool {
+        self.disagree > 0
+    }
+
+    /// What the report calls this row.
+    #[must_use]
+    pub const fn verdict(&self) -> &'static str {
+        if self.underspecified() {
+            "UNDERSPECIFIED"
+        } else if self.measured() == 0 {
+            "not measured"
+        } else {
+            "no gap found"
+        }
+    }
+}
+
+/// Agreement is NOT sharpness, and the report must say so where it is read.
+///
+/// R52: `is_yes` is beyond the frontier at every wording, every implementation
+/// of it was wrong, and its own test CLEARED it 3/3. Two halves that misread a
+/// row the SAME way agree. So this instrument finds gaps; it never certifies
+/// their absence, and a report that let "no gap found" read as "sharp" would
+/// be the weaker claim of the two smuggled in as the stronger.
+pub const AGREEMENT_IS_NOT_SHARPNESS: &str = "  agreement ⊥ sharpness (R52): two halves that misread a row the SAME \
+     way agree.\n  `no gap found` = this instrument found none, ⊥ that the \
+     row has none.\n";
+
+/// The report. It flags rows; it gates nothing.
+///
+/// A REPORT, deliberately: `.:V112` grades the SPEC, and a red gate here
+/// would make the fix "reword until the model agrees with itself", which is
+/// tuning prose to a 20B rather than sharpening an invariant.
+#[must_use]
+pub fn ambiguity_report(rows: &[RowReadings]) -> String {
+    let flagged = rows.iter().filter(|r| r.underspecified()).count();
+    let mut out = format!(
+        "\nAMBIGUITY DETECTOR ({} rows, {flagged} UNDERSPECIFIED)\n",
+        rows.len()
+    );
+    for r in rows {
+        out.push_str(&row_line(r));
+    }
+    out.push_str(AGREEMENT_IS_NOT_SHARPNESS);
+    out
+}
+
+/// One row: the verdict first, so a flagged row is findable by eye.
+fn row_line(r: &RowReadings) -> String {
+    format!(
+        "  {:<14} {:<18} {}/{} disagree · {} uncallable · {} hung\n",
+        r.verdict(),
+        r.label,
+        r.disagree,
+        r.measured(),
+        r.uncallable,
+        r.hung
+    )
 }
 
 /// Five pure functions from this repo, each with the tests it actually has.
@@ -654,8 +1046,8 @@ mod tests {
         let it = &GEN_CORPUS[1]; // bucket
         let good = "pub fn bucket(prompt_tokens: u64) -> &'static str {\n    match prompt_tokens {\n        0..=1_999 => \"b0\",\n        2_000..=7_999 => \"b2\",\n        8_000..=31_999 => \"b8\",\n        _ => \"b32\",\n    }\n}";
         assert_eq!(
-            grade(good, it.preamble, it.tests, "rustc"),
-            Ok(true),
+            grade_detail(good, it.preamble, it.tests, "rustc"),
+            Ok(Grade::Pass),
             "the real function must pass the tests it actually has"
         );
     }
@@ -664,8 +1056,8 @@ mod tests {
     fn grade_rejects_code_that_does_not_compile() {
         let it = &GEN_CORPUS[1];
         assert_eq!(
-            grade("pub fn bucket(", it.preamble, it.tests, "rustc"),
-            Ok(false),
+            grade_detail("pub fn bucket(", it.preamble, it.tests, "rustc"),
+            Ok(Grade::NoCompile),
             "a candidate that will not compile is a WRONG ANSWER, not an error"
         );
     }
@@ -675,7 +1067,10 @@ mod tests {
         // The stub shape: compiles, reads its input, returns one bucket.
         let it = &GEN_CORPUS[1];
         let stub = "pub fn bucket(prompt_tokens: u64) -> &'static str {\n    if prompt_tokens > 0 { \"b0\" } else { \"b0\" }\n}";
-        assert_eq!(grade(stub, it.preamble, it.tests, "rustc"), Ok(false));
+        assert_eq!(
+            grade_detail(stub, it.preamble, it.tests, "rustc"),
+            Ok(Grade::Fail)
+        );
     }
 
     #[test]
@@ -685,8 +1080,13 @@ mod tests {
         // boundary rather than as a broken harness.
         let it = &GEN_CORPUS[1];
         assert!(
-            grade("fn x() {}", it.preamble, it.tests, "definitely-not-rustc")
-                .is_err(),
+            grade_detail(
+                "fn x() {}",
+                it.preamble,
+                it.tests,
+                "definitely-not-rustc"
+            )
+            .is_err(),
             "an unrunnable compiler is an ERROR, never a score"
         );
     }
@@ -718,6 +1118,10 @@ mod tests {
         Pass,
         Fail,
         Error,
+        /// Compiled, ran, never terminated. Killed at `GRADE_TIMEOUT` and
+        /// counted apart -- `V6`. Folding it into `Fail` would score the
+        /// model wrong for code that never gave an answer.
+        Hung,
     }
 
     /// Append one row the moment it exists, so a crash costs ONE call rather
@@ -736,19 +1140,21 @@ mod tests {
     }
 
     /// Grade a reply that arrived. A compiler that cannot RUN is an error,
-    /// never a wrong answer -- the same distinction `grade` already draws.
+    /// never a wrong answer -- the same distinction `grade_detail` draws, and
+    /// a run that never TERMINATED is a third thing again (`V6`).
     fn grade_reply(
         r: &crate::ollama::Reply,
         it: &GenItem,
     ) -> (Outcome, String) {
         let code = crate::ollama::rust_block(&r.text);
-        match grade(&code, it.preamble, it.tests, "rustc") {
-            Ok(true) => (Outcome::Pass, format!("{} tok", r.prompt_tokens)),
-            Ok(false) => (Outcome::Fail, format!("{} tok", r.prompt_tokens)),
+        let tok = format!("{} tok", r.prompt_tokens);
+        match grade_detail(&code, it.preamble, it.tests, "rustc") {
+            Ok(Grade::Pass) => (Outcome::Pass, tok),
+            Ok(Grade::Fail | Grade::NoCompile) => (Outcome::Fail, tok),
+            Ok(Grade::Hung) => (Outcome::Hung, tok),
             Err(e) => (Outcome::Error, e),
         }
     }
-
     /// One measurement, which NEVER panics. A transient belongs in the
     /// record, not in a stack trace.
     fn run_one(prompt: &str, it: &GenItem) -> (Outcome, String) {
@@ -766,6 +1172,7 @@ mod tests {
             Outcome::Pass => "PASS",
             Outcome::Fail => "fail",
             Outcome::Error => "ERROR",
+            Outcome::Hung => "HUNG",
         };
         let row = format!("{run}\t{tag}\t{word}\t{name}\t{note}");
         println!("run {run} · {tag:5} · {word} · {name} · {note}");
@@ -773,23 +1180,34 @@ mod tests {
         o
     }
 
-    /// `(pass, fail, error)` over a set of outcomes. Counted by filtering
-    /// rather than by `+=`, which `arithmetic_side_effects` rejects.
-    fn tally(os: &[Outcome]) -> (usize, usize, usize) {
+    /// `(pass, fail, error, hung)` over a set of outcomes. Counted by
+    /// filtering rather than by `+=`, which `arithmetic_side_effects`
+    /// rejects.
+    fn tally(os: &[Outcome]) -> (usize, usize, usize, usize) {
         let n = |w: Outcome| os.iter().filter(|o| **o == w).count();
-        (n(Outcome::Pass), n(Outcome::Fail), n(Outcome::Error))
+        (
+            n(Outcome::Pass),
+            n(Outcome::Fail),
+            n(Outcome::Error),
+            n(Outcome::Hung),
+        )
     }
 
-    /// Report one condition. An ERROR count above zero means the run is
-    /// INCOMPLETE, and the summary has to say so where a reader will see it.
+    /// Report one condition. An ERROR or a HUNG count above zero means the
+    /// run is INCOMPLETE, and the summary has to say so where a reader will
+    /// see it: `p/total` reads as a score, and every call that did not
+    /// produce one is silently shrinking it (`.:B4`).
     fn report(label: &str, os: &[Outcome]) {
-        let (p, f, e) = tally(os);
+        let (p, f, e, h) = tally(os);
         let total = os.len();
-        println!("  {label:5} pass {p}/{total} · fail {f} · error {e}");
-        if e > 0 {
+        println!(
+            "  {label:5} pass {p}/{total} · fail {f} · error {e} · hung {h}"
+        );
+        let lost = e.saturating_add(h);
+        if lost > 0 {
             println!(
-                "    {e} of {total} did not RUN -- this condition is \
-                 incomplete, not measured (V1)"
+                "    {lost} of {total} produced NO verdict -- this condition \
+                 is incomplete, not measured (V1, V6)"
             );
         }
     }
@@ -814,15 +1232,18 @@ mod tests {
     }
 
     #[test]
-    fn an_error_is_never_counted_as_a_failure() {
-        // V1, and B1 in one assertion: a transient must not read as a miss.
-        let os = [Outcome::Pass, Outcome::Fail, Outcome::Error];
-        assert_eq!(tally(&os), (1, 1, 1), "three outcomes, not two");
-        let all_err = [Outcome::Error, Outcome::Error];
+    fn a_call_that_produced_no_verdict_is_never_counted_as_a_failure() {
+        // V1 and B1 in one assertion: a transient must not read as a miss.
+        // V6 and B2 add the second shape -- a run killed at the clock is not
+        // a miss either, and it is the more dangerous of the two because a
+        // killed child exits non-zero and looks exactly like `fail`.
+        let os = [Outcome::Pass, Outcome::Fail, Outcome::Error, Outcome::Hung];
+        assert_eq!(tally(&os), (1, 1, 1, 1), "four outcomes, not two");
+        let none_ran = [Outcome::Error, Outcome::Hung];
         assert_eq!(
-            tally(&all_err),
-            (0, 0, 2),
-            "a run that never ran scores zero PASS and zero FAIL"
+            tally(&none_ran),
+            (0, 0, 1, 1),
+            "a run that produced no verdict scores zero PASS and zero FAIL"
         );
     }
 
@@ -948,5 +1369,649 @@ mod tests {
         let mut always_no = |_: &str| Ok(false);
         let s = titrate_tier(&TIERS[0], &mut always_no).unwrap();
         assert_eq!(s.correct * 2, s.total, "NO to everything is half, not all");
+    }
+}
+
+#[cfg(test)]
+mod authorship {
+    use super::*;
+
+    /// What two graders said about ONE implementation.
+    #[derive(Clone, Copy)]
+    struct Verdicts {
+        /// Hidden tests, written before any candidate existed.
+        hidden: bool,
+        /// The test the model wrote for itself.
+        own: bool,
+        /// The model's own test did not compile -- it graded NOTHING.
+        own_broken: bool,
+    }
+
+    fn ask(prompt: &str) -> Result<String, String> {
+        crate::ollama::generate(prompt)
+            .map(|r| crate::ollama::rust_block(&r.text))
+    }
+
+    /// One implementation, graded twice. Written BLIND in both arms -- only
+    /// the grading tests differ, which is the single variable (`.:V108`).
+    fn one(it: &GenItem) -> Result<Verdicts, String> {
+        let code = ask(&gen_prompt(it.sharp, it.sig, it.preamble))?;
+        let own_test = ask(&test_prompt(it.sharp, it.sig, it.preamble))?;
+        let h = grade_detail(&code, it.preamble, it.tests, "rustc")?;
+        let o = grade_detail(&code, it.preamble, &own_test, "rustc")?;
+        Ok(Verdicts {
+            hidden: h == Grade::Pass,
+            own: o == Grade::Pass,
+            own_broken: o == Grade::NoCompile,
+        })
+    }
+
+    fn row(run: usize, it: &GenItem, v: Verdicts) {
+        println!(
+            "run {run} · hidden {} · own {} · {}",
+            if v.hidden { "PASS" } else { "fail" },
+            if v.own_broken {
+                "BROKE"
+            } else if v.own {
+                "PASS"
+            } else {
+                "fail"
+            },
+            it.sig.split('(').next().unwrap_or("")
+        );
+    }
+
+    fn counts(vs: &[Verdicts]) -> [usize; 5] {
+        let c = |f: fn(&Verdicts) -> bool| vs.iter().filter(|v| f(v)).count();
+        [
+            c(|v| v.hidden),
+            c(|v| v.own),
+            c(|v| v.own && !v.hidden),
+            c(|v| !v.own && !v.hidden && !v.own_broken),
+            c(|v| v.own_broken),
+        ]
+    }
+
+    /// The discriminating cell is `own PASS, hidden fail`: a self-authored
+    /// test certifying an implementation the real tests reject. That is
+    /// `src/tdd:B2` and `B12` expressed as a number.
+    fn report(vs: &[Verdicts]) {
+        let n = vs.len();
+        let [hidden, own, wrong, caught, broke] = counts(vs);
+        println!("\nAUTHORSHIP TITRATION ({n} measured)");
+        println!("  hidden tests pass  {hidden}/{n}");
+        println!("  own test passes    {own}/{n}");
+        println!("  CERTIFIED WRONG    {wrong}/{n}  (own PASS, hidden fail)");
+        println!("  correctly rejected {caught}/{n}  (both fail)");
+        println!("  own test unusable  {broke}/{n}  (did not compile)");
+    }
+
+    /// T83. Records; asserts nothing about the model.
+    #[test]
+    #[ignore]
+    fn authorship_titration() {
+        const RUNS: usize = 3;
+        let mut vs = Vec::new();
+        for run in 1..=RUNS {
+            for it in GEN_CORPUS {
+                measure(run, it, &mut vs);
+            }
+        }
+        report(&vs);
+    }
+
+    /// One item, recorded. An endpoint failure is an ERROR line and never a
+    /// verdict, so a transient cannot look like the model getting it wrong
+    /// (`src/tdd:V27`, and `B1` is that mistake costing forty minutes).
+    fn measure(run: usize, it: &GenItem, vs: &mut Vec<Verdicts>) {
+        match one(it) {
+            Ok(v) => {
+                row(run, it, v);
+                vs.push(v);
+            }
+            Err(e) => println!("run {run} · ERROR · {e}"),
+        }
+    }
+
+    /// Build a `Verdicts` from a two-letter shorthand: hidden then own,
+    /// where `P` is pass, `f` is fail and `x` is did-not-compile.
+    ///
+    /// Three bool parameters trips `fn_params_excessive_bools`, and the lint
+    /// is right: `v(true, false, true)` at a call site says nothing about
+    /// which flag is which.
+    fn v(spec: &str) -> Verdicts {
+        let mut c = spec.chars();
+        let (h, o) = (c.next(), c.next());
+        Verdicts {
+            hidden: h == Some('P'),
+            own: o == Some('P'),
+            own_broken: o == Some('x'),
+        }
+    }
+
+    #[test]
+    fn the_discriminating_cell_is_own_pass_hidden_fail() {
+        // R51's headline number. Getting these cells wrong would misreport
+        // the whole experiment, and the counts are the only thing standing
+        // between the raw rows and the conclusion.
+        let vs = [
+            v("PP"), // both agree it works
+            v("fP"), // CERTIFIED WRONG -- the cell that matters
+            v("Pf"), // own test rejects correct code
+            v("ff"), // both agree it is broken
+            v("Px"), // own test did not compile
+        ];
+        let [hidden, own, wrong, caught, broke] = counts(&vs);
+        assert_eq!(hidden, 3, "hidden passes");
+        assert_eq!(own, 2, "own passes");
+        assert_eq!(wrong, 1, "own PASS while hidden FAILED");
+        assert_eq!(caught, 1, "both failed -- a real catch");
+        assert_eq!(broke, 1, "own test unusable");
+    }
+
+    #[test]
+    fn a_test_that_did_not_compile_is_not_counted_as_a_catch() {
+        // The `caught` cell must exclude no-compile: a test that never built
+        // rejected nothing, and counting it as a catch would flatter the
+        // model exactly where V111 says not to.
+        let vs = [v("fx")];
+        let [_, _, _, caught, broke] = counts(&vs);
+        assert_eq!(caught, 0, "a no-compile test caught nothing");
+        assert_eq!(broke, 1);
+    }
+
+    #[test]
+    fn report_and_row_render_without_panicking() {
+        let vs = [v("PP"), v("fP")];
+        report(&vs);
+        let Some(it) = GEN_CORPUS.first() else {
+            return;
+        };
+        row(1, it, vs[0]);
+    }
+
+    const GOOD: &str = "pub fn bucket(n: u64) -> &'static str { match n { 0..=1_999 => \"b0\", 2_000..=7_999 => \"b2\", 8_000..=31_999 => \"b8\", _ => \"b32\" } }";
+    const STUB: &str = "pub fn bucket(_n: u64) -> &'static str { \"b0\" }";
+
+    #[test]
+    fn a_test_that_will_not_compile_is_not_a_correct_rejection() {
+        // A test that never compiled caught nothing. Folding it into `Fail`
+        // would credit an unusable test with a correct verdict (V26), which
+        // T83 counts as the model catching its own error.
+        assert_eq!(three_way(), Ok(()));
+    }
+
+    fn three_way() -> Result<(), String> {
+        let it = GEN_CORPUS.get(1).ok_or("corpus")?;
+        let g = |code, tests| grade_detail(code, it.preamble, tests, "rustc");
+        assert_eq!(g(GOOD, "not rust at all")?, Grade::NoCompile);
+        assert_eq!(g(GOOD, it.tests)?, Grade::Pass);
+        assert_eq!(
+            g(STUB, it.tests)?,
+            Grade::Fail,
+            "a compiling wrong answer is FAIL, never NoCompile"
+        );
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod mutants {
+    use super::*;
+
+    /// Every corpus item needs a mutant, or the sweep silently skips it and
+    /// reports a rate over a smaller denominator than it claims (`.:B4`).
+    #[test]
+    fn every_item_has_a_stub() {
+        for it in GEN_CORPUS {
+            assert!(
+                stub_for(it.sig).is_some(),
+                "no mutant for {} -- a skipped item shrinks the denominator",
+                it.sig
+            );
+        }
+    }
+
+    /// THE CONTROL. Each stub must actually be wrong: the hidden tests --
+    /// which are correct by construction -- must FAIL it.
+    ///
+    /// Without this, "the model's test did not kill the stub" is unreadable:
+    /// a stub nothing rejects is not a mutant, it is a second right answer.
+    #[test]
+    fn the_hidden_tests_kill_every_stub() {
+        assert_eq!(control(), Ok(()));
+    }
+
+    fn control() -> Result<(), String> {
+        for it in GEN_CORPUS {
+            let stub = stub_for(it.sig).ok_or("missing stub")?;
+            let g = grade_detail(stub, it.preamble, it.tests, "rustc")?;
+            assert_eq!(
+                g,
+                Grade::Fail,
+                "{} -- a stub the real tests accept is not a mutant",
+                it.sig
+            );
+        }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod kills {
+    use super::*;
+
+    /// Did the model's own test kill a known-wrong implementation?
+    #[derive(Clone, Copy)]
+    struct Kill {
+        /// The authored test FAILED the stub -- it discriminates.
+        killed: bool,
+        /// The authored test would not compile against the stub.
+        broken: bool,
+    }
+
+    fn one(it: &GenItem) -> Result<Kill, String> {
+        let stub = stub_for(it.sig).ok_or("no mutant")?;
+        let t = crate::ollama::generate(&test_prompt(
+            it.sharp,
+            it.sig,
+            it.preamble,
+        ))
+        .map(|r| crate::ollama::rust_block(&r.text))?;
+        // Keep the test itself: T83 discarded its raw material and the next
+        // question could not be asked without re-running (`B1`).
+        log_test(it.sig, &t);
+        let g = grade_detail(stub, it.preamble, &t, "rustc")?;
+        Ok(Kill {
+            killed: g == Grade::Fail,
+            broken: g == Grade::NoCompile,
+        })
+    }
+
+    fn log_test(sig: &str, body: &str) {
+        use std::io::Write;
+        let p = std::path::Path::new("target").join("authored-tests.txt");
+        if let Ok(mut f) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(p)
+        {
+            let _ = writeln!(f, "=== {sig}\n{body}");
+        }
+    }
+
+    fn report(ks: &[Kill]) {
+        let n = ks.len();
+        let killed = ks.iter().filter(|k| k.killed).count();
+        let broken = ks.iter().filter(|k| k.broken).count();
+        let survived = n.saturating_sub(killed).saturating_sub(broken);
+        println!("\nMUTATION SWEEP ({n} authored tests)");
+        println!("  killed the stub   {killed}/{n}  (the test discriminates)");
+        println!(
+            "  stub SURVIVED     {survived}/{n}  (the test measured nothing)"
+        );
+        println!("  test no-compile   {broken}/{n}  (graded nothing at all)");
+    }
+
+    /// Can a self-authored test kill a known-wrong implementation?
+    ///
+    /// `.:V111` says such a test cannot grade its own author. This asks
+    /// whether a MECHANICAL check would have caught that -- run the test
+    /// against a mutant and require RED. If most tests let the stub through,
+    /// the check is the remedy; if most kill it, the fault is elsewhere.
+    #[test]
+    #[ignore]
+    fn authored_tests_vs_mutants() {
+        const RUNS: usize = 3;
+        let mut ks = Vec::new();
+        for run in 1..=RUNS {
+            for it in GEN_CORPUS {
+                measure(run, it, &mut ks);
+            }
+        }
+        report(&ks);
+    }
+
+    /// One item, recorded. An endpoint failure is an ERROR line, never a
+    /// verdict -- a transient must not read as a test that failed to
+    /// discriminate (`src/tdd:V27`).
+    fn measure(run: usize, it: &GenItem, ks: &mut Vec<Kill>) {
+        let name = it.sig.split('(').next().unwrap_or("");
+        match one(it) {
+            Ok(k) => {
+                println!("run {run} · {} · {name}", word(k));
+                ks.push(k);
+            }
+            Err(e) => println!("run {run} · ERROR · {name} · {e}"),
+        }
+    }
+
+    const fn word(k: Kill) -> &'static str {
+        if k.broken {
+            "BROKE"
+        } else if k.killed {
+            "killed"
+        } else {
+            "SURVIVED"
+        }
+    }
+
+    /// Shorthand: `k` killed, `s` survived, `x` did not compile.
+    ///
+    /// Two bool parameters trips `fn_params_excessive_bools`, and the lint
+    /// is right -- `k(false, true)` at a call site says nothing about which
+    /// flag is which, and these two are exactly the pair that must not be
+    /// confused.
+    fn k(spec: char) -> Kill {
+        Kill {
+            killed: spec == 'k',
+            broken: spec == 'x',
+        }
+    }
+
+    #[test]
+    fn the_three_outcomes_are_named_distinctly() {
+        // SURVIVED and BROKE must never read alike: a test that would not
+        // compile graded nothing, while one that let the stub live graded
+        // it and got it wrong. Collapsing them would flatter the model.
+        assert_eq!(word(k('k')), "killed");
+        assert_eq!(word(k('s')), "SURVIVED");
+        assert_eq!(word(k('x')), "BROKE");
+    }
+
+    #[test]
+    fn report_counts_survivors_as_the_remainder() {
+        // `survived` is derived, so an off-by-one here would misstate the
+        // headline. Saturating, because a miscount must not wrap.
+        report(&[k('k'), k('s'), k('x')]);
+        report(&[]);
+    }
+
+    #[test]
+    fn a_vacuous_test_lets_the_stub_live() {
+        // The measurement's own control: a test asserting nothing must be
+        // recorded as SURVIVED, never as a kill.
+        let Some(it) = GEN_CORPUS.first() else {
+            return;
+        };
+        let Some(stub) = stub_for(it.sig) else { return };
+        let vacuous =
+            "#[cfg(test)]\nmod t { #[test] fn a() { assert!(true); } }";
+        assert_eq!(
+            grade_detail(stub, it.preamble, vacuous, "rustc"),
+            Ok(Grade::Pass),
+            "a test that asserts nothing passes a stub -- that is SURVIVED"
+        );
+    }
+}
+
+#[cfg(test)]
+mod signature {
+    use super::*;
+
+    fn ask(p: &str) -> Result<String, String> {
+        crate::ollama::generate(p).map(|r| crate::ollama::rust_block(&r.text))
+    }
+
+    /// Same invariant, same hidden tests. Only the signature differs.
+    /// `(signature given, signature invented)` for one item.
+    type Pair = (Grade, Grade);
+
+    fn one(it: &GenItem) -> Result<Pair, String> {
+        let given = ask(&gen_prompt(it.sharp, it.sig, it.preamble))?;
+        let free = ask(&gen_prompt_no_sig(it.sharp, it.preamble))?;
+        Ok((
+            grade_detail(&given, it.preamble, it.tests, "rustc")?,
+            grade_detail(&free, it.preamble, it.tests, "rustc")?,
+        ))
+    }
+
+    const fn mark(g: Grade) -> &'static str {
+        match g {
+            Grade::Pass => "PASS",
+            Grade::Fail => "fail",
+            Grade::NoCompile => "NOCALL",
+            Grade::Hung => "HUNG",
+        }
+    }
+
+    /// `NoCompile` in the free arm means the invented name or arity is one
+    /// the hidden tests cannot call -- `src/tdd:B12`'s exact shape, and a
+    /// different failure from writing the wrong logic.
+    fn report(rs: &[Pair]) {
+        let n = rs.len();
+        let c = |f: fn(&Pair) -> bool| rs.iter().filter(|r| f(r)).count();
+        println!("\nSIGNATURE TITRATION ({n} measured)");
+        println!("  given  PASS   {}/{n}", c(|r| r.0 == Grade::Pass));
+        println!("  free   PASS   {}/{n}", c(|r| r.1 == Grade::Pass));
+        println!(
+            "  free   NOCALL {}/{n}  (invented a name the tests cannot call)",
+            c(|r| r.1 == Grade::NoCompile)
+        );
+        println!(
+            "  free   wrong  {}/{n}  (callable, wrong logic)",
+            c(|r| r.1 == Grade::Fail)
+        );
+    }
+
+    fn measure(run: usize, it: &GenItem, rs: &mut Vec<Pair>) {
+        let name = it.sig.split('(').next().unwrap_or("");
+        match one(it) {
+            Ok((g, f)) => {
+                println!(
+                    "run {run} · given {} · free {} · {name}",
+                    mark(g),
+                    mark(f)
+                );
+                rs.push((g, f));
+            }
+            Err(e) => println!("run {run} · ERROR · {name} · {e}"),
+        }
+    }
+
+    /// T84. Records; asserts nothing about the model.
+    #[test]
+    #[ignore]
+    fn signature_titration() {
+        const RUNS: usize = 3;
+        let mut rs = Vec::new();
+        for run in 1..=RUNS {
+            for it in GEN_CORPUS {
+                measure(run, it, &mut rs);
+            }
+        }
+        report(&rs);
+    }
+
+    #[test]
+    fn a_name_the_tests_cannot_call_is_not_wrong_logic() {
+        // The two failure modes must stay separate: B12 is an unreachable
+        // NAME, which three repairs could not fix, and that is a different
+        // problem from an implementation that is simply incorrect.
+        assert_eq!(mark(Grade::NoCompile), "NOCALL");
+        assert_eq!(mark(Grade::Fail), "fail");
+        assert_eq!(mark(Grade::Pass), "PASS");
+        report(&[
+            (Grade::Pass, Grade::NoCompile),
+            (Grade::Pass, Grade::Fail),
+            (Grade::Pass, Grade::Pass),
+        ]);
+    }
+}
+
+#[cfg(test)]
+mod ambiguity {
+    use super::*;
+
+    /// `bucket`'s row, and two implementations of it: one correct, one the
+    /// recorded mutant. Reused rather than re-authored -- two readings of one
+    /// fixture is the defect `.:B13` names, in miniature.
+    const GOOD: &str = "pub fn bucket(n: u64) -> &'static str { match n { 0..=1_999 => \"b0\", 2_000..=7_999 => \"b2\", 8_000..=31_999 => \"b8\", _ => \"b32\" } }";
+
+    #[test]
+    fn a_pair_that_did_not_compile_is_not_a_disagreement() {
+        // The whole distinction the instrument rests on. A test that could
+        // not be CALLED graded nothing (`assay:V1`), and counting it as a
+        // disagreement would report the model's naming (`src/tdd:B12`, T84)
+        // as the row's ambiguity -- the one confound this method has.
+        assert_eq!(reading(Grade::NoCompile), Reading::Uncallable);
+        let mut r = RowReadings::new("bucket");
+        r.push(Reading::Uncallable);
+        assert!(!r.underspecified(), "uncallable flags nothing");
+        assert_eq!(r.measured(), 0, "and it is not in the denominator");
+        assert_eq!(r.verdict(), "not measured");
+    }
+
+    #[test]
+    fn the_denominator_names_only_what_was_graded() {
+        // `.:B4`: a ratio must name what is in its denominator. 1 of 2, never
+        // 1 of 3 -- the third pair never ran.
+        let mut r = RowReadings::new("escape_cell");
+        for x in [Reading::Agree, Reading::Disagree, Reading::Uncallable] {
+            r.push(x);
+        }
+        assert_eq!(r.measured(), 2);
+        assert_eq!(r.uncallable, 1);
+        assert!(r.underspecified());
+        assert_eq!(r.verdict(), "UNDERSPECIFIED");
+    }
+
+    #[test]
+    fn one_disagreement_is_enough_to_flag_a_row() {
+        // Ever, not mostly. R52 measured the signal deterministic per item,
+        // so a majority rule would discard the first evidence of a gap.
+        let mut r = RowReadings::new("for_path");
+        r.push(Reading::Agree);
+        r.push(Reading::Agree);
+        assert_eq!(r.verdict(), "no gap found");
+        r.push(Reading::Disagree);
+        assert_eq!(r.verdict(), "UNDERSPECIFIED");
+    }
+
+    #[test]
+    fn the_three_readings_are_named_distinctly() {
+        // DISAGREE and uncallable must never read alike in a report someone
+        // acts on: one names a gap in the row, the other names a run that
+        // measured nothing at all.
+        assert_eq!(Reading::Agree.word(), "agree");
+        assert_eq!(Reading::Disagree.word(), "DISAGREE");
+        assert_eq!(Reading::Uncallable.word(), "uncallable");
+    }
+
+    #[test]
+    fn cross_is_graded_by_rustc_and_never_by_a_model() {
+        assert_eq!(three_readings(), Ok(()));
+    }
+
+    /// All three outcomes off one corpus row, compiled for real.
+    fn three_readings() -> Result<(), String> {
+        let it = GEN_CORPUS.get(1).ok_or("corpus")?;
+        let x = |code, test| cross(code, test, it.preamble, "rustc");
+        assert_eq!(x(GOOD, it.tests)?, Reading::Agree);
+        let stub = stub_for(it.sig).ok_or("mutant")?;
+        assert_eq!(
+            x(stub, it.tests)?,
+            Reading::Disagree,
+            "two readings of one row -- the signal"
+        );
+        assert_eq!(x(GOOD, "not rust at all")?, Reading::Uncallable);
+        Ok(())
+    }
+
+    #[test]
+    fn the_report_flags_a_row_without_certifying_the_others() {
+        // R52: `is_yes` agreed 3/3 while every implementation of it was
+        // wrong. A report where silence reads as `sharp` would state the
+        // stronger claim the measurement cannot support.
+        let mut bad = RowReadings::new("escape_cell");
+        bad.push(Reading::Disagree);
+        let mut ok = RowReadings::new("bucket");
+        ok.push(Reading::Agree);
+        let out = ambiguity_report(&[bad, ok]);
+        assert!(out.contains("1 UNDERSPECIFIED"), "{out}");
+        assert!(out.contains("UNDERSPECIFIED escape_cell"), "{out}");
+        assert!(out.contains("no gap found   bucket"), "{out}");
+        assert!(out.contains("agreement ⊥ sharpness"), "{out}");
+    }
+
+    #[test]
+    fn an_empty_report_flags_nothing_and_still_says_why() {
+        // A run where every call errored must not render as a clean spec.
+        let out = ambiguity_report(&[]);
+        assert!(out.contains("0 rows, 0 UNDERSPECIFIED"), "{out}");
+        assert!(out.contains(AGREEMENT_IS_NOT_SHARPNESS), "{out}");
+    }
+}
+
+#[cfg(test)]
+mod bound {
+    use super::*;
+
+    /// B2's shape, shrunk to a loop that never exits. The real one was
+    /// `while eta <= u64::MAX / 4` stepping 1000 -- ~4.6e15 iterations, which
+    /// is indistinguishable from this at any timescale a test can wait.
+    const NEVER_ENDS: &str = "#[cfg(test)]\nmod t {\n #[test]\n fn a() { loop { std::hint::spin_loop(); } }\n}";
+
+    #[test]
+    fn a_test_that_never_terminates_is_killed_and_reported_apart() {
+        // B2. Without the bound this call does not return, so the assertion
+        // that matters is that the test FINISHES at all -- and then that the
+        // verdict is `Hung` rather than `Fail`.
+        assert_eq!(hung_not_failed(), Ok(()));
+    }
+
+    fn hung_not_failed() -> Result<(), String> {
+        let started = std::time::Instant::now();
+        let g = grade_detail("", "", NEVER_ENDS, "rustc")?;
+        assert_eq!(
+            g,
+            Grade::Hung,
+            "a killed child exits non-zero, so `Fail` is what a hang looks \
+             like from outside -- V6 is that the fold must not happen"
+        );
+        assert!(
+            started.elapsed() < GRADE_TIMEOUT.saturating_mul(3),
+            "the bound must actually bound: {:?}",
+            started.elapsed()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn a_hang_is_not_a_disagreement_and_leaves_the_denominator() {
+        // The reason the fold matters for T97 specifically: `Fail` maps to
+        // `Disagree`, so an unbounded harness would have reported a gap in a
+        // row that nothing disagreed about.
+        assert_eq!(reading(Grade::Hung), Reading::Hung);
+        let mut r = RowReadings::new("abort_budget_ms");
+        r.push(Reading::Hung);
+        assert!(!r.underspecified(), "a hang flags no row");
+        assert_eq!(r.measured(), 0, "and it is not in the denominator");
+        assert_eq!(r.hung, 1);
+        assert_eq!(r.verdict(), "not measured");
+    }
+
+    #[test]
+    fn the_report_shows_hangs_where_a_reader_will_see_them() {
+        // A row measured zero times while looking measured is the failure
+        // mode; the count has to be on the line.
+        let mut r = RowReadings::new("abort_budget_ms");
+        r.push(Reading::Hung);
+        r.push(Reading::Agree);
+        let out = ambiguity_report(&[r]);
+        assert!(out.contains("1 hung"), "{out}");
+        assert!(out.contains("0/1 disagree"), "{out}");
+    }
+
+    #[test]
+    fn the_bound_costs_a_terminating_run_nothing() {
+        // The bound must not turn a slow-but-finite test into a false Hung,
+        // and it must not slow the 33-row sweep down.
+        let Some(it) = GEN_CORPUS.get(1) else { return };
+        let good = "pub fn bucket(n: u64) -> &'static str { match n { 0..=1_999 => \"b0\", 2_000..=7_999 => \"b2\", 8_000..=31_999 => \"b8\", _ => \"b32\" } }";
+        assert_eq!(
+            grade_detail(good, it.preamble, it.tests, "rustc"),
+            Ok(Grade::Pass)
+        );
     }
 }
