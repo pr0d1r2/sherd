@@ -136,7 +136,9 @@ pub fn run_args(mut args: Vec<String>) -> ExitCode {
         #[cfg(feature = "ollama")]
         Some("oneshot") => match (args.get(1), args.get(2), args.get(3)) {
             (Some(_), Some(v), Some(t)) => {
-                match crate::tdd::oneshot(&root, &arg_dir(&args, &root), v, t) {
+                let dir = arg_dir(&args, &root);
+                let run = crate::tdd::Run::new(&root, &dir, v, t);
+                match crate::tdd::oneshot(&run) {
                     Ok(_) => ExitCode::SUCCESS,
                     Err(e) => {
                         eprintln!("bbx: {e}");
