@@ -1423,7 +1423,6 @@ mod loop_tests {
         let after = std::fs::read_to_string(node.join("mod.rs"))
             .map_err(|e| format!("read back: {e}"))?;
         let _ = std::fs::remove_dir_all(&dir);
-        eprintln!("REPAIR OUTCOME: {out:?}");
         check_outcome(&out, &after)
     }
 
