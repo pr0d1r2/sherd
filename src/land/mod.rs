@@ -467,6 +467,75 @@ mod git_tests {
         Ok(())
     }
 
+    /// `push_branch` is BEST-EFFORT: it must never be fatal, and must always
+    /// say which of the three things happened.
+    ///
+    /// `B5` was silence -- nothing printed, nothing pushed, and a caller who
+    /// asked for `--push` could not tell which. V11 is the rule that came out
+    /// of it, and all three arms now run.
+    #[test]
+    fn a_push_reports_whichever_of_the_three_things_happened() {
+        assert_eq!(check_push_arms(), Ok(()));
+    }
+
+    fn check_push_arms() -> Result<(), String> {
+        push_with_no_remote()?;
+        push_to_a_real_remote()?;
+        push_to_a_broken_remote()
+    }
+
+    /// No remote at all. `B5` was SILENCE here.
+    fn push_with_no_remote() -> Result<(), String> {
+        let r = crate::testrepo::TestRepo::new("land-push-none")?;
+        r.git(&["checkout", "-q", "-b", "bbx/apply-p"])?;
+        push_branch(r.path(), "bbx/apply-p");
+        Ok(())
+    }
+
+    /// A remote that exists and accepts the push. The branch really being
+    /// there is the only proof that matters.
+    fn push_to_a_real_remote() -> Result<(), String> {
+        let up = crate::testrepo::TestRepo::new("land-push-up")?;
+        let target = up.path().join("bare.git").display().to_string();
+        init_bare(&target)?;
+        up.git(&["remote", "add", "origin", &target])?;
+        up.git(&["checkout", "-q", "-b", "bbx/apply-up"])?;
+        push_branch(up.path(), "bbx/apply-up");
+        assert!(
+            branches_at(&target)?.contains("bbx/apply-up"),
+            "the push actually landed on the remote"
+        );
+        Ok(())
+    }
+
+    fn init_bare(target: &str) -> Result<(), String> {
+        let out = std::process::Command::new("git")
+            .args(["init", "-q", "--bare", target])
+            .output()
+            .map_err(|e| format!("init bare: {e}"))?;
+        assert!(out.status.success(), "the bare repo must init");
+        Ok(())
+    }
+
+    fn branches_at(target: &str) -> Result<String, String> {
+        let ls = std::process::Command::new("git")
+            .args(["--git-dir", target, "branch"])
+            .output()
+            .map_err(|e| format!("ls: {e}"))?;
+        Ok(String::from_utf8_lossy(&ls.stdout).into_owned())
+    }
+
+    /// Configured but unreachable: reported, NOT fatal. The commit is
+    /// already made, and losing it because a network was down would be worse
+    /// than being unpushed.
+    fn push_to_a_broken_remote() -> Result<(), String> {
+        let b = crate::testrepo::TestRepo::new("land-push-bad")?;
+        b.git(&["remote", "add", "origin", "/no/such/remote.git"])?;
+        b.git(&["checkout", "-q", "-b", "bbx/apply-b"])?;
+        push_branch(b.path(), "bbx/apply-b");
+        Ok(())
+    }
+
     /// A gate that is always green, so the merge is what gets tested.
     fn green_gate(dir: &Path) -> Result<String, String> {
         let p = dir.join("green-cargo");

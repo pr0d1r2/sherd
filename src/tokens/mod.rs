@@ -134,6 +134,23 @@ mod tests {
     use super::*;
 
     #[test]
+    fn a_malformed_ceiling_line_is_named_and_numbered() {
+        // A skipped line means a ceiling that silently stops being enforced,
+        // which is `.:B7` -- chains drifting over unseen. Both malformations
+        // name the LINE so it can be fixed rather than hunted.
+        let short = Ceilings::parse("src/fed 9000\nonlyonefield\n")
+            .err()
+            .unwrap_or_default();
+        assert!(short.contains(":2"), "name the line: {short}");
+        assert!(short.contains("<path> <limit>"), "say the shape: {short}");
+        let nan = Ceilings::parse("src/fed notanumber\n")
+            .err()
+            .unwrap_or_default();
+        assert!(nan.contains(":1"), "name the line: {nan}");
+        assert!(nan.contains("not a token count"), "say why: {nan}");
+    }
+
+    #[test]
     fn a_file_that_cannot_be_read_is_an_error_never_a_zero() {
         // V48. A missing file contributing zero tokens makes an over-budget
         // chain read as comfortably under one, and every ceiling in this repo

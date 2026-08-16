@@ -231,10 +231,29 @@ pub fn render(root: &Path, d: &Decl) -> Result<String, String> {
 mod tests {
     use super::*;
 
-    /// A declaration whose source matches nothing is an ERROR.
+    /// A rule that matches nothing in files that DO exist.
     ///
-    /// Rendering it as an empty slice would silently replace a real document
-    /// with nothing, and the drift check would then call that agreement.
+    /// Distinct from a pattern matching no files, which is the previous test:
+    /// here the sources are real and the rule finds nothing in them. An empty
+    /// slice is a SILENT failure -- it would overwrite a real document with
+    /// nothing and the drift check would then report agreement.
+    #[test]
+    fn a_rule_matching_nothing_in_real_files_is_an_error() {
+        let d = Decl {
+            output: std::path::PathBuf::from("out.md"),
+            source: "SPEC.md".into(),
+            rule: Rule::Section("\u{a7}NO-SUCH-SECTION".into()),
+        };
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let msg = render(root, &d).err().unwrap_or_default();
+        assert!(
+            msg.contains("matched nothing"),
+            "an empty slice must be refused, not written: {msg}"
+        );
+    }
+
+    /// A declaration whose SOURCE matches no files at all -- distinct from a
+    /// rule finding nothing inside files that exist.
     #[test]
     fn a_source_matching_no_files_is_an_error_not_an_empty_slice() {
         let d = Decl {
