@@ -195,7 +195,13 @@ pub fn evidence(
         findings += crate::review::commit(root, sha)
             .map_err(|e| e.to_string())?
             .len();
-        for (node, _) in crate::review::added_in_commit(root, sha) {
+        // A commit whose diff cannot be READ leaves `nodes` short, and a
+        // branch attributed to no node is refused as UNKNOWN rather than
+        // trusted (V4). Propagating keeps that distinction honest: silence
+        // here would look like a branch that touched nothing.
+        let added = crate::review::added_in_commit(root, sha)
+            .map_err(|e| e.to_string())?;
+        for (node, _) in added {
             // The node is the directory holding the file the commit touched.
             if let Some(dir) = node.parent() {
                 lowest = lowest.min(crate::plan::believability(dir));

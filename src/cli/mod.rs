@@ -815,6 +815,84 @@ mod tests {
         );
     }
 
+    /// `check` on a repo that IS broken.
+    ///
+    /// Every reporting branch in `check` only runs when something is wrong,
+    /// so a clean tree exercises none of them -- and this repo is kept clean
+    /// by the gate. A detector tested only on the negative case is satisfied
+    /// by finding nothing, which is `src/fed:B6` and the reason `src/fed:V10`
+    /// exists. These are five such detectors with no positive case.
+    #[test]
+    fn check_reports_the_violations_it_finds_and_exits_one() {
+        assert_eq!(broken_repo_is_caught(), Ok(()));
+    }
+
+    /// A §F row pointing at a directory that is not there (fed V1), the same
+    /// dir named twice (fed V12), a child on disk with no row (fed V11), and
+    /// a §B row naming no invariant (spec V4).
+    const BROKEN: &str = "# SPEC\n\n## \u{a7}G GOAL\n\nbroken on purpose\n\n\
+         ## \u{a7}F FEDERATION\n\ndir|owns|\u{22a5}owns|tokens\n\
+         ghost|nothing real|-|-\n\
+         twice|a|-|-\n\
+         twice|b|-|-\n\n\
+         ## \u{a7}B BUGS\n\nid|date|cause|fix\n\
+         B1|2026-08-21|something broke|no invariant named here\n";
+
+    fn broken_repo_is_caught() -> Result<(), String> {
+        let r = crate::testrepo::TestRepo::new("cli-check-broken")?;
+        r.write("SPEC.md", BROKEN)?;
+        // A real child dir with no §F row -- fed V11's advisory.
+        r.write("orphan/SPEC.md", "# SPEC\n\n## \u{a7}G GOAL\n\nx\n")?;
+        r.commit("a deliberately broken tree")?;
+        assert_eq!(
+            check(r.path()),
+            ExitCode::from(1),
+            "a tree with violations must exit 1, never 0"
+        );
+        Ok(())
+    }
+
+    /// The control, and it is what makes the test above mean anything: the
+    /// same function on a clean tree exits 0. Without this, `check` returning
+    /// 1 unconditionally would pass.
+    #[test]
+    fn check_on_a_clean_tree_exits_zero() {
+        assert_eq!(check_clean_tree(), Ok(()));
+    }
+
+    fn check_clean_tree() -> Result<(), String> {
+        let r = crate::testrepo::TestRepo::new("cli-check-clean")?;
+        r.write(
+            "SPEC.md",
+            "# SPEC\n\n## \u{a7}G GOAL\n\nclean\n\n## \u{a7}V INVARIANTS\n\n\
+             V1: something ! hold\n",
+        )?;
+        r.commit("a clean tree")?;
+        assert_eq!(check(r.path()), ExitCode::SUCCESS);
+        Ok(())
+    }
+
+    /// `review` against a revision that does not exist.
+    #[test]
+    fn review_of_an_unknown_revision_is_an_error_not_a_clean_bill() {
+        // `src/review`'s own rule: an unreadable module is an error, never a
+        // clean review. A missing rev reporting "no findings" would be the
+        // most dangerous possible output.
+        assert_ne!(
+            run_args(argv(&["review", "definitely-not-a-rev"])),
+            ExitCode::SUCCESS,
+            "a rev that does not exist cannot be clean"
+        );
+    }
+
+    /// `review` of a real revision runs and reports.
+    #[test]
+    fn review_of_a_real_revision_reports_and_succeeds() {
+        // ADVISORY by design -- findings do not fail the command -- so the
+        // assertion is that it runs and classifies, not that it is silent.
+        assert_eq!(run_args(argv(&["review", "HEAD"])), ExitCode::SUCCESS);
+    }
+
     /// `repo_root` walks UP to the tree that has both markers.
     #[test]
     fn repo_root_finds_the_tree_that_has_both_markers() {

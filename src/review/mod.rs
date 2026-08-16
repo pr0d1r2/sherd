@@ -145,36 +145,62 @@ pub fn node(path: &Path, added: &[String]) -> std::io::Result<Vec<Finding>> {
 
 /// Public fns ADDED by a commit, per node module it touched.
 ///
-/// Reads the diff rather than the file: a review is about what changed, and
-/// the whole file would flag everything that ever landed.
-#[must_use]
-pub fn added_in_commit(
-    root: &Path,
-    rev: &str,
-) -> Vec<(std::path::PathBuf, Vec<String>)> {
+/// Every `pub fn` a revision ADDED, by the file that holds it.
+pub type AddedFns = Vec<(std::path::PathBuf, Vec<String>)>;
+
+/// The raw diff of one revision.
+///
+/// # Errors
+/// The revision could not be read. `Command::output()` returns `Ok` for a
+/// process that RAN and FAILED, so the exit STATUS is what separates a
+/// revision with no changes from one that does not exist -- checking only
+/// the spawn result made `git show <unknown rev>` look like an empty diff,
+/// and the review then printed a clean bill (B5, V7).
+fn diff_of(root: &Path, rev: &str) -> std::io::Result<String> {
     let out = std::process::Command::new("git")
         .args(["show", "--unified=0", rev])
         .current_dir(root)
-        .output();
-    let Ok(out) = out else { return Vec::new() };
-    let diff = String::from_utf8_lossy(&out.stdout);
+        .output()?;
+    if !out.status.success() {
+        return Err(std::io::Error::other(format!(
+            "cannot read revision `{rev}`: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        )));
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
+/// The name a `+` line declares, if it declares a `pub fn` at all.
+fn added_pub_fn(line: &str) -> Option<&str> {
+    let rest = line.strip_prefix('+')?.trim().strip_prefix("pub fn ")?;
+    Some(rest.split(['(', '<']).next()?.trim())
+}
+
+/// The `pub fn`s a diff adds, per `mod.rs` it touches. Pure over the text.
+#[must_use]
+pub fn added_fns(diff: &str) -> AddedFns {
     let mut per: std::collections::BTreeMap<std::path::PathBuf, Vec<String>> =
         std::collections::BTreeMap::new();
     let mut file = std::path::PathBuf::new();
     for line in diff.lines() {
         if let Some(p) = line.strip_prefix("+++ b/") {
             file = std::path::PathBuf::from(p);
-        } else if let Some(added) = line.strip_prefix('+')
-            && let Some(rest) = added.trim().strip_prefix("pub fn ")
-            && file.file_name().is_some_and(|f| f == "mod.rs")
-            && let Some(name) = rest.split(['(', '<']).next()
+        } else if file.file_name().is_some_and(|f| f == "mod.rs")
+            && let Some(name) = added_pub_fn(line)
         {
-            per.entry(file.clone())
-                .or_default()
-                .push(name.trim().to_string());
+            per.entry(file.clone()).or_default().push(name.to_string());
         }
     }
     per.into_iter().collect()
+}
+
+/// Reads the diff rather than the file: a review is about what changed, and
+/// the whole file would flag everything that ever landed.
+///
+/// # Errors
+/// The revision could not be read -- unreadable is never clean (V7).
+pub fn added_in_commit(root: &Path, rev: &str) -> std::io::Result<AddedFns> {
+    Ok(added_fns(&diff_of(root, rev)?))
 }
 
 /// Review one revision: every node module it touched, every fn it added.
@@ -186,7 +212,7 @@ pub fn commit(
     rev: &str,
 ) -> std::io::Result<Vec<(std::path::PathBuf, Finding)>> {
     let mut out = Vec::new();
-    for (file, added) in added_in_commit(root, rev) {
+    for (file, added) in added_in_commit(root, rev)? {
         for f in node(&root.join(&file), &added)? {
             out.push((file.clone(), f));
         }
@@ -313,20 +339,58 @@ mod git_tests {
         assert_eq!(check_added(), Ok(()));
     }
 
-    fn check_added() -> Result<(), String> {
-        let r = repo_with_a_stub("review-added")?;
-        let added = added_in_commit(r.path(), "HEAD");
-        let names: Vec<&str> = added
+    /// Flatten to just the names, so each assertion states one thing.
+    fn names_in(added: &AddedFns) -> Vec<&str> {
+        added
             .iter()
             .flat_map(|(_, v)| v.iter().map(String::as_str))
-            .collect();
+            .collect()
+    }
+
+    /// A diff touching one module, with every shape the parser must sort.
+    const MIXED: &str = concat!(
+        "+++ b/src/x/mod.rs\n",
+        "+pub fn added(a: u8) -> bool {\n",
+        "+pub fn generic<T>(t: T) {\n",
+        "-pub fn removed() {\n",
+        " pub fn untouched() {\n",
+        "+fn private() {\n",
+        "+++ b/src/x/other.rs\n",
+        "+pub fn not_a_module_file() {\n"
+    );
+
+    /// The diff parser, direct. It was only ever reachable through `git`, so
+    /// its edge cases needed a repo to state.
+    #[test]
+    fn only_added_pub_fns_in_a_module_are_collected() {
+        let got = added_fns(MIXED);
+        assert_eq!(
+            names_in(&got),
+            vec!["added", "generic"],
+            "a REMOVED fn is not added, a private one is not public, and a \
+             file that is not `mod.rs` is not a node module"
+        );
+    }
+
+    #[test]
+    fn an_empty_diff_adds_nothing_without_erroring() {
+        // Distinct from a diff that could not be READ, which is V7's whole
+        // point: this one really did change nothing.
+        assert!(added_fns("").is_empty());
+    }
+
+    fn check_added() -> Result<(), String> {
+        let r = repo_with_a_stub("review-added")?;
+        let added =
+            added_in_commit(r.path(), "HEAD").map_err(|e| e.to_string())?;
+        let names = names_in(&added);
         assert!(
             names.contains(&"added"),
             "the new fn must be seen: {names:?}"
         );
         assert!(
             !names.contains(&"old"),
-            "a fn the commit did not add is not added: {names:?}"
+            "not added by this commit: {names:?}"
         );
         Ok(())
     }
@@ -342,7 +406,12 @@ mod git_tests {
         let r = TestRepo::new("review-spec")?;
         r.write("SPEC.md", "# SPEC\n\nchanged\n")?;
         r.commit("spec only")?;
-        assert!(added_in_commit(r.path(), "HEAD").is_empty());
+        assert!(
+            added_in_commit(r.path(), "HEAD")
+                .map_err(|e| e.to_string())?
+                .is_empty(),
+            "a spec-only commit adds no pub fn"
+        );
         Ok(())
     }
 
