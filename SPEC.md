@@ -106,6 +106,8 @@ R38|the corpus is BELOW the frontier|perfect separation on BOTH arms w/ ⊥ a si
 R39|judge boundary LOCATED|blind lens titration, 4 rungs, 2 runs IDENTICAL: `0-tells` 10/10 · `1-bare` 10/10 · `2-vague` 7/10 · `3-subtle` 6/8. ∴ the boundary is real AND stable AT THE EDGE, ⊥ only deep inside competence — R37 had only shown stability at 100%|`cargo test -- --ignored blind_lens_titration`, 2 runs @ .24, 76 calls
 R40|invariant PRECISION is the axis, ⊥ prompt help|stripping `blind_prompt`'s enumerated tells cost NOTHING (10/10 → 10/10) though every recorded stub matches a clause near-verbatim ∴ the checklist was ⊥ doing the work — HYPOTHESIS FALSIFIED. vague `§V` wording costs 30%, the largest single drop, vs 25% for stubs no clause reaches ∴ cheapest lever on delegation = sharper `§V` rows, ⊥ prompt engineering. `src/lens:B1` & `src/plan:B1` reached this from the other direction|derived from R39
 R41|context stopped binding|T41 made `--depth rule` select: whole repo 170,822 → 109,363 tok (-36%), root 11,576 → 7,638, `src/tdd` 17,127 → 9,886 (-42%). 13 of 13 chains were OVER ceiling, now 0 ∴ the fattest chain is 9.6% of working budget & R4's motivating number no longer describes THIS repo. what remains unsolved is competence, ⊥ context|`bbx budget` before/after T41
+R42|precision drives WRITING too|generation titration, 5 pure fns × sharp\|vague × 3 runs, graded by `rustc` on HIDDEN tests the writer never saw: sharp 12/15 · vague 6/15 = 2.0x. per-item results IDENTICAL ∀ 3 runs ∴ deterministic, ⊥ underpowered — R40's judging effect carries to writing|`cargo test -- --ignored generation_titration`, 30 calls @ .24
+R43|the TYPE is the cheaper channel|the 2x splits 3 ways, ⊥ evenly: `working` & `bucket` sharp 3/3 vague 0/3 — their rule is MAGIC NUMBERS (`ENTRY_COST`, 4 bucket bounds) no signature carries ∴ prose is the only channel. `verdict` & `for_path` 3/3 BOTH — `enum Verdict{Fits{slack},Over{by}}` & named params already encode the rule ∴ vague prose costs NOTHING. `is_yes` 0/3 both = beyond the frontier at every wording|derived from R42
 
 ## §V INVARIANTS
 
@@ -210,6 +212,7 @@ V103: the criterion ⊥ WEAKEN as the rung narrows — a rung-4 task judged agai
 V104: a declared LIMIT ! have a runner that EXITS NONZERO — V74's shape, widened from §C to any number the spec names. V6/V7/V8 declare ceilings, `.context-limits` carries them, `bbx budget` PRINTS them & exits 0 ∴ 4 nodes drifted over unseen (B7). & a path w/ NO ceiling row is UNCHECKED ⊥ unlimited: absence ! read as violation or default, ⊥ as permission
 V105: a declared OPTION ! CHANGE BEHAVIOUR. `Depth::Rule` is §I's default & selected nothing for the project's whole life ∴ every pack shipped archive & every ceiling was measured against it (B8). testable ∀ flag: same input, two settings, DIFFERENT output — a flag whose branches agree is a claim w/ no runner (V74)
 V106: BUILDABLE on the 20B = (a) chain + the file it edits fits working budget & (b) ∃ a rung where the output SURVIVES REVIEW (⊥ merely the gate) & (c) setup cost < writing it by hand. (a) alone is what `budget` checks & is ⊥ SUFFICIENT — after T41 every chain is ≤10% of working & 0 merit wins remain. a module claimed buildable w/o (b) & (c) measured is a wish (`.:B4`: name the denominator)
+V107: push the invariant into the TYPE & the SIGNATURE before sharpening its prose. MEASURED (R43): where the type carries the rule, vague wording costs 0; where the rule is a magic number, precision is the ONLY channel & vague costs 100%. ∴ the cheapest route to V106(b) is a signature that ⊥ CAN be satisfied wrongly, & prose precision is the fallback for what types cannot hold
 V73: dir promotion has 2 triggers — (a) V50 code ceiling, (b) module owns SPEC worth its own node even under ceiling. vendor facades are (b): few hundred lines carrying V17/V24/V25. ⊥ promote every `.rs` — 30 files → 60 is ceremony
 
 ## §T TASKS
@@ -263,8 +266,10 @@ T73|.|`/titrate` machinery — `.bbx-frontier` record, believability re-keyed no
 T74|x|titrate the JUDGE upward until it FAILS — longer fn, weaker `§V`, ⊥-obvious stub. R38: a corpus that never misses locates no boundary|V103,R37,R38
 T75|.|after T41: re-measure ∀ chain, reset `.context-limits` from the new baseline, & wire `bbx budget` into `hk.pkl` ∴ V104 gets its runner IN THE GATE, ⊥ only in a command a human remembers to run|V104,V50
 T76|.|BUILDABILITY SWEEP: `bbx tdd` @ every node, N=3, record (node, rung, kept/tried) → `.bbx-frontier`. answers WHICH modules are buildable, ⊥ whether the idea works|V106,V103,R37
-T77|~|titrate GENERATION against sharp vs vague `§V` — R40 measured precision as the dominant axis for JUDGING; nobody has checked whether it drives WRITING, & vague rows are the live hypothesis for `src/tdd:T13` 0 merit wins|V106,R40
+T77|x|titrate GENERATION against sharp vs vague `§V` — R40 measured precision as the dominant axis for JUDGING; nobody has checked whether it drives WRITING, & vague rows are the live hypothesis for `src/tdd:T13` 0 merit wins|V106,R40
 T78|x|`bbx lens` builds its dir w/ `PathBuf::from`, ⊥ `arg_dir` ∴ it never got T10 root-resolution & `lens .` reports a different chain than `budget` for the same node (B9)|V104,I
+T79|.|EXTEND the generation corpus — 5 items is thin & R43's 3-way split rests on 2 items per class. add items ∀ class (type-carried · magic-number · beyond-frontier). ⊥ more RUNS: variance is 0 (R42)|V107,R43
+T80|.|audit `§V` rows for what a TYPE could carry instead (V107). the rows that need prose precision are the ones no signature can hold|V107,R43
 
 ## §B BUGS
 
