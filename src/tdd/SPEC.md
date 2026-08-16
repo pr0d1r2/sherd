@@ -59,7 +59,7 @@ T14|.|`bbx tdd` on `src/ollama` T3 failed 2x (8 round-trips, 17,551 tok, 4 compi
 T15|x|`named_fn` + pre-judge contract check|V25
 T16|x|`gate` returns `Result` — unrunnable ⊥ red|V26
 T17|x|`context_titration` per-call outcome `pass\|fail\|error`, errors counted apart & never as failures, partials written AS produced ∴ a crash costs ONE call ⊥ the run|V27
-T18|.|re-run `.:T82` once T17 lands — it has NO result: 33 of 66 calls, killed mid-condition. one variable per experiment is `.:V108`|V27
+T18|x|re-run `.:T82` once T17 lands — it has NO result: 33 of 66 calls, killed mid-condition. one variable per experiment is `.:V108`|V27
 
 ## §B BUGS
 
