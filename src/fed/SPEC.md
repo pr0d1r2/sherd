@@ -9,7 +9,7 @@ Federation edges. `§F` table, parent→child, chain to a node.
 V1: `§F` row = `dir|owns|⊥owns|tokens`. 4 cells or ⊥ a row
 V2: edge depth = parent + 1 exactly. ⊥ skip levels
 V3: `⊥owns` ! present — positive lens decides DESCEND, negative one decides STOP. the negative is the byte that prevents loading
-V4: literal `|` in a cell escaped `\|`, & `\` itself escaped `\\` ∴ `cell()` & `split_row()` are INVERSE. row splitting honors both. escaping ONE of the two chars the splitter treats as syntax is what B11 is
+V4: literal `|` in a cell escaped `\|`. `\` is an escape ONLY before `|` — anywhere else it is LITERAL & kept ∴ `C:\path` survives `edges()`. a splitter consuming `\` before ANY char eats data silently, & `\\` before a pipe yields ≠4 cells which V1 then drops as a non-row (B11)
 V5: `tokens` = `-` means UNRECORDED, ⊥ zero
 V6: header row (`dir|owns|…`) ⊥ an edge
 V7: `§F` parse stops @ next `## §` header
@@ -18,7 +18,7 @@ V9: a `§T` row states REMAINING work, ⊥ history. "`X` landed, `Y` still open"
 V10: a detector's test ! include a POSITIVE case. asserting only that nothing was found is satisfied by a fn that always finds nothing (B6)
 V11: sibling `§F` lenses ! EXHAUSTIVE — every child dir on disk appears as a row. a child absent from `§F` is unreachable by descent & invisible to a reader who trusts the table
 V12: sibling `§F` lenses ! DISJOINT — 2 rows ⊥ name the same `dir`. a duplicate makes descent ambiguous & `route` would have to open both
-V13: a codec's test ! assert the ROUND TRIP, ⊥ the encode alone. `assert_eq!(cell("rule|why"), "rule\|why")` states what the ENCODER does & nothing about whether anything can read it back ∴ it passed for the project's whole life while `C:\path` was losing its backslash (B11). B6 is the same shape one node over — a detector asserted only on the negative case is satisfied by finding nothing
+V13: a parser's test ! cover the char it CONSUMES, ⊥ only the sequence it documents. `escaped_pipe_stays_in_the_cell` covers `\|` & nothing covered a LONE `\` ∴ `split_row()` ate backslashes for the project's whole life behind a green suite (B11). B6 is the same shape — a case nothing asserts is a case that passes
 
 ## §T TASKS
 
@@ -39,7 +39,7 @@ T13|~|replace the hand-rolled walk with `itok::walk`/`itok::glob`|`.:V23`
 T14|.|blocked — recomputing needs `crate::tokens`, ⊥ in this node's surface. see B10|`.:V21`
 T15|.|fixture: 4 levels deep, one module with two parents — self-repo is a tree|`.:V4`
 T16|.|parse `§N` rows, line-anchored|`.:V34`
-T17|.|`cell()` ! escape `\` before it escapes `\|` ∴ inverse of `split_row()`. test the ROUND TRIP over `\`, `\|`, `\\|`, `C:\path` & `\\` — ⊥ the encode alone (V13). `escaped_pipe_stays_in_the_cell` covers PARSE only|V13,V4,V1
+T17|.|`split_row()` ! keep `\` LITERAL except before `\|` (V4). test through `edges()`, ⊥ the encoder alone (V13): a lone `\`, `C:\path`, `\|`, & a row that splits to ≠4 cells & so vanishes|V13,V4,V1
 
 ## §B BUGS
 
@@ -54,4 +54,4 @@ B7|2026-08-01|LLM repair reached for `scopeguard::guard` — a crate this repo d
 B8|2026-08-01|`unused import: Path` in a test module COMMITTED through a `-D warnings` gate. `cargo build` ⊥ compile `#[cfg(test)]` code ∴ the flag never saw it. also `find_exhaustive_violations` is called ONLY by tests — `review::unwired`'s exact case, surfaced by my own check & skimmed past|`RUSTFLAGS` exported so BOTH `build` & `test` deny. T6 wires the fn into `check`. GENERALLY: a flag on one command is ⊥ a flag on the toolchain
 B9|2026-08-01|`bbx apply` wrote `find_flat_rs_promotions` filtering `§F` rows on `dir == "." && owns.ends_with(".rs")`. NO `§F` row has `dir == "."` — the shape ⊥ exist. gates green, judge YES, test & impl agreed w/ each other & neither related to `.:V73`. REVERTED|the ROW was wrong, ⊥ the model: `.:V73` is a policy about when to create a dir & answering it needs Rust SOURCE, which `fed` ⊥ read. `classify` says actionable because it parses as "add one fn" ∴ shape is necessary & ⊥ sufficient
 B10|2026-08-01|`bbx apply` wrote `find_token_mismatches` summing FILE SIZES in bytes & comparing them to `§F`.tokens. bytes ⊥ tokens; `.:R8` measured bytes/4 48% off on caveman text & §C says counting is `itok`'s job. gate refused the commit for an UNUSED IMPORT, ⊥ for being wrong — luck|discarded. same class as B9: the node cannot compute the invariant, so the model invents a proxy. row now names the blocker
-B11|2026-08-21|`cell()` escapes `\|` & ⊥ `\`, while `split_row()` treats `\` as an escape & DROPS it ∴ the pair is ⊥ inverse. MEASURED: `C:\path` round-trips to `C:path`, & `a\\|b` encodes to `a\\\|b` which splits into 5 cells where V1 demands 4 ∴ `edges()` drops the row & a `§F` edge VANISHES w/ no error — B6's shape (a fn that finds nothing passes cleanly) one level over. V4 said only "literal pipe escaped backslash-pipe. row splitting honors it" & was SILENT on the backslash ∴ both readings were IN the row. FOUND by `.:T97`'s ambiguity detector flagging the `escape_cell` corpus row 3/3 (`.:R55`), then followed from the fixture into live code|V4 sharpened, V13 added. T17 fixes `cell()` & asserts the round trip
+B11|2026-08-21|`split_row()` treats `\` as an escape before ANY char & DROPS it, while V4 only ever defined `\|` ∴ a backslash anywhere in a cell is EATEN, & a cell ending in `\\` yields 5 cells where V1 demands 4, so `edges()` returns NO row & a `§F` edge vanishes w/ no error — B6's shape (something that finds nothing passes cleanly) one level over. MEASURED through `edges()` on a 3-row table: an `owns` of `C:\path notes` parsed as `C:path notes`, a row whose `owns` ended `tail\\` produced NO edge, & 2 of 3 rows survived. FIRST CAUSE WRONG, mine, one commit earlier: I wrote that `cell()` & `split_row()` are a broken CODEC PAIR & that `cell()`'s output makes an edge vanish. VERIFIED FALSE — `cell()`'s only caller is `table()` → `bbx graph --table`, a MARKDOWN render, & nothing parses its output back ∴ the EFFECTS were real & the MECHANISM I named was ⊥. `.:V59`, & B1 is the same correction on this node's own log. FOUND by `.:T97`'s detector flagging the `escape_cell` corpus row 3/3 (`.:R55`), followed from fixture into live code|V4 & V13 restated. T17 fixes `split_row()` & tests through `edges()`
