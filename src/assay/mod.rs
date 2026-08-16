@@ -91,6 +91,30 @@ pub fn gen_prompt(inv: &str, sig: &str, preamble: &str) -> String {
     )
 }
 
+/// Ask for a TEST, never an implementation.
+///
+/// T83, variable 2 of 3 (`.:V108`). The writer is blind here exactly as in
+/// [`gen_prompt`] -- same invariant, same signature, no implementation to
+/// read -- so the only thing differing between the two arms is WHICH TESTS
+/// grade the candidate: hidden ones written before any candidate existed, or
+/// one the model wrote itself.
+///
+/// `src/tdd:B2` and `B12` are both a model writing a test that agrees with
+/// its own wrong implementation, which makes self-authored tests the live
+/// suspect for `src/tdd:T13`'s zero merit wins.
+#[must_use]
+pub fn test_prompt(inv: &str, sig: &str, preamble: &str) -> String {
+    format!(
+        "{NOTATION}\nInvariant:\n  {inv}\n\n\
+         In scope already:\n```rust\n{preamble}\n```\n\n\
+         Write a `#[test]` function that PROVES this invariant holds for:\n\
+         ```rust\n{sig}\n```\n\n\
+         An implementation that violated the invariant must FAIL your test. \
+         Reply with one ```rust block containing `#[cfg(test)] mod t {{ .. }}` \
+         and nothing else. No implementation."
+    )
+}
+
 /// The same request, prefixed with a real node's lens pack.
 ///
 /// T82, variable 1 of 3 (`.:V108`). R44 measured writing from a ~500 token
@@ -136,6 +160,36 @@ pub fn grade(
     tests: &str,
     rustc: &str,
 ) -> Result<bool, String> {
+    grade_detail(candidate, preamble, tests, rustc).map(|g| g == Grade::Pass)
+}
+
+/// Three outcomes, not two.
+///
+/// A test that will not COMPILE graded nothing, and folding that into `Fail`
+/// would credit an unusable test with a correct rejection -- `src/tdd:V26`
+/// one level finer. T83 needs it: a model whose own test does not build has
+/// caught nothing, and must not be scored as if it had.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Grade {
+    /// Compiled, every test passed.
+    Pass,
+    /// Compiled, a test failed.
+    Fail,
+    /// Did not compile.
+    NoCompile,
+}
+
+/// Compile `candidate` against `tests` and run them.
+///
+/// # Errors
+/// The compiler could not be executed, or the scratch file could not be
+/// written. Both are ERRORS, never verdicts.
+pub fn grade_detail(
+    candidate: &str,
+    preamble: &str,
+    tests: &str,
+    rustc: &str,
+) -> Result<Grade, String> {
     use std::sync::atomic::{AtomicUsize, Ordering};
     static N: AtomicUsize = AtomicUsize::new(0);
     let n = N.fetch_add(1, Ordering::Relaxed);
@@ -153,14 +207,18 @@ pub fn grade(
         .map_err(|e| format!("{rustc} could not run: {e}"))?;
     if !out.status.success() {
         let _ = std::fs::remove_file(&src);
-        return Ok(false);
+        return Ok(Grade::NoCompile);
     }
     let run = Command::new(&bin)
         .output()
         .map_err(|e| format!("compiled binary could not run: {e}"))?;
     let _ = std::fs::remove_file(&src);
     let _ = std::fs::remove_file(&bin);
-    Ok(run.status.success())
+    Ok(if run.status.success() {
+        Grade::Pass
+    } else {
+        Grade::Fail
+    })
 }
 
 /// Five pure functions from this repo, each with the tests it actually has.
@@ -948,5 +1006,188 @@ mod tests {
         let mut always_no = |_: &str| Ok(false);
         let s = titrate_tier(&TIERS[0], &mut always_no).unwrap();
         assert_eq!(s.correct * 2, s.total, "NO to everything is half, not all");
+    }
+}
+
+#[cfg(test)]
+mod authorship {
+    use super::*;
+
+    /// What two graders said about ONE implementation.
+    #[derive(Clone, Copy)]
+    struct Verdicts {
+        /// Hidden tests, written before any candidate existed.
+        hidden: bool,
+        /// The test the model wrote for itself.
+        own: bool,
+        /// The model's own test did not compile -- it graded NOTHING.
+        own_broken: bool,
+    }
+
+    fn ask(prompt: &str) -> Result<String, String> {
+        crate::ollama::generate(prompt)
+            .map(|r| crate::ollama::rust_block(&r.text))
+    }
+
+    /// One implementation, graded twice. Written BLIND in both arms -- only
+    /// the grading tests differ, which is the single variable (`.:V108`).
+    fn one(it: &GenItem) -> Result<Verdicts, String> {
+        let code = ask(&gen_prompt(it.sharp, it.sig, it.preamble))?;
+        let own_test = ask(&test_prompt(it.sharp, it.sig, it.preamble))?;
+        let h = grade_detail(&code, it.preamble, it.tests, "rustc")?;
+        let o = grade_detail(&code, it.preamble, &own_test, "rustc")?;
+        Ok(Verdicts {
+            hidden: h == Grade::Pass,
+            own: o == Grade::Pass,
+            own_broken: o == Grade::NoCompile,
+        })
+    }
+
+    fn row(run: usize, it: &GenItem, v: Verdicts) {
+        println!(
+            "run {run} · hidden {} · own {} · {}",
+            if v.hidden { "PASS" } else { "fail" },
+            if v.own_broken {
+                "BROKE"
+            } else if v.own {
+                "PASS"
+            } else {
+                "fail"
+            },
+            it.sig.split('(').next().unwrap_or("")
+        );
+    }
+
+    fn counts(vs: &[Verdicts]) -> [usize; 5] {
+        let c = |f: fn(&Verdicts) -> bool| vs.iter().filter(|v| f(v)).count();
+        [
+            c(|v| v.hidden),
+            c(|v| v.own),
+            c(|v| v.own && !v.hidden),
+            c(|v| !v.own && !v.hidden && !v.own_broken),
+            c(|v| v.own_broken),
+        ]
+    }
+
+    /// The discriminating cell is `own PASS, hidden fail`: a self-authored
+    /// test certifying an implementation the real tests reject. That is
+    /// `src/tdd:B2` and `B12` expressed as a number.
+    fn report(vs: &[Verdicts]) {
+        let n = vs.len();
+        let [hidden, own, wrong, caught, broke] = counts(vs);
+        println!("\nAUTHORSHIP TITRATION ({n} measured)");
+        println!("  hidden tests pass  {hidden}/{n}");
+        println!("  own test passes    {own}/{n}");
+        println!("  CERTIFIED WRONG    {wrong}/{n}  (own PASS, hidden fail)");
+        println!("  correctly rejected {caught}/{n}  (both fail)");
+        println!("  own test unusable  {broke}/{n}  (did not compile)");
+    }
+
+    /// T83. Records; asserts nothing about the model.
+    #[test]
+    #[ignore]
+    fn authorship_titration() {
+        const RUNS: usize = 3;
+        let mut vs = Vec::new();
+        for run in 1..=RUNS {
+            for it in GEN_CORPUS {
+                measure(run, it, &mut vs);
+            }
+        }
+        report(&vs);
+    }
+
+    /// One item, recorded. An endpoint failure is an ERROR line and never a
+    /// verdict, so a transient cannot look like the model getting it wrong
+    /// (`src/tdd:V27`, and `B1` is that mistake costing forty minutes).
+    fn measure(run: usize, it: &GenItem, vs: &mut Vec<Verdicts>) {
+        match one(it) {
+            Ok(v) => {
+                row(run, it, v);
+                vs.push(v);
+            }
+            Err(e) => println!("run {run} · ERROR · {e}"),
+        }
+    }
+
+    /// Build a `Verdicts` from a two-letter shorthand: hidden then own,
+    /// where `P` is pass, `f` is fail and `x` is did-not-compile.
+    ///
+    /// Three bool parameters trips `fn_params_excessive_bools`, and the lint
+    /// is right: `v(true, false, true)` at a call site says nothing about
+    /// which flag is which.
+    fn v(spec: &str) -> Verdicts {
+        let mut c = spec.chars();
+        let (h, o) = (c.next(), c.next());
+        Verdicts {
+            hidden: h == Some('P'),
+            own: o == Some('P'),
+            own_broken: o == Some('x'),
+        }
+    }
+
+    #[test]
+    fn the_discriminating_cell_is_own_pass_hidden_fail() {
+        // R51's headline number. Getting these cells wrong would misreport
+        // the whole experiment, and the counts are the only thing standing
+        // between the raw rows and the conclusion.
+        let vs = [
+            v("PP"), // both agree it works
+            v("fP"), // CERTIFIED WRONG -- the cell that matters
+            v("Pf"), // own test rejects correct code
+            v("ff"), // both agree it is broken
+            v("Px"), // own test did not compile
+        ];
+        let [hidden, own, wrong, caught, broke] = counts(&vs);
+        assert_eq!(hidden, 3, "hidden passes");
+        assert_eq!(own, 2, "own passes");
+        assert_eq!(wrong, 1, "own PASS while hidden FAILED");
+        assert_eq!(caught, 1, "both failed -- a real catch");
+        assert_eq!(broke, 1, "own test unusable");
+    }
+
+    #[test]
+    fn a_test_that_did_not_compile_is_not_counted_as_a_catch() {
+        // The `caught` cell must exclude no-compile: a test that never built
+        // rejected nothing, and counting it as a catch would flatter the
+        // model exactly where V111 says not to.
+        let vs = [v("fx")];
+        let [_, _, _, caught, broke] = counts(&vs);
+        assert_eq!(caught, 0, "a no-compile test caught nothing");
+        assert_eq!(broke, 1);
+    }
+
+    #[test]
+    fn report_and_row_render_without_panicking() {
+        let vs = [v("PP"), v("fP")];
+        report(&vs);
+        let Some(it) = GEN_CORPUS.first() else {
+            return;
+        };
+        row(1, it, vs[0]);
+    }
+
+    const GOOD: &str = "pub fn bucket(n: u64) -> &'static str { match n { 0..=1_999 => \"b0\", 2_000..=7_999 => \"b2\", 8_000..=31_999 => \"b8\", _ => \"b32\" } }";
+    const STUB: &str = "pub fn bucket(_n: u64) -> &'static str { \"b0\" }";
+
+    #[test]
+    fn a_test_that_will_not_compile_is_not_a_correct_rejection() {
+        // A test that never compiled caught nothing. Folding it into `Fail`
+        // would credit an unusable test with a correct verdict (V26), which
+        // T83 counts as the model catching its own error.
+        assert_eq!(three_way(), Ok(()));
+    }
+
+    fn three_way() -> Result<(), String> {
+        let it = GEN_CORPUS.get(1).ok_or("corpus")?;
+        let g = |code, tests| grade_detail(code, it.preamble, tests, "rustc");
+        assert_eq!(g(GOOD, "not rust at all")?, Grade::NoCompile);
+        assert_eq!(g(GOOD, it.tests)?, Grade::Pass);
+        assert_eq!(
+            g(STUB, it.tests)?,
+            Grade::Fail,
+            "a compiling wrong answer is FAIL, never NoCompile"
+        );
+        Ok(())
     }
 }
