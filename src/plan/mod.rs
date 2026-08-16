@@ -890,3 +890,57 @@ pub fn apply(root: &Path, max_repair: usize) -> Result<String, String> {
     state.save();
     Ok(sha)
 }
+
+#[cfg(test)]
+mod git_tests {
+    use super::*;
+    use crate::testrepo::TestRepo;
+
+    #[test]
+    fn preflight_refuses_a_tree_that_is_not_a_repo() {
+        // `apply` COMMITS, so it needs a repo. Saying so beats failing later
+        // with a git error nobody reads.
+        let d = std::env::temp_dir().join("bbx-not-a-repo");
+        let _ = std::fs::create_dir_all(&d);
+        let r = preflight(&d);
+        let _ = std::fs::remove_dir_all(&d);
+        assert!(r.is_err(), "a non-repo must be refused");
+    }
+
+    #[test]
+    fn preflight_refuses_a_dirty_tree() {
+        assert_eq!(check_dirty(), Ok(()));
+    }
+
+    /// A dirty tree means the generated diff would not be the only thing in
+    /// the commit, which is the whole point of the branch `apply` makes.
+    fn check_dirty() -> Result<(), String> {
+        let r = TestRepo::new("plan-dirty")?;
+        r.write("stray.txt", "uncommitted\n")?;
+        let out = preflight(r.path());
+        let Err(msg) = out else {
+            return Err("a dirty tree must be refused".into());
+        };
+        assert!(msg.contains("dirty"), "the refusal must say why: {msg}");
+        Ok(())
+    }
+
+    #[test]
+    fn preflight_on_a_clean_repo_names_a_run_branch() {
+        assert_eq!(check_clean(), Ok(()));
+    }
+
+    /// Generated code never lands on the trunk directly: `preflight` puts the
+    /// run on its own branch, and `bbx land` is what moves it, on evidence.
+    fn check_clean() -> Result<(), String> {
+        let r = TestRepo::new("plan-clean")?;
+        let branch = preflight(r.path())?;
+        assert!(
+            branch.starts_with("bbx/"),
+            "a run gets its own branch, got {branch}"
+        );
+        let now = r.git(&["rev-parse", "--abbrev-ref", "HEAD"])?;
+        assert_eq!(now, branch, "preflight must have switched to it");
+        Ok(())
+    }
+}

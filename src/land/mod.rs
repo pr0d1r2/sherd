@@ -130,16 +130,21 @@ fn git(root: &Path, args: &[&str]) -> Result<String, String> {
 
 /// The configured push remote, when there is one.
 ///
-/// `gitlab` by name: this repo has exactly one and naming it is honest about
-/// that. Absent remote is not an error -- a clone with no remote is a valid
-/// place to run, it just gets no CI.
+/// `gitlab` first, because that is this fleet's remote, then `origin`,
+/// because it is everyone else's. Absent remote is not an error -- a clone
+/// with no remote is a valid place to run, it just gets no CI.
+///
+/// Matching ONLY `gitlab` meant [`push_branch`] returned early on every other
+/// clone and printed nothing, so `bbx land --push` was indistinguishable from
+/// a push that worked (B5).
 #[must_use]
 pub fn remote(root: &Path) -> Option<String> {
-    git(root, &["remote"])
-        .ok()?
-        .lines()
-        .find(|r| *r == "gitlab")
-        .map(ToString::to_string)
+    let names = git(root, &["remote"]).ok()?;
+    let has = |w: &str| names.lines().any(|r| r == w);
+    if has("gitlab") {
+        return Some("gitlab".to_string());
+    }
+    has("origin").then(|| "origin".to_string())
 }
 
 /// Push `branch` to the remote, if there is one. Best-effort by design.
@@ -152,7 +157,12 @@ pub fn remote(root: &Path) -> Option<String> {
 /// A failed push is reported and never fatal. The commit is already made, and
 /// losing it because a network was down would be worse than being unpushed.
 pub fn push_branch(root: &Path, branch: &str) {
-    let Some(r) = remote(root) else { return };
+    let Some(r) = remote(root) else {
+        // Silence was B5: nothing printed, nothing pushed, and a caller who
+        // asked for `--push` could not tell which had happened.
+        eprintln!("  no `gitlab` or `origin` remote -- {branch} stays LOCAL");
+        return;
+    };
     match git(root, &["push", "-q", "--set-upstream", &r, branch]) {
         Ok(_) => eprintln!("  pushed {branch} to {r} -- CI runs on it there"),
         Err(e) => eprintln!("  push to {r} FAILED (commit is local only): {e}"),
@@ -339,5 +349,59 @@ mod tests {
     fn a_refusal_carries_the_number_that_caused_it() {
         let e = landable(&ev(1, true, 0, 0.50)).unwrap_err();
         assert!(e.contains("0.50") && e.contains("0.85"), "{e}");
+    }
+}
+
+#[cfg(test)]
+mod git_tests {
+    use super::*;
+    use crate::testrepo::TestRepo;
+
+    #[test]
+    fn current_branch_reads_the_checked_out_name() {
+        assert_eq!(check_branch(), Ok(()));
+    }
+
+    fn check_branch() -> Result<(), String> {
+        let r = TestRepo::new("land-branch")?;
+        assert_eq!(current_branch(r.path())?, "main");
+        r.git(&["checkout", "-q", "-b", "bbx/run"])?;
+        assert_eq!(current_branch(r.path())?, "bbx/run");
+        Ok(())
+    }
+
+    #[test]
+    fn origin_counts_as_a_remote_not_only_gitlab() {
+        assert_eq!(check_remote(), Ok(()));
+    }
+
+    /// B5: matching only `gitlab` meant `push_branch` returned early and said
+    /// nothing on every clone that names its remote `origin` -- which is
+    /// every clone but this fleet's.
+    fn check_remote() -> Result<(), String> {
+        let r = TestRepo::new("land-remote")?;
+        assert_eq!(remote(r.path()), None, "no remote is None, not a guess");
+        r.git(&["remote", "add", "origin", "/dev/null"])?;
+        assert_eq!(remote(r.path()).as_deref(), Some("origin"));
+        r.git(&["remote", "add", "gitlab", "/dev/null"])?;
+        assert_eq!(
+            remote(r.path()).as_deref(),
+            Some("gitlab"),
+            "the fleet's remote wins when both exist"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn git_reports_a_failure_rather_than_an_empty_string() {
+        // An empty result and a failed command must not look alike: `land`
+        // decides on what git says, and "" would read as a clean answer.
+        assert_eq!(check_git_err(), Ok(()));
+    }
+
+    fn check_git_err() -> Result<(), String> {
+        let r = TestRepo::new("land-giterr")?;
+        assert!(git(r.path(), &["rev-parse", "nonexistent-ref"]).is_err());
+        Ok(())
     }
 }

@@ -21,6 +21,7 @@ V7: EVERY commit pushes to the remote when one exists — the remote runs CI on 
 V8: ONE branch per RUN, ⊥ per `apply`. an overnight run calls `apply` ~20x ∴ per-call naming = 20 branches & `HH-MM` collides anyway. a run is the unit anyone reviews
 V9: a refused branch is UNTOUCHED. it is the record of the try & deleting it destroys the evidence the next run needs
 V10: the blind lens is ⊥ re-run here — `drive_from` applied it to every commit before it existed. a 2nd identical call is a 2nd READING of one rule, ⊥ a 2nd opinion (`.:V72`)
+V11: a BEST-EFFORT path ! say when it did nothing. `push_branch` returned early on an unrecognised remote & printed NOTHING ∴ `--push` that pushed & `--push` that silently skipped were the same output (B5). absence of an action ! be reported, same rule as `.:V48` for an unread file
 
 ## §T TASKS
 
@@ -36,3 +37,4 @@ T7|.|`land` ⊥ distinguish SUPERVISOR commits from generated ones ∴ hand-writ
 ## §B BUGS
 
 id|date|cause|fix
+B5|2026-08-19|`remote()` matched the literal name `gitlab` & nothing else ∴ on ANY clone naming its remote `origin` — which is every clone but this fleet's — `push_branch` returned early & printed nothing, so `bbx land --push` looked identical whether it pushed or skipped. a PUBLIC MIT repo where the documented `--push` silently does nothing for a contributor|V11. `gitlab` first, then `origin`; the no-remote case now SAYS the branch stays local. found by a coverage test asserting `Some("origin")` — the test was written to exercise a line & exposed a behaviour
