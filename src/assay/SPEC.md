@@ -40,7 +40,7 @@ T3|.|`GEN_CORPUS` is 101 lines & `RECORDED` 59 — data, ⊥ code, but they sit 
 T4|.|`.:T83` (test authorship) & `.:T84` (signature given vs invented) — the 2 remaining variables of the `.:R44`→`.:tdd:T13` gap. one variable per comparison is `.:V108`|V5
 T5|x|`context_titration` per-call outcome `pass\|fail\|error`, errors counted apart & never as failures, partials written AS produced ∴ a crash costs ONE call ⊥ the run. was `.:tdd:T17`, moved here w/ the harness|V1
 T6|x|re-ran `.:T82` once T5 landed — the first attempt had NO result: 33 of 66 calls, killed mid-condition. was `.:tdd:T18`|V1,`.:V108`
-T7|.|`grade_detail` ! bound the child: spawn, wait ≤ a declared timeout, kill on expiry, return a 4th `Grade::Hung` — ⊥ `Fail` (V6). `Reading::Hung` likewise ∴ a hung pair leaves the row's DENOMINATOR, as `Uncallable` already does|V6,V1
+T7|x|`grade_detail` ! bound the child: spawn, wait ≤ a declared timeout, kill on expiry, return a 4th `Grade::Hung` — ⊥ `Fail` (V6). `Reading::Hung` likewise ∴ a hung pair leaves the row's DENOMINATOR, as `Uncallable` already does|V6,V1
 
 ## §B BUGS
 

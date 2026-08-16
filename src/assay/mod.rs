@@ -221,35 +221,16 @@ pub fn gen_prompt_in_context(
     )
 }
 
-/// Compile a candidate against tests it never saw, and run them.
-///
-/// The grader is `rustc`, never a model. A model grader would confound this
-/// twice: `.:R40` measured the judge as itself precision-sensitive, and
-/// `src/tdd:B2` is a judge loosening under pressure.
-///
-/// Code that does not COMPILE is a wrong answer, so `Ok(false)`. A toolchain
-/// that could not RUN is an error, so `Err` -- `.:V26`: a missing compiler
-/// scoring zero is indistinguishable from a model that cannot write, and the
-/// whole measurement would read as a located boundary.
-///
-/// # Errors
-/// The compiler could not be executed, or the scratch file could not be
-/// written.
-pub fn grade(
-    candidate: &str,
-    preamble: &str,
-    tests: &str,
-    rustc: &str,
-) -> Result<bool, String> {
-    grade_detail(candidate, preamble, tests, rustc).map(|g| g == Grade::Pass)
-}
-
-/// Three outcomes, not two.
+/// Four outcomes, not two.
 ///
 /// A test that will not COMPILE graded nothing, and folding that into `Fail`
 /// would credit an unusable test with a correct rejection -- `src/tdd:V26`
 /// one level finer. T83 needs it: a model whose own test does not build has
 /// caught nothing, and must not be scored as if it had.
+///
+/// `Hung` is `V6`, and it is the same rule a third time: the MODEL writes
+/// what gets run, so termination is not assumable, and a run that never ends
+/// decided nothing either.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Grade {
     /// Compiled, every test passed.
@@ -258,9 +239,29 @@ pub enum Grade {
     Fail,
     /// Did not compile.
     NoCompile,
+    /// Compiled, ran, and was still running at [`GRADE_TIMEOUT`].
+    Hung,
 }
 
-/// Compile `candidate` against `tests` and run them.
+/// How long a graded child may run before it is killed and called `Hung`.
+///
+/// The whole corpus compiles and runs in under a second, so this is ~10x
+/// headroom rather than a tuned number, and it bounds a 33-row sweep at five
+/// and a half minutes in the worst case. The number matters far less than
+/// the existence of a bound: without one the wait is unbounded, which is
+/// `B2` -- fifty-five minutes on a single `while eta <= u64::MAX / 4`.
+pub const GRADE_TIMEOUT: std::time::Duration =
+    std::time::Duration::from_secs(10);
+
+/// How often the child is checked. Small enough to be invisible against a
+/// sub-second run, large enough not to spin a core.
+const POLL: std::time::Duration = std::time::Duration::from_millis(25);
+
+/// Compile `candidate` against `tests` and run them, under a clock.
+///
+/// The grader is `rustc`, never a model. A model grader would confound this
+/// twice: `.:R40` measured the judge as itself precision-sensitive, and
+/// `src/tdd:B2` is a judge loosening under pressure.
 ///
 /// # Errors
 /// The compiler could not be executed, or the scratch file could not be
@@ -271,35 +272,85 @@ pub fn grade_detail(
     tests: &str,
     rustc: &str,
 ) -> Result<Grade, String> {
+    let (src, bin) = scratch_paths();
+    std::fs::write(&src, format!("{preamble}\n{candidate}\n{tests}\n"))
+        .map_err(|e| format!("scratch write: {e}"))?;
+    let built = compile(rustc, &src, &bin)?;
+    let g = if built {
+        run_bounded(&bin)?
+    } else {
+        Grade::NoCompile
+    };
+    let _ = std::fs::remove_file(&src);
+    let _ = std::fs::remove_file(&bin);
+    Ok(g)
+}
+
+/// A unique source and binary path per call, so concurrent grades cannot
+/// overwrite each other's scratch.
+fn scratch_paths() -> (std::path::PathBuf, std::path::PathBuf) {
     use std::sync::atomic::{AtomicUsize, Ordering};
     static N: AtomicUsize = AtomicUsize::new(0);
     let n = N.fetch_add(1, Ordering::Relaxed);
     let dir = std::env::temp_dir();
-    let src = dir.join(format!("bbx_gen_{}_{n}.rs", std::process::id()));
-    let bin = dir.join(format!("bbx_gen_{}_{n}", std::process::id()));
-    std::fs::write(&src, format!("{preamble}\n{candidate}\n{tests}\n"))
-        .map_err(|e| format!("scratch write: {e}"))?;
+    let pid = std::process::id();
+    (
+        dir.join(format!("bbx_gen_{pid}_{n}.rs")),
+        dir.join(format!("bbx_gen_{pid}_{n}")),
+    )
+}
+
+/// `rustc` itself is trusted to terminate -- it is not what the model wrote.
+fn compile(
+    rustc: &str,
+    src: &std::path::Path,
+    bin: &std::path::Path,
+) -> Result<bool, String> {
     let out = Command::new(rustc)
         .args(["--test", "--edition", "2021", "-A", "warnings"])
-        .arg(&src)
+        .arg(src)
         .arg("-o")
-        .arg(&bin)
+        .arg(bin)
         .output()
         .map_err(|e| format!("{rustc} could not run: {e}"))?;
-    if !out.status.success() {
-        let _ = std::fs::remove_file(&src);
-        return Ok(Grade::NoCompile);
-    }
-    let run = Command::new(&bin)
-        .output()
+    Ok(out.status.success())
+}
+
+/// Run the compiled tests, and stop waiting at [`GRADE_TIMEOUT`].
+///
+/// `Stdio::null()`, deliberately: a piped stream nobody drains DEADLOCKS
+/// once the child fills the buffer, which would reintroduce `B2` through the
+/// other door. Only the exit status was ever read.
+///
+/// A child still alive at the deadline is killed and reported `Hung`. It is
+/// NOT reported `Fail`: a killed process exits non-zero, so folding the two
+/// would record a wrong answer about code that never gave one -- which for
+/// the ambiguity detector means a DISAGREEMENT about a row nothing
+/// disagreed about (`V6`).
+fn run_bounded(bin: &std::path::Path) -> Result<Grade, String> {
+    let mut child = Command::new(bin)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
         .map_err(|e| format!("compiled binary could not run: {e}"))?;
-    let _ = std::fs::remove_file(&src);
-    let _ = std::fs::remove_file(&bin);
-    Ok(if run.status.success() {
-        Grade::Pass
-    } else {
-        Grade::Fail
-    })
+    let deadline = std::time::Instant::now().checked_add(GRADE_TIMEOUT);
+    while deadline.is_none_or(|d| std::time::Instant::now() < d) {
+        match child.try_wait() {
+            Err(e) => return Err(format!("waiting on the child: {e}")),
+            Ok(Some(s)) if s.success() => return Ok(Grade::Pass),
+            Ok(Some(_)) => return Ok(Grade::Fail),
+            Ok(None) => std::thread::sleep(POLL),
+        }
+    }
+    reap(&mut child);
+    Ok(Grade::Hung)
+}
+
+/// Kill the child and WAIT for it, so the sweep does not accumulate zombies
+/// across thirty-three rows.
+fn reap(child: &mut std::process::Child) {
+    let _ = child.kill();
+    let _ = child.wait();
 }
 
 /// What a test and an implementation, each written BLIND from the SAME `§V`
@@ -323,32 +374,43 @@ pub enum Reading {
     /// a name or arity mismatch, which is `src/tdd:B12`'s shape and T84's
     /// subject. It graded NOTHING, so it is not a disagreement.
     Uncallable,
+    /// The pair compiled and then never terminated. `V6`, and `B2` is
+    /// fifty-five minutes of it. Killed at [`GRADE_TIMEOUT`] and reported
+    /// apart: a run that never ended decided nothing about the row either.
+    Hung,
 }
 
 impl Reading {
-    /// Three outcomes, named so no two read alike.
+    /// Four outcomes, named so no two read alike.
     #[must_use]
     pub const fn word(self) -> &'static str {
         match self {
             Self::Agree => "agree",
             Self::Disagree => "DISAGREE",
             Self::Uncallable => "uncallable",
+            Self::Hung => "hung",
         }
     }
 }
 
-/// `NoCompile` is the one that must NOT become a verdict about the row.
+/// `NoCompile` and `Hung` are the two that must NOT become verdicts about
+/// the row.
 ///
-/// `assay:V1` at the level of a single call: a pair that never compiled says
+/// `assay:V1` at the level of a single call. A pair that never compiled says
 /// nothing about the invariant, and folding it into `Disagree` would flag
 /// every row whose signature the writer had to invent -- the model's naming,
 /// reported as the spec's ambiguity.
+///
+/// A pair that never TERMINATED says as little, and `V6` is why folding that
+/// one is worse: a killed child exits non-zero, so `Fail` is exactly what a
+/// hang looks like from the outside, and the fold would be silent.
 #[must_use]
 pub const fn reading(g: Grade) -> Reading {
     match g {
         Grade::Pass => Reading::Agree,
         Grade::Fail => Reading::Disagree,
         Grade::NoCompile => Reading::Uncallable,
+        Grade::Hung => Reading::Hung,
     }
 }
 
@@ -386,6 +448,10 @@ pub struct RowReadings {
     pub disagree: usize,
     /// The pair did not compile. Counted APART, never as either.
     pub uncallable: usize,
+    /// The pair never terminated and was killed. Counted APART for the same
+    /// reason (`V6`), and it is the one the harness must SEE: a row that
+    /// hangs every run is measured zero times while looking measured.
+    pub hung: usize,
 }
 
 impl RowReadings {
@@ -404,15 +470,17 @@ impl RowReadings {
             Reading::Agree => &mut self.agree,
             Reading::Disagree => &mut self.disagree,
             Reading::Uncallable => &mut self.uncallable,
+            Reading::Hung => &mut self.hung,
         };
         *c = c.saturating_add(1);
     }
 
-    /// The DENOMINATOR, and it excludes what graded nothing.
+    /// The DENOMINATOR, and it excludes everything that graded nothing.
     ///
     /// `.:B4`: a ratio must name what is in its denominator. A pair that did
-    /// not compile is not a pair that agreed, and dividing by it would report
-    /// a row as clean in proportion to how often the instrument failed.
+    /// not compile is not a pair that agreed, and neither is one that was
+    /// killed at the clock -- dividing by either would report a row as clean
+    /// in proportion to how often the instrument failed on it.
     #[must_use]
     pub const fn measured(&self) -> usize {
         self.agree.saturating_add(self.disagree)
@@ -473,14 +541,16 @@ pub fn ambiguity_report(rows: &[RowReadings]) -> String {
 /// One row: the verdict first, so a flagged row is findable by eye.
 fn row_line(r: &RowReadings) -> String {
     format!(
-        "  {:<14} {:<18} {}/{} disagree · {} uncallable\n",
+        "  {:<14} {:<18} {}/{} disagree · {} uncallable · {} hung\n",
         r.verdict(),
         r.label,
         r.disagree,
         r.measured(),
-        r.uncallable
+        r.uncallable,
+        r.hung
     )
 }
+
 /// Five pure functions from this repo, each with the tests it actually has.
 ///
 /// `sharp` is the row as written; `vague` names the subject and drops the
@@ -972,8 +1042,8 @@ mod tests {
         let it = &GEN_CORPUS[1]; // bucket
         let good = "pub fn bucket(prompt_tokens: u64) -> &'static str {\n    match prompt_tokens {\n        0..=1_999 => \"b0\",\n        2_000..=7_999 => \"b2\",\n        8_000..=31_999 => \"b8\",\n        _ => \"b32\",\n    }\n}";
         assert_eq!(
-            grade(good, it.preamble, it.tests, "rustc"),
-            Ok(true),
+            grade_detail(good, it.preamble, it.tests, "rustc"),
+            Ok(Grade::Pass),
             "the real function must pass the tests it actually has"
         );
     }
@@ -982,8 +1052,8 @@ mod tests {
     fn grade_rejects_code_that_does_not_compile() {
         let it = &GEN_CORPUS[1];
         assert_eq!(
-            grade("pub fn bucket(", it.preamble, it.tests, "rustc"),
-            Ok(false),
+            grade_detail("pub fn bucket(", it.preamble, it.tests, "rustc"),
+            Ok(Grade::NoCompile),
             "a candidate that will not compile is a WRONG ANSWER, not an error"
         );
     }
@@ -993,7 +1063,10 @@ mod tests {
         // The stub shape: compiles, reads its input, returns one bucket.
         let it = &GEN_CORPUS[1];
         let stub = "pub fn bucket(prompt_tokens: u64) -> &'static str {\n    if prompt_tokens > 0 { \"b0\" } else { \"b0\" }\n}";
-        assert_eq!(grade(stub, it.preamble, it.tests, "rustc"), Ok(false));
+        assert_eq!(
+            grade_detail(stub, it.preamble, it.tests, "rustc"),
+            Ok(Grade::Fail)
+        );
     }
 
     #[test]
@@ -1003,8 +1076,13 @@ mod tests {
         // boundary rather than as a broken harness.
         let it = &GEN_CORPUS[1];
         assert!(
-            grade("fn x() {}", it.preamble, it.tests, "definitely-not-rustc")
-                .is_err(),
+            grade_detail(
+                "fn x() {}",
+                it.preamble,
+                it.tests,
+                "definitely-not-rustc"
+            )
+            .is_err(),
             "an unrunnable compiler is an ERROR, never a score"
         );
     }
@@ -1036,6 +1114,10 @@ mod tests {
         Pass,
         Fail,
         Error,
+        /// Compiled, ran, never terminated. Killed at `GRADE_TIMEOUT` and
+        /// counted apart -- `V6`. Folding it into `Fail` would score the
+        /// model wrong for code that never gave an answer.
+        Hung,
     }
 
     /// Append one row the moment it exists, so a crash costs ONE call rather
@@ -1054,19 +1136,21 @@ mod tests {
     }
 
     /// Grade a reply that arrived. A compiler that cannot RUN is an error,
-    /// never a wrong answer -- the same distinction `grade` already draws.
+    /// never a wrong answer -- the same distinction `grade_detail` draws, and
+    /// a run that never TERMINATED is a third thing again (`V6`).
     fn grade_reply(
         r: &crate::ollama::Reply,
         it: &GenItem,
     ) -> (Outcome, String) {
         let code = crate::ollama::rust_block(&r.text);
-        match grade(&code, it.preamble, it.tests, "rustc") {
-            Ok(true) => (Outcome::Pass, format!("{} tok", r.prompt_tokens)),
-            Ok(false) => (Outcome::Fail, format!("{} tok", r.prompt_tokens)),
+        let tok = format!("{} tok", r.prompt_tokens);
+        match grade_detail(&code, it.preamble, it.tests, "rustc") {
+            Ok(Grade::Pass) => (Outcome::Pass, tok),
+            Ok(Grade::Fail | Grade::NoCompile) => (Outcome::Fail, tok),
+            Ok(Grade::Hung) => (Outcome::Hung, tok),
             Err(e) => (Outcome::Error, e),
         }
     }
-
     /// One measurement, which NEVER panics. A transient belongs in the
     /// record, not in a stack trace.
     fn run_one(prompt: &str, it: &GenItem) -> (Outcome, String) {
@@ -1084,6 +1168,7 @@ mod tests {
             Outcome::Pass => "PASS",
             Outcome::Fail => "fail",
             Outcome::Error => "ERROR",
+            Outcome::Hung => "HUNG",
         };
         let row = format!("{run}\t{tag}\t{word}\t{name}\t{note}");
         println!("run {run} · {tag:5} · {word} · {name} · {note}");
@@ -1091,23 +1176,34 @@ mod tests {
         o
     }
 
-    /// `(pass, fail, error)` over a set of outcomes. Counted by filtering
-    /// rather than by `+=`, which `arithmetic_side_effects` rejects.
-    fn tally(os: &[Outcome]) -> (usize, usize, usize) {
+    /// `(pass, fail, error, hung)` over a set of outcomes. Counted by
+    /// filtering rather than by `+=`, which `arithmetic_side_effects`
+    /// rejects.
+    fn tally(os: &[Outcome]) -> (usize, usize, usize, usize) {
         let n = |w: Outcome| os.iter().filter(|o| **o == w).count();
-        (n(Outcome::Pass), n(Outcome::Fail), n(Outcome::Error))
+        (
+            n(Outcome::Pass),
+            n(Outcome::Fail),
+            n(Outcome::Error),
+            n(Outcome::Hung),
+        )
     }
 
-    /// Report one condition. An ERROR count above zero means the run is
-    /// INCOMPLETE, and the summary has to say so where a reader will see it.
+    /// Report one condition. An ERROR or a HUNG count above zero means the
+    /// run is INCOMPLETE, and the summary has to say so where a reader will
+    /// see it: `p/total` reads as a score, and every call that did not
+    /// produce one is silently shrinking it (`.:B4`).
     fn report(label: &str, os: &[Outcome]) {
-        let (p, f, e) = tally(os);
+        let (p, f, e, h) = tally(os);
         let total = os.len();
-        println!("  {label:5} pass {p}/{total} · fail {f} · error {e}");
-        if e > 0 {
+        println!(
+            "  {label:5} pass {p}/{total} · fail {f} · error {e} · hung {h}"
+        );
+        let lost = e.saturating_add(h);
+        if lost > 0 {
             println!(
-                "    {e} of {total} did not RUN -- this condition is \
-                 incomplete, not measured (V1)"
+                "    {lost} of {total} produced NO verdict -- this condition \
+                 is incomplete, not measured (V1, V6)"
             );
         }
     }
@@ -1132,15 +1228,18 @@ mod tests {
     }
 
     #[test]
-    fn an_error_is_never_counted_as_a_failure() {
-        // V1, and B1 in one assertion: a transient must not read as a miss.
-        let os = [Outcome::Pass, Outcome::Fail, Outcome::Error];
-        assert_eq!(tally(&os), (1, 1, 1), "three outcomes, not two");
-        let all_err = [Outcome::Error, Outcome::Error];
+    fn a_call_that_produced_no_verdict_is_never_counted_as_a_failure() {
+        // V1 and B1 in one assertion: a transient must not read as a miss.
+        // V6 and B2 add the second shape -- a run killed at the clock is not
+        // a miss either, and it is the more dangerous of the two because a
+        // killed child exits non-zero and looks exactly like `fail`.
+        let os = [Outcome::Pass, Outcome::Fail, Outcome::Error, Outcome::Hung];
+        assert_eq!(tally(&os), (1, 1, 1, 1), "four outcomes, not two");
+        let none_ran = [Outcome::Error, Outcome::Hung];
         assert_eq!(
-            tally(&all_err),
-            (0, 0, 2),
-            "a run that never ran scores zero PASS and zero FAIL"
+            tally(&none_ran),
+            (0, 0, 1, 1),
+            "a run that produced no verdict scores zero PASS and zero FAIL"
         );
     }
 
@@ -1668,6 +1767,7 @@ mod signature {
             Grade::Pass => "PASS",
             Grade::Fail => "fail",
             Grade::NoCompile => "NOCALL",
+            Grade::Hung => "HUNG",
         }
     }
 
@@ -1836,5 +1936,78 @@ mod ambiguity {
         let out = ambiguity_report(&[]);
         assert!(out.contains("0 rows, 0 UNDERSPECIFIED"), "{out}");
         assert!(out.contains(AGREEMENT_IS_NOT_SHARPNESS), "{out}");
+    }
+}
+
+#[cfg(test)]
+mod bound {
+    use super::*;
+
+    /// B2's shape, shrunk to a loop that never exits. The real one was
+    /// `while eta <= u64::MAX / 4` stepping 1000 -- ~4.6e15 iterations, which
+    /// is indistinguishable from this at any timescale a test can wait.
+    const NEVER_ENDS: &str = "#[cfg(test)]\nmod t {\n #[test]\n fn a() { loop { std::hint::spin_loop(); } }\n}";
+
+    #[test]
+    fn a_test_that_never_terminates_is_killed_and_reported_apart() {
+        // B2. Without the bound this call does not return, so the assertion
+        // that matters is that the test FINISHES at all -- and then that the
+        // verdict is `Hung` rather than `Fail`.
+        assert_eq!(hung_not_failed(), Ok(()));
+    }
+
+    fn hung_not_failed() -> Result<(), String> {
+        let started = std::time::Instant::now();
+        let g = grade_detail("", "", NEVER_ENDS, "rustc")?;
+        assert_eq!(
+            g,
+            Grade::Hung,
+            "a killed child exits non-zero, so `Fail` is what a hang looks \
+             like from outside -- V6 is that the fold must not happen"
+        );
+        assert!(
+            started.elapsed() < GRADE_TIMEOUT.saturating_mul(3),
+            "the bound must actually bound: {:?}",
+            started.elapsed()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn a_hang_is_not_a_disagreement_and_leaves_the_denominator() {
+        // The reason the fold matters for T97 specifically: `Fail` maps to
+        // `Disagree`, so an unbounded harness would have reported a gap in a
+        // row that nothing disagreed about.
+        assert_eq!(reading(Grade::Hung), Reading::Hung);
+        let mut r = RowReadings::new("abort_budget_ms");
+        r.push(Reading::Hung);
+        assert!(!r.underspecified(), "a hang flags no row");
+        assert_eq!(r.measured(), 0, "and it is not in the denominator");
+        assert_eq!(r.hung, 1);
+        assert_eq!(r.verdict(), "not measured");
+    }
+
+    #[test]
+    fn the_report_shows_hangs_where_a_reader_will_see_them() {
+        // A row measured zero times while looking measured is the failure
+        // mode; the count has to be on the line.
+        let mut r = RowReadings::new("abort_budget_ms");
+        r.push(Reading::Hung);
+        r.push(Reading::Agree);
+        let out = ambiguity_report(&[r]);
+        assert!(out.contains("1 hung"), "{out}");
+        assert!(out.contains("0/1 disagree"), "{out}");
+    }
+
+    #[test]
+    fn the_bound_costs_a_terminating_run_nothing() {
+        // The bound must not turn a slow-but-finite test into a false Hung,
+        // and it must not slow the 33-row sweep down.
+        let Some(it) = GEN_CORPUS.get(1) else { return };
+        let good = "pub fn bucket(n: u64) -> &'static str { match n { 0..=1_999 => \"b0\", 2_000..=7_999 => \"b2\", 8_000..=31_999 => \"b8\", _ => \"b32\" } }";
+        assert_eq!(
+            grade_detail(good, it.preamble, it.tests, "rustc"),
+            Ok(Grade::Pass)
+        );
     }
 }
