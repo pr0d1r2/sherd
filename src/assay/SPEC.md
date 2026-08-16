@@ -13,11 +13,14 @@ a corpus, & a way to grade a model against it. an assay tests a sample against w
 
 ## §I INTERFACES
 
-- lib: `grade(candidate, preamble, tests, rustc) -> Result<bool,String>` — compile & run against HIDDEN tests
+- lib: `grade_detail(candidate, preamble, tests, rustc) -> Result<Grade,String>` — compile & run against HIDDEN tests, under `GRADE_TIMEOUT`. `Grade` = `Pass|Fail|NoCompile|Hung`; the last two graded NOTHING & are counted APART (V1, V6)
+- lib: `cross(code, test, preamble, rustc) -> Result<Reading,String>` — one BLIND test against one BLIND impl of the SAME row. `Reading` = `Agree|Disagree|Uncallable|Hung`
+- lib: `RowReadings` · `ambiguity_report(&[RowReadings]) -> String` — per ROW, ⊥ pooled. a REPORT, ⊥ a gate
 - lib: `titrate_tier(&Tier, judge) -> Result<TierScore,String>`
-- lib: `gen_prompt(inv, sig, preamble)` · `gen_prompt_in_context(pack, ..)` · `blind_prompt_bare(inv, added)`
-- lib: `GEN_CORPUS` · `RECORDED` · `VAGUE` · `SUBTLE` · `TIERS`
+- lib: `gen_prompt(inv, sig, preamble)` · `gen_prompt_no_sig(inv, preamble)` · `test_prompt(inv, sig, preamble)` · `gen_prompt_in_context(pack, ..)` · `blind_prompt_bare(inv, added)`
+- lib: `GEN_CORPUS` · `RECORDED` · `VAGUE` · `SUBTLE` · `TIERS` · `stub_for(sig)`
 - file: `target/titration.tsv` — one row per call, appended AS PRODUCED
+- file: `target/ambiguity.txt` — the impl & the test per row, kept AS PRODUCED (B1)
 
 ## §R RESEARCH
 
