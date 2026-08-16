@@ -832,7 +832,7 @@ mod tests {
     /// A §F row pointing at a directory that is not there (fed V1), the same
     /// dir named twice (fed V12), a child on disk with no row (fed V11), and
     /// a §B row naming no invariant (spec V4).
-    const BROKEN: &str = "# SPEC\n\n## \u{a7}G GOAL\n\nbroken on purpose\n\n\
+    const BROKEN: &str = "# SPEC\n\n## \u{a7}V INVARIANTS\n\nV1: out of order\n\n## \u{a7}G GOAL\n\nbroken on purpose\n\n## \u{a7}T TASKS\n\nid|status|task|cites\nT1|?|a status that is not x, ~ or .|-\n\n\
          ## \u{a7}F FEDERATION\n\ndir|owns|\u{22a5}owns|tokens\n\
          ghost|nothing real|-|-\n\
          twice|a|-|-\n\
@@ -871,6 +871,34 @@ mod tests {
         )?;
         r.commit("a clean tree")?;
         assert_eq!(check(r.path()), ExitCode::SUCCESS);
+        Ok(())
+    }
+
+    /// `review` on a commit that adds a STUB, so the findings loop runs.
+    ///
+    /// The printing branch only executes when there is something to print,
+    /// and this repo's own commits are reviewed clean -- so `review_cmd`'s
+    /// findings path had never run. A stub is a new `pub fn` called only from
+    /// its own test, which is exactly what `unwired` flags (`src/fed:B6`).
+    #[test]
+    fn review_prints_the_findings_it_has_and_stays_advisory() {
+        assert_eq!(review_a_stub_commit(), Ok(()));
+    }
+
+    fn review_a_stub_commit() -> Result<(), String> {
+        let r = crate::testrepo::TestRepo::new("cli-review-stub")?;
+        r.write(
+            "src/n/mod.rs",
+            "pub fn stub() -> bool { false }\n\n#[cfg(test)]\nmod t {\n \
+             use super::*;\n #[test]\n fn a() { assert!(!stub()); }\n}\n",
+        )?;
+        r.commit("add a stub called only by its own test")?;
+        assert_eq!(
+            review_cmd(r.path(), "HEAD"),
+            ExitCode::SUCCESS,
+            "V3: a finding is ADVISORY -- review reports, the reader judges, \
+             and auto-failing would trade a false negative for a false positive"
+        );
         Ok(())
     }
 
