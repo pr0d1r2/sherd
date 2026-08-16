@@ -6,6 +6,8 @@
 
 MOTIVATING NUMBER: `itok` = 135,096 tok (28,462 spec + 106,634 code) vs 102,529 working on the target box. An 11,291-line CLI ⊥ fit its own best-case hardware.
 
+TARGET: most modules BUILDABLE on the 20B (V106) — ⊥ merely readable by it. context was the binding constraint & after T41 is ⊥: the fattest chain is 9,886 of 102,529 working = 9.6% (R41). competence is what binds now, & `src/tdd:T13` still reads 0 merit wins.
+
 ## §F FEDERATION
 
 dir|owns|⊥owns|tokens
@@ -103,6 +105,7 @@ R37|judge is STABLE|blind lens, 3 runs × 2 arms × 5 items = 30 calls @ ~420 to
 R38|the corpus is BELOW the frontier|perfect separation on BOTH arms w/ ⊥ a single miss ∴ this task sits comfortably inside competence & LOCATES NOTHING. a test that never fails measures no boundary. next titration ! go UP (harder judge: longer fn, weaker invariant, ⊥-obvious stub) or SIDEWAYS (generation, where `src/tdd:T13` still reads 0 merit wins), ⊥ repeat this one|derived from R37
 R39|judge boundary LOCATED|blind lens titration, 4 rungs, 2 runs IDENTICAL: `0-tells` 10/10 · `1-bare` 10/10 · `2-vague` 7/10 · `3-subtle` 6/8. ∴ the boundary is real AND stable AT THE EDGE, ⊥ only deep inside competence — R37 had only shown stability at 100%|`cargo test -- --ignored blind_lens_titration`, 2 runs @ .24, 76 calls
 R40|invariant PRECISION is the axis, ⊥ prompt help|stripping `blind_prompt`'s enumerated tells cost NOTHING (10/10 → 10/10) though every recorded stub matches a clause near-verbatim ∴ the checklist was ⊥ doing the work — HYPOTHESIS FALSIFIED. vague `§V` wording costs 30%, the largest single drop, vs 25% for stubs no clause reaches ∴ cheapest lever on delegation = sharper `§V` rows, ⊥ prompt engineering. `src/lens:B1` & `src/plan:B1` reached this from the other direction|derived from R39
+R41|context stopped binding|T41 made `--depth rule` select: whole repo 170,822 → 109,363 tok (-36%), root 11,576 → 7,638, `src/tdd` 17,127 → 9,886 (-42%). 13 of 13 chains were OVER ceiling, now 0 ∴ the fattest chain is 9.6% of working budget & R4's motivating number no longer describes THIS repo. what remains unsolved is competence, ⊥ context|`bbx budget` before/after T41
 
 ## §V INVARIANTS
 
@@ -206,6 +209,7 @@ V102: a gate ! declare its OP SET as data, ⊥ bury it in a hook body. green nam
 V103: the criterion ⊥ WEAKEN as the rung narrows — a rung-4 task judged against the same `§V` as a rung-1 one, else the descent proves nothing. a granularize-until-success loop converges on TRIVIA by construction (`src/tdd:B2` = a judge loosening from "proves the invariant" to "would compile"). success below the verifiability floor is recorded UNVERIFIED, ⊥ kept
 V104: a declared LIMIT ! have a runner that EXITS NONZERO — V74's shape, widened from §C to any number the spec names. V6/V7/V8 declare ceilings, `.context-limits` carries them, `bbx budget` PRINTS them & exits 0 ∴ 4 nodes drifted over unseen (B7). & a path w/ NO ceiling row is UNCHECKED ⊥ unlimited: absence ! read as violation or default, ⊥ as permission
 V105: a declared OPTION ! CHANGE BEHAVIOUR. `Depth::Rule` is §I's default & selected nothing for the project's whole life ∴ every pack shipped archive & every ceiling was measured against it (B8). testable ∀ flag: same input, two settings, DIFFERENT output — a flag whose branches agree is a claim w/ no runner (V74)
+V106: BUILDABLE on the 20B = (a) chain + the file it edits fits working budget & (b) ∃ a rung where the output SURVIVES REVIEW (⊥ merely the gate) & (c) setup cost < writing it by hand. (a) alone is what `budget` checks & is ⊥ SUFFICIENT — after T41 every chain is ≤10% of working & 0 merit wins remain. a module claimed buildable w/o (b) & (c) measured is a wish (`.:B4`: name the denominator)
 V73: dir promotion has 2 triggers — (a) V50 code ceiling, (b) module owns SPEC worth its own node even under ceiling. vendor facades are (b): few hundred lines carrying V17/V24/V25. ⊥ promote every `.rs` — 30 files → 60 is ceremony
 
 ## §T TASKS
@@ -258,6 +262,9 @@ T72|x|gate → `hk` from `nix-hk`, ops in `hk.pkl`, `pre-commit` + `pre-push`, f
 T73|.|`/titrate` machinery — `.bbx-frontier` record, believability re-keyed node → SHAPE, cost ledger w/ the denominator named (`.:B4`)|V103,V60
 T74|x|titrate the JUDGE upward until it FAILS — longer fn, weaker `§V`, ⊥-obvious stub. R38: a corpus that never misses locates no boundary|V103,R37,R38
 T75|.|after T41: re-measure ∀ chain, reset `.context-limits` from the new baseline, & wire `bbx budget` into `hk.pkl` ∴ V104 gets its runner IN THE GATE, ⊥ only in a command a human remembers to run|V104,V50
+T76|.|BUILDABILITY SWEEP: `bbx tdd` @ every node, N=3, record (node, rung, kept/tried) → `.bbx-frontier`. answers WHICH modules are buildable, ⊥ whether the idea works|V106,V103,R37
+T77|.|titrate GENERATION against sharp vs vague `§V` — R40 measured precision as the dominant axis for JUDGING; nobody has checked whether it drives WRITING, & vague rows are the live hypothesis for `src/tdd:T13` 0 merit wins|V106,R40
+T78|.|`bbx lens` builds its dir w/ `PathBuf::from`, ⊥ `arg_dir` ∴ it never got T10 root-resolution & `lens .` reports a different chain than `budget` for the same node (B9)|V104,I
 
 ## §B BUGS
 
@@ -270,3 +277,4 @@ B5|2026-08-05|HEAD stopped COMPILING w/ ⊥ blackbox commit. `67fa9ad` (08-02 10
 B6|2026-08-18|gate ran `build` + `test` ONLY, from the first commit that had a hook — no fmt, no clippy — ∴ an entirely unformatted tree & 18 clippy findings accrued behind a verdict that read green every time. the ops lived as a shell BODY in `.githooks/pre-commit` ∴ the SET of checks was never reviewable data & nobody could see what was ⊥ there|ops → `hk.pkl`, file-scoped & readable; fmt + clippy gated & the debt paid (`abd2bb1`). V102. `-D warnings` moved off `RUSTFLAGS` so it stops reaching `../itok`
 B7|2026-08-18|`.context-limits` declares per-node chain ceilings & `bbx budget` PRINTED the table w/o comparing against them or failing — T10 sat `.` from the first commit ∴ every chain drifted over unseen. w/ the comparison RUNNING it is 13 of 13, ⊥ the 4 first counted: root alone grew 10,060 → 11,576 in ONE session & every chain pays root|V104. T10 built the runner (exit 1). `src/land`/`src/slice` inherit `src` by longest prefix — they are over an INHERITED ceiling, ⊥ unbounded as this row first claimed
 B8|2026-08-18|`lens::pack` reads the WHOLE `SPEC.md` ∀ chain member & consults `Depth` only to APPEND `SPEC.why.md` ∴ `--depth rule` — §I's documented DEFAULT — selected nothing, & `§R`/`§B` archive has ridden in every pack & every budget since the command existed. MEASURED 33% of root, 59% of `src/tdd`, 58% of `src/plan`. `rule_depth` was written, tested & correct in `src/tdd` the whole time, called only by the tdd worker path|V105. T41 moves `rule_depth` to the owner & makes `Depth` select; T75 re-measures after
+B9|2026-08-18|`bbx lens <dir>` passes `PathBuf::from(d)` straight to `pack` while `budget`/`fed` go through `arg_dir`, which T10 fixed to resolve against ROOT ∴ `lens .` reports a 2-node chain where `budget` reports 1 node for the same target, & from a subdirectory `lens` reads a truncated chain w/ no error. the same relative-vs-absolute defect T10 fixed, one command over, missed because the fix was applied to the HELPER & ⊥ to every caller|T78. GENERALLY: fixing a shared helper ! be followed by finding who does ⊥ use it
