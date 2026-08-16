@@ -128,113 +128,147 @@ fn tail(s: &str, n: usize) -> &str {
     if s.len() <= n { s } else { &s[s.len() - n..] }
 }
 
-fn run(
-    prompt: &str,
-    label: &'static str,
-    log: &mut Vec<Step>,
-) -> Result<String, String> {
-    run_sampled(prompt, label, ollama::Sampling::DETERMINISTIC, log)
+/// One streamed chunk: echo it under `-v`, else a dot every 25. Returns the
+/// new count.
+///
+/// Extracted because making `run_sampled` a METHOD added an indent level and
+/// pushed this closure past `excessive-nesting` -- the limit noticing that a
+/// four-deep closure inside a call inside a method was never readable.
+fn tick(chunk: &str, n: usize) -> usize {
+    use std::io::Write;
+    if ollama::verbose() {
+        eprint!("{chunk}");
+    } else if n.wrapping_add(1).is_multiple_of(25) {
+        eprint!(".");
+    }
+    let _ = std::io::stderr().flush();
+    n.wrapping_add(1)
 }
 
-fn run_sampled(
-    prompt: &str,
-    label: &'static str,
-    sampling: ollama::Sampling,
-    log: &mut Vec<Step>,
-) -> Result<String, String> {
-    use std::io::Write;
-    // Count locally too: the server's number and ours must agree, and a
-    // silent divergence means the prompt is not what this code thinks it is.
-    let local = crate::tokens::count(prompt);
-    // Say what is being sent, and what it should COST, before sending it. A
-    // silent 40-90s wait is indistinguishable from a hang (V21), and a
-    // prediction is what lets the escalation guards mean anything.
-    let eta = ollama::predict_for(label, local.tokens);
-    eprintln!(
-        "  [{label}] -> {} tok ({:.1} KB) - eta {:.0}s cold / {:.0}s if cached (~{} gen)",
-        local.tokens,
-        prompt.len() as f64 / 1024.0,
-        eta.total_s(),
-        eta.cached_s(),
-        eta.gen_est
-    );
-    eprint!("       ");
-    let _ = std::io::stderr().flush();
-    if ollama::verbose() {
-        eprintln!("\n--- prompt [{label}] ---\n{prompt}\n--- end prompt ---");
+/// Transport plus the step log: they always travel together, so they are one
+/// thing. Threading the transport as a fifth ARGUMENT pushed `run_sampled`
+/// past `clippy.toml`'s limit of four, which was the limit correctly saying
+/// the seam wanted a context and not another parameter (`.:V109`).
+pub struct Caller<'a> {
+    t: &'a dyn ollama::Transport,
+    /// What each round-trip cost. Steps without their cost are not evidence.
+    pub log: Vec<Step>,
+}
+
+impl<'a> Caller<'a> {
+    /// A caller over `t`, with an empty log.
+    #[must_use]
+    pub fn new(t: &'a dyn ollama::Transport) -> Self {
+        Self { t, log: Vec::new() }
     }
-    let mut n = 0usize;
-    let r =
-        ollama::generate_sampled(prompt, label, sampling, eta, &mut |chunk| {
-            if ollama::verbose() {
-                eprint!("{chunk}");
-            } else {
-                n += 1;
-                // One dot per ~25 chunks: visible motion, not a firehose.
-                if n.is_multiple_of(25) {
-                    eprint!(".");
-                }
-            }
-            let _ = std::io::stderr().flush();
-        })?;
-    eprintln!();
-    ollama::observe_gen(label, r.eval_tokens);
-    if ollama::verbose() {
-        if !r.thinking.is_empty() {
+
+    /// One deterministic round-trip.
+    fn run(
+        &mut self,
+        prompt: &str,
+        label: &'static str,
+    ) -> Result<String, String> {
+        self.run_sampled(prompt, label, ollama::Sampling::DETERMINISTIC)
+    }
+
+    /// One round-trip at `sampling`, recorded in `self.log`.
+    fn run_sampled(
+        &mut self,
+        prompt: &str,
+        label: &'static str,
+        sampling: ollama::Sampling,
+    ) -> Result<String, String> {
+        use std::io::Write;
+        // Count locally too: the server's number and ours must agree, and a
+        // silent divergence means the prompt is not what this code thinks it is.
+        let local = crate::tokens::count(prompt);
+        // Say what is being sent, and what it should COST, before sending it. A
+        // silent 40-90s wait is indistinguishable from a hang (V21), and a
+        // prediction is what lets the escalation guards mean anything.
+        let eta = ollama::predict_for(label, local.tokens);
+        eprintln!(
+            "  [{label}] -> {} tok ({:.1} KB) - eta {:.0}s cold / {:.0}s if cached (~{} gen)",
+            local.tokens,
+            prompt.len() as f64 / 1024.0,
+            eta.total_s(),
+            eta.cached_s(),
+            eta.gen_est
+        );
+        eprint!("       ");
+        let _ = std::io::stderr().flush();
+        if ollama::verbose() {
             eprintln!(
-                "\n--- reasoning [{label}] ---\n{}\n--- end reasoning ---",
-                r.thinking
+                "\n--- prompt [{label}] ---\n{prompt}\n--- end prompt ---"
             );
         }
-        eprintln!("--- end reply [{label}] ---");
-    }
-    // Prediction against telemetry -- the comparison is the point. A delta
-    // that stays large means the pace model is wrong about THIS endpoint.
-    let actual = r.ms as f64 / 1000.0;
-    let basis = if ollama::last_cached() {
-        eta.cached_s()
-    } else {
-        eta.total_s()
-    };
-    let delta = (actual - basis) / basis * 100.0;
-    eprintln!(
-        "  [{label}] <- {} sent · {} gen · {actual:.1}s (eta {:.0}s, {delta:+.0}%){}",
-        r.prompt_tokens,
-        r.eval_tokens,
-        basis,
-        if ollama::last_cached() {
-            "  [prefix CACHED]"
-        } else {
-            ""
+        let mut n = 0usize;
+        let r = ollama::generate_via(
+            self.t,
+            prompt,
+            label,
+            sampling,
+            eta,
+            &mut |chunk| n = tick(chunk, n),
+        )?;
+        eprintln!();
+        ollama::observe_gen(label, r.eval_tokens);
+        if ollama::verbose() {
+            if !r.thinking.is_empty() {
+                eprintln!(
+                    "\n--- reasoning [{label}] ---\n{}\n--- end reasoning ---",
+                    r.thinking
+                );
+            }
+            eprintln!("--- end reply [{label}] ---");
         }
-    );
-    if !r.thinking.is_empty() {
+        // Prediction against telemetry -- the comparison is the point. A delta
+        // that stays large means the pace model is wrong about THIS endpoint.
+        let actual = r.ms as f64 / 1000.0;
+        let basis = if ollama::last_cached() {
+            eta.cached_s()
+        } else {
+            eta.total_s()
+        };
+        let delta = (actual - basis) / basis * 100.0;
         eprintln!(
-            "       (+{} reasoning tokens, hidden -- see -v){}",
-            r.thinking.len() / 4,
-            if ollama::last_load_ms() > 500 {
-                format!(
-                    "  [endpoint was COLD: {}ms model load]",
-                    ollama::last_load_ms()
-                )
+            "  [{label}] <- {} sent · {} gen · {actual:.1}s (eta {:.0}s, {delta:+.0}%){}",
+            r.prompt_tokens,
+            r.eval_tokens,
+            basis,
+            if ollama::last_cached() {
+                "  [prefix CACHED]"
             } else {
-                String::new()
+                ""
             }
         );
+        if !r.thinking.is_empty() {
+            eprintln!(
+                "       (+{} reasoning tokens, hidden -- see -v){}",
+                r.thinking.len() / 4,
+                if ollama::last_load_ms() > 500 {
+                    format!(
+                        "  [endpoint was COLD: {}ms model load]",
+                        ollama::last_load_ms()
+                    )
+                } else {
+                    String::new()
+                }
+            );
+        }
+        if r.prompt_tokens.abs_diff(local.tokens) > local.tokens / 10 {
+            eprintln!(
+                "  [{label}] note: local count {} vs server {} -- >10% apart",
+                local.tokens, r.prompt_tokens
+            );
+        }
+        self.log.push(Step {
+            label,
+            prompt_tokens: r.prompt_tokens,
+            eval_tokens: r.eval_tokens,
+            ms: r.ms,
+        });
+        Ok(r.text)
     }
-    if r.prompt_tokens.abs_diff(local.tokens) > local.tokens / 10 {
-        eprintln!(
-            "  [{label}] note: local count {} vs server {} -- >10% apart",
-            local.tokens, r.prompt_tokens
-        );
-    }
-    log.push(Step {
-        label,
-        prompt_tokens: r.prompt_tokens,
-        eval_tokens: r.eval_tokens,
-        ms: r.ms,
-    });
-    Ok(r.text)
 }
 
 /// The MONOLITH arm of the premise gate (root V60): everything in one call.
@@ -263,9 +297,9 @@ pub fn oneshot(
         .find(|l| l.starts_with(&format!("{invariant}:")))
         .ok_or_else(|| format!("{invariant} not declared"))?
         .to_string();
-    let mut log = Vec::new();
 
-    let reply = run(
+    let mut c = Caller::new(&ollama::Http);
+    let reply = c.run(
         &format!(
             "{}\n--- spec (complete) ---\n{spec_txt}\n\n\
          --- implementation (complete) ---\n{impl_r}\n\n\
@@ -277,7 +311,6 @@ pub fn oneshot(
             NOTATION
         ),
         "monolith",
-        &mut log,
     )?;
 
     let blocks: Vec<&str> = reply
@@ -298,11 +331,11 @@ pub fn oneshot(
     )
     .map_err(|e| e.to_string())?;
     let (ok, out) = gate(root)?;
-    let sent: u64 = log.iter().map(|s| s.prompt_tokens).sum();
+    let sent: u64 = c.log.iter().map(|s| s.prompt_tokens).sum();
     eprintln!("\n  1 round-trip · {sent} tok sent · max single call {sent}");
     if ok {
         eprintln!("  VERDICT: MERGEABLE -- gates green");
-        Ok(log)
+        Ok(c.log)
     } else {
         eprintln!("{}", tail(&out, 1200));
         Err("NOT mergeable -- gates red".into())
@@ -315,6 +348,75 @@ pub fn oneshot(
 /// Returns the reason the loop could not proceed. A rejected test, a test that
 /// is already green, or an exhausted repair budget are all reported -- never
 /// silently swallowed.
+/// One `tdd` run's inputs, bundled.
+///
+/// A struct rather than a seventh parameter: `drive_from` already took six
+/// against `clippy.toml`'s limit of four, and adding the transport as an
+/// argument would have made the signature worse to fix a testability problem
+/// (`.:V50`). The limit did design work here rather than nagging.
+///
+/// `transport` is what makes the loop RUNNABLE OFFLINE (`V27`). Every model
+/// call in the loop goes through it, so a scripted one drives the whole
+/// cycle with no endpoint -- which is the only way anything here gets a test
+/// that is not a forty-minute live run.
+/// Repair attempts step 4 gets when the caller does not say.
+pub const DEFAULT_REPAIRS: usize = 3;
+
+pub struct Run<'a> {
+    /// Repo root; the gate runs here.
+    pub root: &'a Path,
+    /// The node whose `mod.rs` is edited.
+    pub node: &'a Path,
+    /// Where the invariant is declared -- may be an ancestor (`.:plan` B6).
+    pub owner: &'a Path,
+    /// The invariant id, e.g. `V3`.
+    pub invariant: &'a str,
+    /// The task text from the `§T` row.
+    pub task: &'a str,
+    /// How many repair attempts step 4 gets.
+    pub max_repair: usize,
+    /// Where model calls go. `&ollama::Http` in production.
+    pub transport: &'a dyn ollama::Transport,
+}
+
+impl<'a> Run<'a> {
+    /// A run against the real endpoint, with owner defaulting to the node.
+    #[must_use]
+    /// `max_repair` defaults to `DEFAULT_REPAIRS`; use [`Self::repairs`] to
+    /// change it. A fifth parameter would have put this past
+    /// `clippy.toml`'s limit of four -- the same limit that made `Run` exist.
+    pub fn new(
+        root: &'a Path,
+        node: &'a Path,
+        invariant: &'a str,
+        task: &'a str,
+    ) -> Self {
+        Self {
+            root,
+            node,
+            owner: node,
+            invariant,
+            task,
+            max_repair: DEFAULT_REPAIRS,
+            transport: &ollama::Http,
+        }
+    }
+
+    /// How many repair attempts step 4 gets.
+    #[must_use]
+    pub const fn repairs(mut self, n: usize) -> Self {
+        self.max_repair = n;
+        self
+    }
+
+    /// The same run, with the invariant declared in an ancestor.
+    #[must_use]
+    pub const fn owned_by(mut self, owner: &'a Path) -> Self {
+        self.owner = owner;
+        self
+    }
+}
+
 pub fn drive(
     root: &Path,
     node: &Path,
@@ -322,7 +424,7 @@ pub fn drive(
     task: &str,
     max_repair: usize,
 ) -> Result<Vec<Step>, String> {
-    drive_from(root, node, node, invariant, task, max_repair)
+    drive_run(&Run::new(root, node, invariant, task).repairs(max_repair))
 }
 
 /// As [`drive`], but the invariant is declared in `owner`, which may be an
@@ -525,6 +627,11 @@ pub fn is_yes(verdict: &str) -> bool {
 ///
 /// # Errors
 /// See [`drive`].
+/// As [`drive_run`], from loose parts. `plan::apply` builds its arguments
+/// one at a time, so it keeps a positional entry point.
+///
+/// # Errors
+/// See [`drive_run`].
 pub fn drive_from(
     root: &Path,
     node: &Path,
@@ -533,6 +640,16 @@ pub fn drive_from(
     task: &str,
     max_repair: usize,
 ) -> Result<Vec<Step>, String> {
+    drive_run(
+        &Run::new(root, node, invariant, task)
+            .repairs(max_repair)
+            .owned_by(owner),
+    )
+}
+
+pub fn drive_run(r: &Run) -> Result<Vec<Step>, String> {
+    let (root, node, owner, invariant, task, max_repair) =
+        (r.root, r.node, r.owner, r.invariant, r.task, r.max_repair);
     let spec_path = node.join("SPEC.md");
     let inv_path = owner.join("SPEC.md");
     let mod_path = node.join("mod.rs");
@@ -554,7 +671,7 @@ pub fn drive_from(
 
     let spec_rules = rule_depth(&spec_txt);
     let surface = signatures(impl_r);
-    let mut log = Vec::new();
+    let mut c = Caller::new(r.transport);
 
     // 1 -- RED test, with the judge's objection fed back on rejection. The
     // judge's reason is actionable signal; discarding it and hand-tuning the
@@ -590,7 +707,7 @@ pub fn drive_from(
         } else {
             "1 red-retry"
         };
-        test_fn = ollama::rust_block(&run(&prompt, label, &mut log)?);
+        test_fn = ollama::rust_block(&c.run(&prompt, label)?);
 
         // Deterministic, before the judge, at zero tokens: if the row names
         // the function to write, the test has to CALL it. Measured -- the row
@@ -611,7 +728,7 @@ pub fn drive_from(
             continue;
         }
 
-        let verdict = run(
+        let verdict = c.run(
             &format!(
                 "{NOTATION}\n--- data model ---\n{surface}\n\nInvariant:\n  {inv}\n\n\
              Proposed test:\n```rust\n{test_fn}\n```\n\n\
@@ -629,7 +746,6 @@ pub fn drive_from(
             } else {
                 "1b re-judge"
             },
-            &mut log,
         )?;
         let first = verdict.trim().lines().next().unwrap_or("").to_string();
         eprintln!("  judge: {}", first.chars().take(78).collect::<String>());
@@ -694,11 +810,10 @@ pub fn drive_from(
     for k in 0..n {
         let label: &'static str =
             if k == 0 { "2 green" } else { "2 green-alt" };
-        let code = ollama::rust_block(&run_sampled(
+        let code = ollama::rust_block(&c.run_sampled(
             &green_prompt,
             label,
             ollama::Sampling::candidate(k),
-            &mut log,
         )?);
         std::fs::write(&mod_path, insert_impl(&with_test, &code))
             .map_err(|e| e.to_string())?;
@@ -774,7 +889,7 @@ pub fn drive_from(
         let cur_surface = signatures(cur_impl);
         let label: &'static str =
             if i == 0 { "4 repair-1" } else { "4 repair-n" };
-        let fixed = ollama::rust_block(&run(
+        let fixed = ollama::rust_block(&c.run(
             &format!(
                 "--- existing API (signatures) ---\n{cur_surface}\n\n--- your current attempt ---\n{last_added}\n\n--- test ---\n```rust\n{test_fn}\n```\n\n\
              --- failure ---\n{}\n\n\
@@ -785,7 +900,6 @@ pub fn drive_from(
                 tail(&out, 2000)
             ),
             label,
-            &mut log,
         )?);
         let replaced = if cur_impl.contains(last_added.trim()) {
             cur_impl.replace(last_added.trim(), fixed.trim())
@@ -809,7 +923,7 @@ pub fn drive_from(
     // said no, and asking a judge to confirm it costs a call to learn nothing.
     if ok {
         let verdict =
-            run(&blind_prompt(&inv, &last_added), "5 blind judge", &mut log)?;
+            c.run(&blind_prompt(&inv, &last_added), "5 blind judge")?;
         let first = verdict.trim().lines().next().unwrap_or("").to_string();
         eprintln!("  blind: {}", first.chars().take(78).collect::<String>());
         if !is_yes(&verdict) {
@@ -820,16 +934,16 @@ pub fn drive_from(
         }
     }
 
-    let sent: u64 = log.iter().map(|s| s.prompt_tokens).sum();
-    let max = log.iter().map(|s| s.prompt_tokens).max().unwrap_or(0);
+    let sent: u64 = c.log.iter().map(|s| s.prompt_tokens).sum();
+    let max = c.log.iter().map(|s| s.prompt_tokens).max().unwrap_or(0);
     eprintln!(
         "\n  {} round-trips · {sent} tok sent · max single call {max}",
-        log.len()
+        c.log.len()
     );
     if ok {
         eprintln!("  VERDICT: MERGEABLE -- gates green + second lens");
         guard.keep();
-        Ok(log)
+        Ok(c.log)
     } else {
         eprintln!("{}", tail(&out, 2000));
         Err(
