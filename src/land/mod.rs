@@ -357,6 +357,87 @@ mod git_tests {
     use super::*;
     use crate::testrepo::TestRepo;
 
+    /// `stamp` against dates computed independently, not by rerunning it.
+    ///
+    /// It is a civil-from-days conversion with an era shift shifting the year
+    /// to start in March so the leap day falls last -- the branch NAME every
+    /// run's work is filed under (V8), and nothing asserted a single real
+    /// date. Off-by-one era arithmetic is silent: it produces a plausible
+    /// date, on the wrong day.
+    const DATES: &[(u64, &str)] = &[
+        (0, "1970-01-01--00-00"),
+        (86_399, "1970-01-01--23-59"),
+        (946_684_800, "2000-01-01--00-00"),
+        // Divisible by 400, so 2000 IS a leap year -- the case the
+        // hundred-year rule gets wrong on its own.
+        (951_782_400, "2000-02-29--00-00"),
+        (1_709_164_800, "2024-02-29--00-00"),
+        (1_756_400_000, "2025-08-28--16-53"),
+        (1_767_225_599, "2025-12-31--23-59"),
+        // 2100 is divisible by 100 and NOT by 400, so there is no
+        // 2100-02-29 and the 28th is followed by March.
+        (4_107_456_000, "2100-02-28--00-00"),
+        (4_107_542_400, "2100-03-01--00-00"),
+    ];
+
+    #[test]
+    fn stamp_converts_epoch_seconds_to_a_real_calendar_date() {
+        for (secs, want) in DATES {
+            assert_eq!(&stamp(*secs), want, "stamp({secs})");
+        }
+    }
+
+    #[test]
+    fn a_day_apart_in_seconds_is_a_day_apart_on_the_calendar() {
+        // The 2100 pair, stated as the property rather than as two literals:
+        // adding one day must cross February into March, because 2100 has no
+        // twenty-ninth.
+        assert_eq!(stamp(4_107_456_000 + 86_400), "2100-03-01--00-00");
+    }
+
+    #[test]
+    fn a_branch_with_no_commits_is_refused_before_anything_else() {
+        // V1: generated code must not reach `main` without passing here, and
+        // the cheapest refusal comes first -- there is nothing to weigh yet.
+        let e = Evidence {
+            commits: 0,
+            gate_ok: true,
+            findings: 0,
+            nodes: 1,
+            believability: 1.0,
+        };
+        assert!(
+            landable(&e).is_err(),
+            "a branch with no commits has nothing to land"
+        );
+        let msg = landable(&e).err().unwrap_or_default();
+        assert!(msg.contains("no commits"), "{msg}");
+    }
+
+    /// `land` on a repo with no run branch REFUSES, and says why.
+    ///
+    /// V9: a refused branch is UNTOUCHED -- it is the record of the try. The
+    /// assertion that matters is that refusing does not mutate anything.
+    #[test]
+    fn landing_from_a_repo_with_nothing_to_land_refuses_and_touches_nothing() {
+        assert_eq!(check_no_land(), Ok(()));
+    }
+
+    fn check_no_land() -> Result<(), String> {
+        let r = crate::testrepo::TestRepo::new("land-nothing")?;
+        r.write("SPEC.md", "# SPEC\n\n## \u{a7}G GOAL\n\nx\n")?;
+        r.commit("seed")?;
+        let before = r.git(&["rev-parse", "HEAD"])?;
+        let out = land(r.path(), false);
+        assert!(out.is_err(), "a repo on its default branch cannot land");
+        assert_eq!(
+            r.git(&["rev-parse", "HEAD"])?,
+            before,
+            "V9: a refusal leaves the tree exactly as it was"
+        );
+        Ok(())
+    }
+
     #[test]
     fn current_branch_reads_the_checked_out_name() {
         assert_eq!(check_branch(), Ok(()));
