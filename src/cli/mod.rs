@@ -46,7 +46,12 @@ pub fn run() -> ExitCode {
     match args.first().map(String::as_str) {
         Some("budget") => budget(&root, arg_dir(&args, &root)),
         Some("lens") => match (args.get(1), depth_arg(&args)) {
-            (Some(d), Ok(dep)) => lens_cmd(&root, &PathBuf::from(d), dep),
+            // B9: this passed `PathBuf::from(d)` while `budget` and `fed`
+            // went through `arg_dir`, so it never got T10's root resolution
+            // and `lens .` reported a different chain than `budget` for the
+            // same node. Fixing a shared helper has to be followed by finding
+            // who does not use it.
+            (Some(_), Ok(dep)) => lens_cmd(&root, &arg_dir(&args, &root), dep),
             (Some(_), Err(m)) => usage(&m),
             (None, _) => usage("lens needs a dir"),
         },
@@ -114,13 +119,13 @@ pub fn run() -> ExitCode {
         Some("land") => land_verb(&root, args.iter().any(|a| a == "--push")),
         #[cfg(feature = "ollama")]
         Some("ask") => match (args.get(1), args.get(2)) {
-            (Some(d), Some(q)) => ask(&root, &PathBuf::from(d), q),
+            (Some(_), Some(q)) => ask(&root, &arg_dir(&args, &root), q),
             _ => usage("ask needs <dir> and a question"),
         },
         #[cfg(feature = "ollama")]
         Some("oneshot") => match (args.get(1), args.get(2), args.get(3)) {
-            (Some(d), Some(v), Some(t)) => {
-                match crate::tdd::oneshot(&root, &PathBuf::from(d), v, t) {
+            (Some(_), Some(v), Some(t)) => {
+                match crate::tdd::oneshot(&root, &arg_dir(&args, &root), v, t) {
                     Ok(_) => ExitCode::SUCCESS,
                     Err(e) => {
                         eprintln!("bbx: {e}");
@@ -132,8 +137,8 @@ pub fn run() -> ExitCode {
         },
         #[cfg(feature = "ollama")]
         Some("tdd") => match (args.get(1), args.get(2), args.get(3)) {
-            (Some(d), Some(v), Some(task)) => {
-                tdd_cmd(&root, &PathBuf::from(d), v, task)
+            (Some(_), Some(v), Some(task)) => {
+                tdd_cmd(&root, &arg_dir(&args, &root), v, task)
             }
             _ => usage("tdd needs <dir> <invariant> <task>"),
         },

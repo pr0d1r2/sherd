@@ -120,6 +120,131 @@ pub fn expected_calls(test_src: &str, existing: &str) -> Vec<String> {
 /// files to every context pack and every budget (`.:B8`).
 pub use crate::spec::rule_depth;
 
+/// One generation item: the same function asked for twice, once from a sharp
+/// invariant and once from a vague one.
+///
+/// `tests` are HIDDEN from the writer. A writer shown the test can satisfy it
+/// without reading the invariant, which is the stub path recorded three times
+/// in `§B` -- and it would measure the wrong thing entirely, since the
+/// question is whether invariant PRECISION drives writing (`.:R40`).
+pub struct GenItem {
+    /// The invariant as a careful `§V` row states it.
+    pub sharp: &'static str,
+    /// The same rule as a hurried row states it: subject named, deciding
+    /// property left out.
+    pub vague: &'static str,
+    /// The signature the writer must fill.
+    pub sig: &'static str,
+    /// Types and constants both the candidate and the tests need.
+    pub preamble: &'static str,
+    /// The grader. Written before any candidate existed.
+    pub tests: &'static str,
+}
+
+/// Ask for an implementation from an invariant and a signature, nothing else.
+#[must_use]
+pub fn gen_prompt(inv: &str, sig: &str, preamble: &str) -> String {
+    format!(
+        "{NOTATION}\nInvariant:\n  {inv}\n\n\
+         In scope already:\n```rust\n{preamble}\n```\n\n\
+         Write the body of exactly this function so that it satisfies the \
+         invariant:\n```rust\n{sig}\n```\n\n\
+         Reply with the complete function and nothing else. No tests, no \
+         explanation, no `mod`."
+    )
+}
+
+/// Compile a candidate against tests it never saw, and run them.
+///
+/// The grader is `rustc`, never a model. A model grader would confound this
+/// twice: `.:R40` measured the judge as itself precision-sensitive, and
+/// `src/tdd:B2` is a judge loosening under pressure.
+///
+/// Code that does not COMPILE is a wrong answer, so `Ok(false)`. A toolchain
+/// that could not RUN is an error, so `Err` -- `.:V26`: a missing compiler
+/// scoring zero is indistinguishable from a model that cannot write, and the
+/// whole measurement would read as a located boundary.
+///
+/// # Errors
+/// The compiler could not be executed, or the scratch file could not be
+/// written.
+pub fn grade(
+    candidate: &str,
+    preamble: &str,
+    tests: &str,
+    rustc: &str,
+) -> Result<bool, String> {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    static N: AtomicUsize = AtomicUsize::new(0);
+    let n = N.fetch_add(1, Ordering::Relaxed);
+    let dir = std::env::temp_dir();
+    let src = dir.join(format!("bbx_gen_{}_{n}.rs", std::process::id()));
+    let bin = dir.join(format!("bbx_gen_{}_{n}", std::process::id()));
+    std::fs::write(&src, format!("{preamble}\n{candidate}\n{tests}\n"))
+        .map_err(|e| format!("scratch write: {e}"))?;
+    let out = Command::new(rustc)
+        .args(["--test", "--edition", "2021", "-A", "warnings"])
+        .arg(&src)
+        .arg("-o")
+        .arg(&bin)
+        .output()
+        .map_err(|e| format!("{rustc} could not run: {e}"))?;
+    if !out.status.success() {
+        let _ = std::fs::remove_file(&src);
+        return Ok(false);
+    }
+    let run = Command::new(&bin)
+        .output()
+        .map_err(|e| format!("compiled binary could not run: {e}"))?;
+    let _ = std::fs::remove_file(&src);
+    let _ = std::fs::remove_file(&bin);
+    Ok(run.status.success())
+}
+
+/// Five pure functions from this repo, each with the tests it actually has.
+///
+/// `sharp` is the row as written; `vague` names the subject and drops the
+/// property that decides the verdict -- the wording a hurried `§V` row gets.
+/// Everything else is identical between the two, which is `.:V103`: only the
+/// scaffolding may vary, never the criterion.
+pub const GEN_CORPUS: &[GenItem] = &[
+    GenItem {
+        sharp: "V46: a budget subtracts entry cost; a window smaller than entry cost is `does not fit` -- zero -- never a huge number by wrapping",
+        vague: "V46: compute the working budget",
+        sig: "pub fn working(window: u64) -> u64",
+        preamble: "pub const ENTRY_COST: u64 = 28_543;",
+        tests: "#[cfg(test)]\nmod t {\n use super::*;\n #[test]\n fn a() { assert_eq!(working(131_072), 102_529); }\n #[test]\n fn b() { assert_eq!(working(1_000), 0); }\n #[test]\n fn c() { assert_eq!(working(28_543), 0); }\n}",
+    },
+    GenItem {
+        sharp: "V14: prefill rate is a function of SIZE, so a prompt is bucketed: under 2,000 is `b0`, 2,000 to 7,999 is `b2`, 8,000 to 31,999 is `b8`, 32,000 and over is `b32`",
+        vague: "V14: classify a prompt by size",
+        sig: "pub fn bucket(prompt_tokens: u64) -> &'static str",
+        preamble: "",
+        tests: "#[cfg(test)]\nmod t {\n use super::*;\n #[test]\n fn a() { assert_eq!(bucket(0), \"b0\"); assert_eq!(bucket(1_999), \"b0\"); }\n #[test]\n fn b() { assert_eq!(bucket(2_000), \"b2\"); assert_eq!(bucket(7_999), \"b2\"); }\n #[test]\n fn c() { assert_eq!(bucket(8_000), \"b8\"); assert_eq!(bucket(31_999), \"b8\"); }\n #[test]\n fn d() { assert_eq!(bucket(32_000), \"b32\"); }\n}",
+    },
+    GenItem {
+        sharp: "V22: a verdict is YES only when the FIRST line says so, case-insensitively and ignoring surrounding whitespace; a YES appearing later in the explanation is not assent",
+        vague: "V22: read the judge's answer",
+        sig: "pub fn is_yes(verdict: &str) -> bool",
+        preamble: "",
+        tests: "#[cfg(test)]\nmod t {\n use super::*;\n #[test]\n fn a() { assert!(is_yes(\"YES\\nit reads its input\")); }\n #[test]\n fn b() { assert!(is_yes(\"  yes -- fine  \")); }\n #[test]\n fn c() { assert!(!is_yes(\"NO\\nreturns YES for everything\")); }\n #[test]\n fn d() { assert!(!is_yes(\"\")); }\n}",
+    },
+    GenItem {
+        sharp: "V4: a verdict states DIRECTION and DISTANCE, never a bare bool -- at or under budget it is Fits carrying the SLACK, over budget it is Over carrying the EXCESS",
+        vague: "V4: report whether it fits",
+        sig: "pub fn verdict(cost: u64, budget: u64) -> Verdict",
+        preamble: "#[derive(Debug, PartialEq, Eq)]\npub enum Verdict { Fits { slack: u64 }, Over { by: u64 } }",
+        tests: "#[cfg(test)]\nmod t {\n use super::*;\n #[test]\n fn a() { assert_eq!(verdict(100, 500), Verdict::Fits { slack: 400 }); }\n #[test]\n fn b() { assert_eq!(verdict(900, 500), Verdict::Over { by: 400 }); }\n #[test]\n fn c() { assert_eq!(verdict(500, 500), Verdict::Fits { slack: 0 }); }\n}",
+    },
+    GenItem {
+        sharp: "V6: the ceiling for a path is the value of the LONGEST matching prefix among the rows; when no row is a prefix of the path, the default",
+        vague: "V6: look up the ceiling for a path",
+        sig: "pub fn for_path(rows: &[(String, u64)], default: u64, path: &str) -> u64",
+        preamble: "",
+        tests: "#[cfg(test)]\nmod t {\n use super::*;\n fn r() -> Vec<(String, u64)> { vec![(\"src\".to_string(), 100), (\"src/tdd\".to_string(), 200)] }\n #[test]\n fn a() { assert_eq!(for_path(&r(), 9, \"src/tdd/mod.rs\"), 200); }\n #[test]\n fn b() { assert_eq!(for_path(&r(), 9, \"src/fed\"), 100); }\n #[test]\n fn c() { assert_eq!(for_path(&r(), 9, \"docs\"), 9); }\n}",
+    },
+];
+
 /// Split a Rust source file at the `#[cfg(test)]` boundary.
 ///
 /// One definition, because the code ceiling (root V50) needs exactly this
@@ -1516,6 +1641,107 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// The grader's control arm. If the real implementation fails its own
+    /// tests, every zero the titration reports is the harness, not the model.
+    #[test]
+    fn grade_accepts_a_known_good_implementation() {
+        let it = &GEN_CORPUS[1]; // bucket
+        let good = "pub fn bucket(prompt_tokens: u64) -> &'static str {\n    match prompt_tokens {\n        0..=1_999 => \"b0\",\n        2_000..=7_999 => \"b2\",\n        8_000..=31_999 => \"b8\",\n        _ => \"b32\",\n    }\n}";
+        assert_eq!(
+            grade(good, it.preamble, it.tests, "rustc"),
+            Ok(true),
+            "the real function must pass the tests it actually has"
+        );
+    }
+
+    #[test]
+    fn grade_rejects_code_that_does_not_compile() {
+        let it = &GEN_CORPUS[1];
+        assert_eq!(
+            grade("pub fn bucket(", it.preamble, it.tests, "rustc"),
+            Ok(false),
+            "a candidate that will not compile is a WRONG ANSWER, not an error"
+        );
+    }
+
+    #[test]
+    fn grade_rejects_a_plausible_but_wrong_answer() {
+        // The stub shape: compiles, reads its input, returns one bucket.
+        let it = &GEN_CORPUS[1];
+        let stub = "pub fn bucket(prompt_tokens: u64) -> &'static str {\n    if prompt_tokens > 0 { \"b0\" } else { \"b0\" }\n}";
+        assert_eq!(grade(stub, it.preamble, it.tests, "rustc"), Ok(false));
+    }
+
+    #[test]
+    fn grade_errors_when_the_toolchain_is_absent() {
+        // V26. A missing compiler scoring zero is indistinguishable from a
+        // model that cannot write, and the whole run would read as a located
+        // boundary rather than as a broken harness.
+        let it = &GEN_CORPUS[1];
+        assert!(
+            grade("fn x() {}", it.preamble, it.tests, "definitely-not-rustc")
+                .is_err(),
+            "an unrunnable compiler is an ERROR, never a score"
+        );
+    }
+
+    #[test]
+    fn sharp_and_vague_prompts_differ_only_in_the_invariant() {
+        // V103: the criterion is fixed, only the wording varies. If the two
+        // prompts differed anywhere else the measurement would attribute that
+        // difference to precision.
+        for it in GEN_CORPUS {
+            let s = gen_prompt(it.sharp, it.sig, it.preamble);
+            let v = gen_prompt(it.vague, it.sig, it.preamble);
+            assert_eq!(
+                s.replace(it.sharp, "<INV>"),
+                v.replace(it.vague, "<INV>"),
+                "prompts must be identical outside the invariant"
+            );
+            assert!(!s.contains("#[cfg(test)]"), "the writer never sees tests");
+            assert!(!v.contains("assert"), "the writer never sees tests");
+        }
+    }
+
+    /// T77. Records; asserts nothing about the model, for T74's reason -- a
+    /// test demanding a result from a run built to find one is flaky by
+    /// construction, and the first red would be answered by weakening it.
+    #[test]
+    #[ignore]
+    fn generation_titration() {
+        const RUNS: usize = 3;
+        let mut sharp_ok = 0;
+        let mut vague_ok = 0;
+        for run in 1..=RUNS {
+            for it in GEN_CORPUS {
+                for (label, inv) in [("sharp", it.sharp), ("vague", it.vague)] {
+                    let p = gen_prompt(inv, it.sig, it.preamble);
+                    let r = crate::ollama::generate(&p)
+                        .expect("endpoint unreachable -- BBX_ENDPOINT");
+                    let code = crate::ollama::rust_block(&r.text);
+                    let pass = grade(&code, it.preamble, it.tests, "rustc")
+                        .expect("rustc must RUN -- V26");
+                    if pass {
+                        if label == "sharp" {
+                            sharp_ok += 1;
+                        } else {
+                            vague_ok += 1;
+                        }
+                    }
+                    println!(
+                        "run {run} · {label:5} · {} · {}",
+                        if pass { "PASS" } else { "fail" },
+                        it.sig.split('(').next().unwrap_or("")
+                    );
+                }
+            }
+        }
+        let n = RUNS * GEN_CORPUS.len();
+        println!(
+            "\nGENERATION TITRATION\n  sharp {sharp_ok}/{n}\n  vague {vague_ok}/{n}"
+        );
     }
 
     #[test]

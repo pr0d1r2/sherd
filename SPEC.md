@@ -263,8 +263,8 @@ T73|.|`/titrate` machinery — `.bbx-frontier` record, believability re-keyed no
 T74|x|titrate the JUDGE upward until it FAILS — longer fn, weaker `§V`, ⊥-obvious stub. R38: a corpus that never misses locates no boundary|V103,R37,R38
 T75|.|after T41: re-measure ∀ chain, reset `.context-limits` from the new baseline, & wire `bbx budget` into `hk.pkl` ∴ V104 gets its runner IN THE GATE, ⊥ only in a command a human remembers to run|V104,V50
 T76|.|BUILDABILITY SWEEP: `bbx tdd` @ every node, N=3, record (node, rung, kept/tried) → `.bbx-frontier`. answers WHICH modules are buildable, ⊥ whether the idea works|V106,V103,R37
-T77|.|titrate GENERATION against sharp vs vague `§V` — R40 measured precision as the dominant axis for JUDGING; nobody has checked whether it drives WRITING, & vague rows are the live hypothesis for `src/tdd:T13` 0 merit wins|V106,R40
-T78|.|`bbx lens` builds its dir w/ `PathBuf::from`, ⊥ `arg_dir` ∴ it never got T10 root-resolution & `lens .` reports a different chain than `budget` for the same node (B9)|V104,I
+T77|~|titrate GENERATION against sharp vs vague `§V` — R40 measured precision as the dominant axis for JUDGING; nobody has checked whether it drives WRITING, & vague rows are the live hypothesis for `src/tdd:T13` 0 merit wins|V106,R40
+T78|x|`bbx lens` builds its dir w/ `PathBuf::from`, ⊥ `arg_dir` ∴ it never got T10 root-resolution & `lens .` reports a different chain than `budget` for the same node (B9)|V104,I
 
 ## §B BUGS
 
