@@ -589,21 +589,38 @@ mod tests {
 /// `kept` counts only what survived REVIEW, not what passed the gate -- the
 /// gate has gone green on three stubs, so counting commits would measure the
 /// wrong thing.
-pub fn record_outcome(node: &Path, kept: bool) {
-    let mut st = crate::state::State::load();
+/// Record one outcome IN a given store.
+///
+/// The store is a parameter because the ambient one is shared: `.bbx-state`
+/// lives in the repo, every test that touches it races every other, and
+/// `.coverage` records this suite's coverage FLAPPING for exactly that
+/// reason (`src/ollama:T4`). A scorekeeper that can only write one global
+/// file cannot be tested without becoming the thing it is measuring.
+pub fn record_outcome_in(
+    st: &mut crate::state::State,
+    node: &Path,
+    kept: bool,
+) {
     let key = node.to_string_lossy().to_string();
-    let bump = |st: &mut crate::state::State, k: &str| {
+    let mut bump = |k: &str| {
         let n = st.get_u64("score", &format!("{key}.{k}")).unwrap_or(0) + 1;
         st.set("score", &format!("{key}.{k}"), n.to_string());
     };
-    bump(&mut st, "tried");
+    bump("tried");
     if kept {
-        bump(&mut st, "kept");
+        bump("kept");
     }
+}
+
+/// Record one outcome in the ambient store, and save it.
+pub fn record_outcome(node: &Path, kept: bool) {
+    let mut st = crate::state::State::load();
+    record_outcome_in(&mut st, node, kept);
     st.save();
 }
 
-/// How much to believe a node's next row will survive review.
+/// How much to believe a node's next row will survive review, from a given
+/// store.
 ///
 /// Laplace-smoothed: `(kept + 1) / (tried + 2)`. An untried node scores 0.5,
 /// so it outranks one that has failed three times without pretending to know
@@ -611,26 +628,34 @@ pub fn record_outcome(node: &Path, kept: bool) {
 /// by track record -- and `plan` was treating every row as equally likely to
 /// work, which is exactly what he argues against.
 #[must_use]
-pub fn believability(node: &Path) -> f64 {
-    let st = crate::state::State::load();
-    let key = node.to_string_lossy().to_string();
-    let tried = st.get_u64("score", &format!("{key}.tried")).unwrap_or(0);
-    let kept = st.get_u64("score", &format!("{key}.kept")).unwrap_or(0);
+pub fn believability_in(st: &crate::state::State, node: &Path) -> f64 {
+    let (tried, kept) = record_in(st, node);
     #[allow(clippy::cast_precision_loss)]
     {
         (kept as f64 + 1.0) / (tried as f64 + 2.0)
     }
 }
 
-/// `(tried, kept)` for a node, for reporting.
+/// [`believability_in`] against the ambient store.
 #[must_use]
-pub fn record(node: &Path) -> (u64, u64) {
-    let st = crate::state::State::load();
+pub fn believability(node: &Path) -> f64 {
+    believability_in(&crate::state::State::load(), node)
+}
+
+/// `(tried, kept)` for a node, from a given store.
+#[must_use]
+pub fn record_in(st: &crate::state::State, node: &Path) -> (u64, u64) {
     let key = node.to_string_lossy().to_string();
     (
         st.get_u64("score", &format!("{key}.tried")).unwrap_or(0),
         st.get_u64("score", &format!("{key}.kept")).unwrap_or(0),
     )
+}
+
+/// `(tried, kept)` for a node from the ambient store, for reporting.
+#[must_use]
+pub fn record(node: &Path) -> (u64, u64) {
+    record_in(&crate::state::State::load(), node)
 }
 
 // ---- triage: where does an unmanaged row belong? ----
@@ -1052,6 +1077,73 @@ mod git_tests {
             cites: cites.into(),
             status: '.',
         }
+    }
+
+    /// A store of its own, so this test races nothing.
+    fn store(tag: &str) -> crate::state::State {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static N: AtomicUsize = AtomicUsize::new(0);
+        let n = N.fetch_add(1, Ordering::Relaxed);
+        crate::state::State::at(
+            std::env::temp_dir()
+                .join(format!("bbx-score-{tag}-{}-{n}", std::process::id())),
+        )
+    }
+
+    #[test]
+    fn an_untried_node_outranks_one_that_has_failed() {
+        // Laplace: `(kept + 1) / (tried + 2)`. An untried node scores 0.5, so
+        // it goes ahead of a node that failed three times WITHOUT pretending
+        // to know it is good. A raw ratio would score the untried node 0/0
+        // and the failed one 0.00, making them indistinguishable.
+        let mut st = store("laplace");
+        let untried = Path::new("src/never-tried");
+        let failed = Path::new("src/failed");
+        for _ in 0..3 {
+            record_outcome_in(&mut st, failed, false);
+        }
+        let u = believability_in(&st, untried);
+        let f = believability_in(&st, failed);
+        assert!(
+            (u - 0.5).abs() < 1e-9,
+            "an untried node sits at 0.5, got {u}"
+        );
+        assert!(f < u, "three failures rank BELOW untried: {f} vs {u}");
+        assert_eq!(record_in(&st, failed), (3, 0), "tried counted, kept not");
+    }
+
+    #[test]
+    fn five_consecutive_keeps_clears_the_landing_bar() {
+        // `src/land:V2` puts LAND_MIN at 0.85 and calls it "5 consecutive
+        // keeps under Laplace". That is an arithmetic claim in prose, and
+        // nothing checked it: 6/7 = 0.857, so five is the number and four
+        // (5/6 = 0.833) is not.
+        let mut st = store("bar");
+        let n = Path::new("src/proven");
+        for _ in 0..4 {
+            record_outcome_in(&mut st, n, true);
+        }
+        assert!(
+            believability_in(&st, n) < 0.85,
+            "four keeps is 5/6 = 0.833, below the bar"
+        );
+        record_outcome_in(&mut st, n, true);
+        assert!(
+            believability_in(&st, n) >= 0.85,
+            "five keeps is 6/7 = 0.857, and V2 says that clears it"
+        );
+    }
+
+    #[test]
+    fn a_kept_outcome_counts_in_both_tallies_and_a_reverted_one_in_neither() {
+        // `kept` counts what survived REVIEW, not what passed the gate -- the
+        // gate has gone green on three stubs, so counting commits would
+        // measure the wrong thing.
+        let mut st = store("tally");
+        let n = Path::new("src/mixed");
+        record_outcome_in(&mut st, n, true);
+        record_outcome_in(&mut st, n, false);
+        assert_eq!(record_in(&st, n), (2, 1), "two tries, one kept");
     }
 
     #[test]
