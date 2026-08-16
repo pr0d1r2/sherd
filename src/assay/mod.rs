@@ -115,6 +115,28 @@ pub fn test_prompt(inv: &str, sig: &str, preamble: &str) -> String {
     )
 }
 
+/// Ask for an implementation with NO signature given.
+///
+/// T84, variable 3 of 3 (`.:V108`). `.:R44` handed the writer a signature;
+/// `bbx tdd` makes it invent one, and `src/tdd:B12` is that going wrong -- a
+/// test calling `check_edge_depths` while step 2 defined a different name,
+/// unrecoverable by three repairs.
+///
+/// Graded against the SAME hidden tests, so a name or arity the tests cannot
+/// call shows up as `Grade::NoCompile` rather than as a wrong answer. That
+/// distinction is the whole measurement.
+#[must_use]
+pub fn gen_prompt_no_sig(inv: &str, preamble: &str) -> String {
+    format!(
+        "{NOTATION}\nInvariant:\n  {inv}\n\n\
+         In scope already:\n```rust\n{preamble}\n```\n\n\
+         Write the public function that satisfies this invariant. Choose its \
+         name and signature yourself.\n\n\
+         Reply with the complete function and nothing else. No tests, no \
+         explanation, no `mod`."
+    )
+}
+
 /// A deliberately WRONG implementation that still compiles.
 ///
 /// The mutant a test must kill. `.:V111` says a self-authored test cannot
@@ -1438,5 +1460,98 @@ mod kills {
             Ok(Grade::Pass),
             "a test that asserts nothing passes a stub -- that is SURVIVED"
         );
+    }
+}
+
+#[cfg(test)]
+mod signature {
+    use super::*;
+
+    fn ask(p: &str) -> Result<String, String> {
+        crate::ollama::generate(p).map(|r| crate::ollama::rust_block(&r.text))
+    }
+
+    /// Same invariant, same hidden tests. Only the signature differs.
+    /// `(signature given, signature invented)` for one item.
+    type Pair = (Grade, Grade);
+
+    fn one(it: &GenItem) -> Result<Pair, String> {
+        let given = ask(&gen_prompt(it.sharp, it.sig, it.preamble))?;
+        let free = ask(&gen_prompt_no_sig(it.sharp, it.preamble))?;
+        Ok((
+            grade_detail(&given, it.preamble, it.tests, "rustc")?,
+            grade_detail(&free, it.preamble, it.tests, "rustc")?,
+        ))
+    }
+
+    const fn mark(g: Grade) -> &'static str {
+        match g {
+            Grade::Pass => "PASS",
+            Grade::Fail => "fail",
+            Grade::NoCompile => "NOCALL",
+        }
+    }
+
+    /// `NoCompile` in the free arm means the invented name or arity is one
+    /// the hidden tests cannot call -- `src/tdd:B12`'s exact shape, and a
+    /// different failure from writing the wrong logic.
+    fn report(rs: &[Pair]) {
+        let n = rs.len();
+        let c = |f: fn(&Pair) -> bool| rs.iter().filter(|r| f(r)).count();
+        println!("\nSIGNATURE TITRATION ({n} measured)");
+        println!("  given  PASS   {}/{n}", c(|r| r.0 == Grade::Pass));
+        println!("  free   PASS   {}/{n}", c(|r| r.1 == Grade::Pass));
+        println!(
+            "  free   NOCALL {}/{n}  (invented a name the tests cannot call)",
+            c(|r| r.1 == Grade::NoCompile)
+        );
+        println!(
+            "  free   wrong  {}/{n}  (callable, wrong logic)",
+            c(|r| r.1 == Grade::Fail)
+        );
+    }
+
+    fn measure(run: usize, it: &GenItem, rs: &mut Vec<Pair>) {
+        let name = it.sig.split('(').next().unwrap_or("");
+        match one(it) {
+            Ok((g, f)) => {
+                println!(
+                    "run {run} · given {} · free {} · {name}",
+                    mark(g),
+                    mark(f)
+                );
+                rs.push((g, f));
+            }
+            Err(e) => println!("run {run} · ERROR · {name} · {e}"),
+        }
+    }
+
+    /// T84. Records; asserts nothing about the model.
+    #[test]
+    #[ignore]
+    fn signature_titration() {
+        const RUNS: usize = 3;
+        let mut rs = Vec::new();
+        for run in 1..=RUNS {
+            for it in GEN_CORPUS {
+                measure(run, it, &mut rs);
+            }
+        }
+        report(&rs);
+    }
+
+    #[test]
+    fn a_name_the_tests_cannot_call_is_not_wrong_logic() {
+        // The two failure modes must stay separate: B12 is an unreachable
+        // NAME, which three repairs could not fix, and that is a different
+        // problem from an implementation that is simply incorrect.
+        assert_eq!(mark(Grade::NoCompile), "NOCALL");
+        assert_eq!(mark(Grade::Fail), "fail");
+        assert_eq!(mark(Grade::Pass), "PASS");
+        report(&[
+            (Grade::Pass, Grade::NoCompile),
+            (Grade::Pass, Grade::Fail),
+            (Grade::Pass, Grade::Pass),
+        ]);
     }
 }
