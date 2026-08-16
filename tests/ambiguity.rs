@@ -71,16 +71,16 @@ fn name(sig: &str) -> &str {
 ///
 /// `#[ignore]` because it needs `BBX_ENDPOINT`. 2 calls per row per run.
 ///
-/// THREE runs, though `assay:R1` says runs buy nothing and items buy
-/// everything -- because what R1 measured was a POOLED rate, and the verdict
-/// here is per ROW. "Ever, not mostly" is only sound if a row that leaves a
-/// gap leaves it every time, which is R52's claim and this is the check on
-/// it. If the third run agrees with the first, the next version drops to one
-/// and spends the calls on more ROWS.
+/// ONE run, and that is a measured decision rather than the obvious default.
+/// The first sweep ran three and every row came back identical (`.:R55`),
+/// which is what "ever, not mostly" needed: a row that leaves a gap leaves it
+/// every time. `assay:R1` had already measured runs buying nothing and items
+/// buying everything, pooled; this is the same result per ROW. So the calls
+/// go to more rows instead.
 #[test]
 #[ignore]
 fn ambiguity_detector() {
-    const RUNS: usize = 3;
+    const RUNS: usize = 1;
     let mut rows: Vec<RowReadings> = GEN_CORPUS
         .iter()
         .map(|it| RowReadings::new(name(it.sig)))

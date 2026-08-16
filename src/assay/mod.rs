@@ -370,9 +370,13 @@ pub enum Reading {
     /// The blind test REJECTS the blind implementation. Two readings of one
     /// row, and the gap between them is in the row.
     Disagree,
-    /// The test could not be compiled against the implementation at all --
-    /// a name or arity mismatch, which is `src/tdd:B12`'s shape and T84's
-    /// subject. It graded NOTHING, so it is not a disagreement.
+    /// The test could not be compiled against the implementation at all.
+    /// It graded NOTHING, so it is not a disagreement.
+    ///
+    /// `src/tdd:B12`'s name-or-arity mismatch is one cause and was the one
+    /// assumed here; `.:R55` measured the other and it dominates -- `sign`
+    /// failed 3/3 on `let samples: [i64; 10]` holding nine elements. An
+    /// ordinary compile error in the model's test, not a naming problem.
     Uncallable,
     /// The pair compiled and then never terminated. `V6`, and `B2` is
     /// fifty-five minutes of it. Killed at [`GRADE_TIMEOUT`] and reported
