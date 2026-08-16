@@ -444,6 +444,70 @@ mod git_tests {
         Ok(())
     }
 
+    /// `evidence` over a real branch.
+    ///
+    /// It counts commits, sums review findings, and takes the LOWEST
+    /// believability of every node the branch touched -- V4, a branch is as
+    /// trustworthy as its least proven node, not its average. `gate_ok` is a
+    /// parameter, so the whole function is reachable without running cargo.
+    #[test]
+    fn evidence_counts_the_commits_on_the_branch_and_no_others() {
+        assert_eq!(check_evidence(), Ok(()));
+    }
+
+    fn check_evidence() -> Result<(), String> {
+        let r = crate::testrepo::TestRepo::new("land-evidence")?;
+        r.git(&["checkout", "-q", "-b", "bbx/apply-test"])?;
+        r.write("src/n/mod.rs", "pub fn a() -> u8 { 1 }\n")?;
+        r.commit("one")?;
+        r.write("src/n/mod.rs", "pub fn a() -> u8 { 1 }\npub fn b() {}\n")?;
+        r.commit("two")?;
+        let e = evidence(r.path(), "bbx/apply-test", true)?;
+        assert_eq!(e.commits, 2, "only what is ahead of main counts");
+        assert!(e.gate_ok, "the gate verdict is passed in, not re-run");
+        assert!(e.nodes >= 1, "the touched node is attributed: {e:?}");
+        Ok(())
+    }
+
+    /// A branch with nothing ahead of `main`.
+    #[test]
+    fn a_branch_level_with_main_has_no_commits_to_weigh() {
+        assert_eq!(check_empty_evidence(), Ok(()));
+    }
+
+    fn check_empty_evidence() -> Result<(), String> {
+        let r = crate::testrepo::TestRepo::new("land-empty")?;
+        r.git(&["checkout", "-q", "-b", "bbx/apply-empty"])?;
+        let e = evidence(r.path(), "bbx/apply-empty", true)?;
+        assert_eq!(e.commits, 0);
+        assert_eq!(
+            e.nodes, 0,
+            "no commits means no attribution -- UNKNOWN, not trustworthy (V4)"
+        );
+        assert!(landable(&e).is_err(), "and it does not land");
+        Ok(())
+    }
+
+    /// A dirty tree is refused BEFORE the gate runs.
+    #[test]
+    fn a_dirty_tree_is_refused_before_anything_expensive_happens() {
+        assert_eq!(check_dirty(), Ok(()));
+    }
+
+    fn check_dirty() -> Result<(), String> {
+        let r = crate::testrepo::TestRepo::new("land-dirty")?;
+        r.git(&["checkout", "-q", "-b", "bbx/apply-dirty"])?;
+        r.write("uncommitted.txt", "not staged\n")?;
+        let Err(msg) = land(r.path(), false) else {
+            return Err("a dirty tree cannot land".into());
+        };
+        assert!(
+            msg.contains("dirty"),
+            "land moves COMMITTED work only, and says so: {msg}"
+        );
+        Ok(())
+    }
+
     #[test]
     fn current_branch_reads_the_checked_out_name() {
         assert_eq!(check_branch(), Ok(()));
