@@ -36,6 +36,7 @@ V23: step 2 is a FIELD, ⊥ a first draft. N candidates compete on the SAME evid
 V24: a run that keeps nothing leaves nothing. restore is STRUCTURAL — a `Drop` guard armed before the 1st write & disarmed only by `keep()` — ⊥ a restore remembered on each exit path. 3 paths restored by hand & the 4th (repair exhaustion) did ⊥, leaving code that would ⊥ COMPILE ∴ every later command in the repo failed, ⊥ only that node (B22). `?` returns from paths nobody enumerated
 V25: a row naming `f(...)` is a CONTRACT — the red test ! call `f`. checked DETERMINISTICALLY before the judge, @ 0 tokens. a test that drives a different entry point can be a perfectly good test & still leave step 2 w/ no new fn to write ∴ it rewrites an existing one (B23). a fn named w/o an arg list is a REFERENCE ("⊥ touch `generate_via`"), ⊥ an instruction
 V26: a gate that did ⊥ EXECUTE is an ERROR, ⊥ a red gate. `Result`, ⊥ `bool` — a missing toolchain returning `false` is indistinguishable from a failing test, & step 1 REQUIRES red ∴ an absent `cargo` read as "red as required" & the loop would write code against a gate that never ran (B24). `.:V48` for a subprocess
+V27: the loop ! be drivable w/ a SUBSTITUTED transport. `ollama::generate_via` takes `&dyn Transport` & `.:ollama` has a fake, but nothing threads one up ∴ `drive_from` — 267 lines, cognitive 21, ⊥ ONE offline test — can only be exercised by a 40-min endpoint run. V26 one level up: a thing that cannot RUN offline cannot be VERIFIED, & every §B in this node was found the expensive way
 V18: step 2 gets the CONTRACT — the calls the test makes that ⊥ exist yet, extracted deterministically (`.:V18`). the SIGNATURE constrains the design: `check_edge_depth(text)` took no path ∴ no walking ∴ no ignore-glob violation & no temp dir. fixing a NAME mismatch removed 3 unrelated defects (B12)
 
 ## §T TASKS
@@ -57,6 +58,8 @@ T13|~|MEASURE V23 @ N=3, 2 runs: BOTH 3/3 red, 0 merit wins observed. run 1 reve
 T14|.|`bbx tdd` on `src/ollama` T3 failed 2x (8 round-trips, 17,551 tok, 4 compile errors incl `E0428` redefined). per `.:sit` a row failing twice is EVIDENCE ABOUT THE ROW — retry ⊥ productive until it is split|V23
 T15|x|`named_fn` + pre-judge contract check|V25
 T16|x|`gate` returns `Result` — unrunnable ⊥ red|V26
+T17|.|thread `&dyn Transport` through `drive`→`drive_from`→`run`→`run_sampled`→`generate_via`. `drive_from` already takes 6 args vs the limit of 4 ∴ bundle into a `Run` struct ⊥ add a 7th (`.:V50`)|V27,`.:V50`
+T18|.|ONE offline test driving the WHOLE loop against a scripted transport: test authored → gate RED → impl written → gate GREEN. the first end-to-end test the loop has ever had, & the precondition for `.:T92`|V27,V26
 
 ## §B BUGS
 
