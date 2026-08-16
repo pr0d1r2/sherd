@@ -817,6 +817,43 @@ mod tests {
         );
     }
 
+    /// `budget` on a repo whose chain EXCEEDS its declared ceiling.
+    ///
+    /// The over-ceiling branch is another detector with no positive case:
+    /// `.:B7` is `.context-limits` declaring per-node ceilings while `budget`
+    /// PRINTED the table without comparing against them, so every chain
+    /// drifted over unseen for the project's life. The comparison now exists
+    /// and the gate keeps this repo at 0 over, which means the branch that
+    /// reports a breach can never fire here.
+    #[test]
+    fn a_chain_over_its_ceiling_exits_one_and_a_generous_one_exits_zero() {
+        assert_eq!(over_ceiling_is_caught(), Ok(()));
+    }
+
+    /// A node whose SPEC costs more than one token -- which is every real one.
+    const FAT_SPEC: &str = "# SPEC\n\n## \u{a7}G GOAL\n\nsomething long \
+         enough to cost more than one token, several times over, so the \
+         ceiling below is genuinely exceeded rather than merely equalled\n";
+
+    fn over_ceiling_is_caught() -> Result<(), String> {
+        let r = crate::testrepo::TestRepo::new("cli-budget-over")?;
+        r.write("SPEC.md", FAT_SPEC)?;
+        r.write(".context-limits", "SPEC.md 1\n")?;
+        r.commit("a node over its ceiling")?;
+        let root = r.path().to_path_buf();
+        assert_eq!(
+            budget(r.path(), root.clone()),
+            ExitCode::from(1),
+            "B7: a chain over its ceiling must FAIL, not merely print"
+        );
+        // The control: raise the ceiling and the same tree passes. Without
+        // it, `budget` returning 1 unconditionally would satisfy the test.
+        r.write(".context-limits", "SPEC.md 100000\n")?;
+        r.commit("raise it")?;
+        assert_eq!(budget(r.path(), root), ExitCode::SUCCESS);
+        Ok(())
+    }
+
     /// `check` on a repo that IS broken.
     ///
     /// Every reporting branch in `check` only runs when something is wrong,
