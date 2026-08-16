@@ -794,19 +794,21 @@ mod tests {
     /// the same thing the gate does and covers the dispatch that reaches
     /// them. `.:V27` -- this repo must be a valid federation -- is exactly
     /// the claim being exercised.
+    const VERBS: [&[&str]; 8] = [
+        &["graph"],
+        &["graph", "--dot"],
+        &["graph", "--table"],
+        &["graph", "--tree"],
+        &["fed"],
+        &["check"],
+        &["budget"],
+        &["slice", "--list"],
+    ];
+
     #[test]
     fn the_read_only_verbs_succeed_on_this_repo() {
-        for a in [
-            vec!["graph"],
-            vec!["graph", "--dot"],
-            vec!["graph", "--table"],
-            vec!["graph", "--tree"],
-            vec!["fed"],
-            vec!["check"],
-            vec!["budget"],
-            vec!["slice", "--list"],
-        ] {
-            let code = run_args(argv(&a));
+        for a in VERBS {
+            let code = run_args(argv(a));
             assert_eq!(
                 code,
                 ExitCode::SUCCESS,

@@ -62,8 +62,18 @@ local fast = new Mapping<String, Step> {
       [ "$now" -le "$was" ] || { echo "hk: lint debt ROSE, $was -> $now. The limits in clippy.toml are the shape the target model handles (.:R44); adding to the debt walks away from the §G TARGET. Fix the new sites, or record WHY in .lint-debt with the raise." >&2; exit 1; }
       [ "$now" -eq "$was" ] || echo "hk: lint debt fell $was -> $now. Run \\`hk run fix\\` to record it."
       """
+    // `fix` may only LOWER. `pre-commit` runs the fast set in fix mode, so a
+    // fix that recorded whatever it measured would file down the ratchet's
+    // own teeth on every commit -- it would write the raise it exists to
+    // refuse, and the gate would never fail twice for the same debt.
+    //
+    // Caught exactly that way: the cli coverage tests added one violation,
+    // `hk check --all` refused, and this step then rewrote 274 to 275 behind
+    // the commit.
     fix = """
       now=$(cargo clippy --all-targets --message-format=short 2>&1 | grep -cE '^src/.*: warning')
+      was=$(awk '/^total /{print $2}' .lint-debt)
+      [ "$now" -le "$was" ] || { echo "hk: refusing to RECORD a raise, $was -> $now. A ratchet that writes down whatever it measures is not a ratchet. Fix the new sites, or edit .lint-debt by hand with the reason." >&2; exit 1; }
       awk -v n="$now" '/^total /{print "total " n; next} {print}' .lint-debt > .lint-debt.new
       mv .lint-debt.new .lint-debt
       """
@@ -131,10 +141,13 @@ local all = (fast) {
       awk -v n="$now" -v w="$was" 'BEGIN{exit !(n+0 > w+0)}' && echo "hk: coverage rose $was% -> $now%. Run \\`hk run fix\\` to record it."
       printf 'coverage %s%% (floor %s%%)\\n' "$now" "$was"
       """
+    // Same rule as `lint-debt`, mirrored: this one may only RAISE.
     fix = """
       out=$(cargo llvm-cov --summary-only 2>&1) || { echo "$out" >&2; exit 1; }
       now=$(printf '%s' "$out" | awk '/^TOTAL/{gsub("%","",$10); print $10}')
+      was=$(awk '/^lines /{print $2}' .coverage)
       [ -n "$now" ] || exit 1
+      awk -v n="$now" -v w="$was" 'BEGIN{exit !(n+0 < w+0)}' && { echo "hk: refusing to RECORD a drop, $was% -> $now%. Cover the gap, or edit .coverage by hand with the reason." >&2; exit 1; }
       awk -v n="$now" '/^lines /{print "lines " n; next} {print}' .coverage > .coverage.new
       mv .coverage.new .coverage
       """
