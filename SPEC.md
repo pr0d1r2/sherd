@@ -101,6 +101,8 @@ R35|prefill is 4x slower here|373 tok/s @ 9,048 · 320 @ 17,846 · 247 @ 36,070 
 R36|prefill dominance rises|decode 26-33 tok/s (`pace decode` carried 50 from .181). 36k pack = 146.3s prefill vs ~13s for a 400-tok reply = 92% prefill, where R16 measured 83% @ 28k on .181 ∴ SLOWER hardware makes the small-pack thesis STRONGER, ⊥ weaker — the penalty for a fat pack scales with how slow prefill is|derived from R35 + measured `eval_duration`
 R37|judge is STABLE|blind lens, 3 runs × 2 arms × 5 items = 30 calls @ ~420 tok: 5/5 stubs REJECTED & 5/5 working fns ACCEPTED, identical ∀ 3 runs. zero variance ∴ `P(kept\|shape)` is a REAL parameter at this shape, ⊥ a coin flip — a known-good rung STAYS known-good ∴ exploit (`/sit`) is distinct from search (`/titrate`)|`cargo test -- --ignored`, 3 runs @ .24, both arms
 R38|the corpus is BELOW the frontier|perfect separation on BOTH arms w/ ⊥ a single miss ∴ this task sits comfortably inside competence & LOCATES NOTHING. a test that never fails measures no boundary. next titration ! go UP (harder judge: longer fn, weaker invariant, ⊥-obvious stub) or SIDEWAYS (generation, where `src/tdd:T13` still reads 0 merit wins), ⊥ repeat this one|derived from R37
+R39|judge boundary LOCATED|blind lens titration, 4 rungs, 2 runs IDENTICAL: `0-tells` 10/10 · `1-bare` 10/10 · `2-vague` 7/10 · `3-subtle` 6/8. ∴ the boundary is real AND stable AT THE EDGE, ⊥ only deep inside competence — R37 had only shown stability at 100%|`cargo test -- --ignored blind_lens_titration`, 2 runs @ .24, 76 calls
+R40|invariant PRECISION is the axis, ⊥ prompt help|stripping `blind_prompt`'s enumerated tells cost NOTHING (10/10 → 10/10) though every recorded stub matches a clause near-verbatim ∴ the checklist was ⊥ doing the work — HYPOTHESIS FALSIFIED. vague `§V` wording costs 30%, the largest single drop, vs 25% for stubs no clause reaches ∴ cheapest lever on delegation = sharper `§V` rows, ⊥ prompt engineering. `src/lens:B1` & `src/plan:B1` reached this from the other direction|derived from R39
 
 ## §V INVARIANTS
 
@@ -202,6 +204,7 @@ V75: format facts read from the CHECKER's own source, ⊥ a vendored `FORMAT.md`
 V101: a dep ! resolve to an IMMUTABLE artifact — registry version + lock checksum. a sibling PATH dep is a shared working tree ∴ the gate's green is true only for the INSTANT it ran & expires silently when the sibling moves (B5). a new path dep ! carry a §B-recorded reason
 V102: a gate ! declare its OP SET as data, ⊥ bury it in a hook body. green names only what RAN ∴ an op nobody declared is invisible, ⊥ merely absent — fmt & clippy were missing for the project's whole life & every verdict looked identical (B6)
 V103: the criterion ⊥ WEAKEN as the rung narrows — a rung-4 task judged against the same `§V` as a rung-1 one, else the descent proves nothing. a granularize-until-success loop converges on TRIVIA by construction (`src/tdd:B2` = a judge loosening from "proves the invariant" to "would compile"). success below the verifiability floor is recorded UNVERIFIED, ⊥ kept
+V104: a declared LIMIT ! have a runner that EXITS NONZERO — V74's shape, widened from §C to any number the spec names. V6/V7/V8 declare ceilings, `.context-limits` carries them, `bbx budget` PRINTS them & exits 0 ∴ 4 nodes drifted over unseen (B7). & a path w/ NO ceiling row is UNCHECKED ⊥ unlimited: absence ! read as violation or default, ⊥ as permission
 V73: dir promotion has 2 triggers — (a) V50 code ceiling, (b) module owns SPEC worth its own node even under ceiling. vendor facades are (b): few hundred lines carrying V17/V24/V25. ⊥ promote every `.rs` — 30 files → 60 is ceremony
 
 ## §T TASKS
@@ -213,7 +216,7 @@ T3|.|capability-parity audit `microlith` vs what `bbx` needs. write the comparis
 T4|x|parse `§F` table → (dir, owns, ⊥owns, tokens), escape-aware|I,V1
 T6|x|superseded — edges/chain/discover land; depth & cycle are `src/fed:T4`|V1,V2,V4
 T8|x|bind `itok::estimate`, tier floor `bpe`, method label|V17,V24
-T10|.|`bbx budget` + over-budget exit 1|V6,V7,V8
+T10|.|`bbx budget` + over-budget exit 1|V6,V7,V8,V104
 T12|.|id namespacing + resolver `path:Vn`|V10,V11
 T14|x|`bbx lens` render pack, `--depth rule` default|I,V15,V45
 T16|x|moved — `src/cli:T4`|I
@@ -253,6 +256,7 @@ T71|.|publish or public-mirror `itok` ∴ ⊥ path dep left, & `packages.default
 T72|x|gate → `hk` from `nix-hk`, ops in `hk.pkl`, `pre-commit` + `pre-push`, fmt & clippy gated for the 1st time|V26,V82,V102
 T73|.|`/titrate` machinery — `.bbx-frontier` record, believability re-keyed node → SHAPE, cost ledger w/ the denominator named (`.:B4`)|V103,V60
 T74|x|titrate the JUDGE upward until it FAILS — longer fn, weaker `§V`, ⊥-obvious stub. R38: a corpus that never misses locates no boundary|V103,R37,R38
+T75|.|pay the 4 over-ceiling chains by SPLITTING ⊥ raising, & give `src/land`/`src/slice` the ceiling rows they lack|V104,V50
 
 ## §B BUGS
 
@@ -263,3 +267,4 @@ B3|2026-08-01|SPEC defect, mine: V78 written as a STATIC partition — SET = imp
 B4|2026-08-01|SPEC defect, mine, repeated across ~6 commit messages: claimed "95x on the binding constraint" comparing our max call to 157,071 — which is `itok`'s WHOLE-REPO tdd profile, ⊥ what a one-call prompt needs. MEASURED baseline for the same task = 2,659 tok ∴ real ratio 2.1x. compared against a straw man nobody would build|`bbx oneshot` built as the honest monolith arm; R29/R30 carry the measurement; V60 restated. GENERALLY: a ratio ! name what is in the DENOMINATOR & that thing ! be something someone would actually do
 B5|2026-08-05|HEAD stopped COMPILING w/ ⊥ blackbox commit. `67fa9ad` (08-02 10:26) imported `microlith`'s inner `violation` module & the gate passed; microlith privatized it 9h later (`421ab02`, 08-02 19:16) ∴ E0603 on a tree already judged green, & already pushed. `../microlith` was a path dep ∴ no version could hold it still, & `Cargo.lock` read `0.4.0` for a sibling saying `0.5.0`|`microlith` = crates.io `0.5` + lock checksum (V101). `itok` stays a path dep & is now the ONLY one — recorded, runner-checked (T70), removed by T71. `src/spec:B1` carries the import half
 B6|2026-08-18|gate ran `build` + `test` ONLY, from the first commit that had a hook — no fmt, no clippy — ∴ an entirely unformatted tree & 18 clippy findings accrued behind a verdict that read green every time. the ops lived as a shell BODY in `.githooks/pre-commit` ∴ the SET of checks was never reviewable data & nobody could see what was ⊥ there|ops → `hk.pkl`, file-scoped & readable; fmt + clippy gated & the debt paid (`abd2bb1`). V102. `-D warnings` moved off `RUSTFLAGS` so it stops reaching `../itok`
+B7|2026-08-18|`.context-limits` declares per-node chain ceilings & `bbx budget` PRINTS the table w/o comparing against them or failing — T10 (`over-budget exit 1`) sat `.` from the first commit ∴ `src/tdd` 16,516/16,000 · `src/plan` 13,341/13,000 · `src/ollama` 13,084/13,000 · `src/spec` 12,055/12,000 all drifted OVER & the command exited 0. `src/land` & `src/slice` carry NO row at all ∴ unbounded & indistinguishable from compliant. the `§R`/`§T` rows added THIS DAY pushed them — every chain pays root|V104. T10 builds the runner; T75 pays the debt by SPLITTING, ⊥ a raise
