@@ -25,6 +25,11 @@ exclude = [
   ".context-limits",
   ".bbx-state",
   ".bbx-slices",
+  # The gate: its ops and the pkl schema they amend. Same class as `.githooks`
+  # above -- it runs on THIS working tree and means nothing inside a published
+  # tarball. `pkl/Config.pkl` alone is a 1,014-line vendored schema.
+  "hk.pkl",
+  "pkl",
   # Agent tooling for THIS repo; a consumer has no use for our commands.
   ".claude",
 ]
