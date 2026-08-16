@@ -7,6 +7,8 @@
 pub mod assay;
 pub mod cli;
 pub mod code;
+
+// Test-only: a scratch git repo. Compiled into no binary.
 pub mod fed;
 pub mod land;
 pub mod lens;
@@ -15,6 +17,8 @@ pub mod review;
 pub mod slice;
 pub mod spec;
 pub mod state;
+#[cfg(test)]
+pub mod testrepo;
 pub mod tokens;
 
 #[cfg(feature = "ollama")]

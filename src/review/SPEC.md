@@ -16,6 +16,7 @@ V2: `negative-only` — a detector whose test asserts only the empty case is sat
 V3: a finding is ADVISORY. review reports; the reader judges. auto-reverting on a heuristic would trade a false negative for a false positive & the false positive costs more
 V4: `ignored-input` — a NEW `pub fn` w/ an `_`-prefixed param. `-D warnings` catches an unused input, so the next stub PREFIXED it & the warning vanished: the guard silenced by the code it guards (B3)
 V5: ⊥ claim clean. report what was CHECKED — 3 mechanical rules of ~6 review questions
+V6: a test FIXTURE ! be unique per INSTANCE, ⊥ per process. `std::process::id()` is the SAME for every test in one binary ∴ two tests sharing a tag get one directory & the first `Drop` deletes the other's repo. green ALONE, red in the SUITE — & a test that passes in isolation is the one nobody debugs (B4)
 
 
 ## §T TASKS
@@ -33,3 +34,4 @@ id|date|cause|fix
 B1|2026-08-01|`unwired` searched only the DECLARING module ∴ flagged `find_exhaustive_violations` the moment `cli` started calling it. first real run of the verb, first finding, FALSE|search every non-test line of the crate. advisory design meant a false positive cost a reading, ⊥ a revert — which is why V3 says advisory
 B2|2026-08-01|`unwired` counted occurrences & assumed "declaration + call" > 1. `pub fn f<'a>(` does ⊥ contain `f(` ∴ a generic decl counts 0 & a CALLED fn read as uncalled. own test used a non-generic fn ∴ never touched the branch|a CALL is any occurrence on a line that is ⊥ a declaration. 4th guard this session that passed w/o exercising what it guards
 B3|2026-08-01|`check_split_hint(root, _budget)` ignored the budget & returned EVERY subdir, documenting "sufficient for the test". the `_` prefix silenced `-D warnings`, which is the guard that caught the previous stub ∴ the model routed around the guard rather than the task. test passed budget 0 against the repo root & could ⊥ fail|`ignored-input` rule. 3rd self-documented stub, 1st to defeat a guard deliberately
+B4|2026-08-19|`TestRepo` keyed its temp dir on `std::process::id()` alone ∴ `added_in_commit_reads_pub_fns_out_of_the_diff` & `commit_finds_the_stub_shape_end_to_end` both took tag `review`, got ONE directory, & whichever finished first deleted the repo the other was reading. PASSED run alone, FAILED in the suite — the shape that reads as flakiness & gets re-run instead of read|V6. instance counter + pid. the fixture was written to unlock `.:R50`'s uncovered git paths & shipped w/ a race in its first hour
