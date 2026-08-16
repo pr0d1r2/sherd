@@ -302,6 +302,185 @@ pub fn grade_detail(
     })
 }
 
+/// What a test and an implementation, each written BLIND from the SAME `§V`
+/// row, said about each other.
+///
+/// `.:V112`. Two calls and a compile, with no reference answer anywhere: the
+/// question is not whether either half is RIGHT, it is whether they read the
+/// row the same way. R51 measured them disagreeing 7 of 33, and R54 read the
+/// disagreements back -- every one was a rule the row left unstated and the
+/// two halves filled in differently. So a disagreement is evidence about the
+/// ROW, which is what makes this an instrument for the spec rather than for
+/// the model.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Reading {
+    /// The blind test passes the blind implementation. One reading, twice.
+    Agree,
+    /// The blind test REJECTS the blind implementation. Two readings of one
+    /// row, and the gap between them is in the row.
+    Disagree,
+    /// The test could not be compiled against the implementation at all --
+    /// a name or arity mismatch, which is `src/tdd:B12`'s shape and T84's
+    /// subject. It graded NOTHING, so it is not a disagreement.
+    Uncallable,
+}
+
+impl Reading {
+    /// Three outcomes, named so no two read alike.
+    #[must_use]
+    pub const fn word(self) -> &'static str {
+        match self {
+            Self::Agree => "agree",
+            Self::Disagree => "DISAGREE",
+            Self::Uncallable => "uncallable",
+        }
+    }
+}
+
+/// `NoCompile` is the one that must NOT become a verdict about the row.
+///
+/// `assay:V1` at the level of a single call: a pair that never compiled says
+/// nothing about the invariant, and folding it into `Disagree` would flag
+/// every row whose signature the writer had to invent -- the model's naming,
+/// reported as the spec's ambiguity.
+#[must_use]
+pub const fn reading(g: Grade) -> Reading {
+    match g {
+        Grade::Pass => Reading::Agree,
+        Grade::Fail => Reading::Disagree,
+        Grade::NoCompile => Reading::Uncallable,
+    }
+}
+
+/// Compile a blind test against a blind implementation of the same row.
+///
+/// The grader is `rustc`, never a model -- the whole node's first constraint.
+/// Unlike a mutation sweep (REFUTED, R53) this needs no known-wrong stub and
+/// no hidden tests, so it runs on a row nobody has an answer for.
+///
+/// # Errors
+/// The compiler could not be executed, or the scratch file could not be
+/// written. Both are ERRORS, never verdicts (`assay:V1`).
+pub fn cross(
+    code: &str,
+    test: &str,
+    preamble: &str,
+    rustc: &str,
+) -> Result<Reading, String> {
+    grade_detail(code, preamble, test, rustc).map(reading)
+}
+
+/// One `§V` row's readings, accumulated over runs.
+///
+/// Per ROW, never pooled: T83 pooled to grade the model and got one rate,
+/// where R52 shows the signal is per-item and deterministic -- `for_path` and
+/// `escape_cell` disagreed 3/3 each while the rest agreed. Pooling those into
+/// "7 of 33" is exactly the resolution that hides which row to fix.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RowReadings {
+    /// What to call this row in the report.
+    pub label: String,
+    /// Test and implementation read the row the same way.
+    pub agree: usize,
+    /// They read it differently. The count that flags.
+    pub disagree: usize,
+    /// The pair did not compile. Counted APART, never as either.
+    pub uncallable: usize,
+}
+
+impl RowReadings {
+    /// A row with nothing measured yet.
+    #[must_use]
+    pub fn new(label: &str) -> Self {
+        Self {
+            label: label.to_string(),
+            ..Self::default()
+        }
+    }
+
+    /// Record one reading.
+    pub const fn push(&mut self, r: Reading) {
+        let c = match r {
+            Reading::Agree => &mut self.agree,
+            Reading::Disagree => &mut self.disagree,
+            Reading::Uncallable => &mut self.uncallable,
+        };
+        *c = c.saturating_add(1);
+    }
+
+    /// The DENOMINATOR, and it excludes what graded nothing.
+    ///
+    /// `.:B4`: a ratio must name what is in its denominator. A pair that did
+    /// not compile is not a pair that agreed, and dividing by it would report
+    /// a row as clean in proportion to how often the instrument failed.
+    #[must_use]
+    pub const fn measured(&self) -> usize {
+        self.agree.saturating_add(self.disagree)
+    }
+
+    /// A row is UNDERSPECIFIED when the two blind halves ever disagreed.
+    ///
+    /// Ever, not mostly: R52 measured this deterministic per item, so one
+    /// disagreement is a gap the row leaves open, not noise.
+    #[must_use]
+    pub const fn underspecified(&self) -> bool {
+        self.disagree > 0
+    }
+
+    /// What the report calls this row.
+    #[must_use]
+    pub const fn verdict(&self) -> &'static str {
+        if self.underspecified() {
+            "UNDERSPECIFIED"
+        } else if self.measured() == 0 {
+            "not measured"
+        } else {
+            "no gap found"
+        }
+    }
+}
+
+/// Agreement is NOT sharpness, and the report must say so where it is read.
+///
+/// R52: `is_yes` is beyond the frontier at every wording, every implementation
+/// of it was wrong, and its own test CLEARED it 3/3. Two halves that misread a
+/// row the SAME way agree. So this instrument finds gaps; it never certifies
+/// their absence, and a report that let "no gap found" read as "sharp" would
+/// be the weaker claim of the two smuggled in as the stronger.
+pub const AGREEMENT_IS_NOT_SHARPNESS: &str = "  agreement ⊥ sharpness (R52): two halves that misread a row the SAME \
+     way agree.\n  `no gap found` = this instrument found none, ⊥ that the \
+     row has none.\n";
+
+/// The report. It flags rows; it gates nothing.
+///
+/// A REPORT, deliberately: `.:V112` grades the SPEC, and a red gate here
+/// would make the fix "reword until the model agrees with itself", which is
+/// tuning prose to a 20B rather than sharpening an invariant.
+#[must_use]
+pub fn ambiguity_report(rows: &[RowReadings]) -> String {
+    let flagged = rows.iter().filter(|r| r.underspecified()).count();
+    let mut out = format!(
+        "\nAMBIGUITY DETECTOR ({} rows, {flagged} UNDERSPECIFIED)\n",
+        rows.len()
+    );
+    for r in rows {
+        out.push_str(&row_line(r));
+    }
+    out.push_str(AGREEMENT_IS_NOT_SHARPNESS);
+    out
+}
+
+/// One row: the verdict first, so a flagged row is findable by eye.
+fn row_line(r: &RowReadings) -> String {
+    format!(
+        "  {:<14} {:<18} {}/{} disagree · {} uncallable\n",
+        r.verdict(),
+        r.label,
+        r.disagree,
+        r.measured(),
+        r.uncallable
+    )
+}
 /// Five pure functions from this repo, each with the tests it actually has.
 ///
 /// `sharp` is the row as written; `vague` names the subject and drops the
@@ -1553,5 +1732,109 @@ mod signature {
             (Grade::Pass, Grade::Fail),
             (Grade::Pass, Grade::Pass),
         ]);
+    }
+}
+
+#[cfg(test)]
+mod ambiguity {
+    use super::*;
+
+    /// `bucket`'s row, and two implementations of it: one correct, one the
+    /// recorded mutant. Reused rather than re-authored -- two readings of one
+    /// fixture is the defect `.:B13` names, in miniature.
+    const GOOD: &str = "pub fn bucket(n: u64) -> &'static str { match n { 0..=1_999 => \"b0\", 2_000..=7_999 => \"b2\", 8_000..=31_999 => \"b8\", _ => \"b32\" } }";
+
+    #[test]
+    fn a_pair_that_did_not_compile_is_not_a_disagreement() {
+        // The whole distinction the instrument rests on. A test that could
+        // not be CALLED graded nothing (`assay:V1`), and counting it as a
+        // disagreement would report the model's naming (`src/tdd:B12`, T84)
+        // as the row's ambiguity -- the one confound this method has.
+        assert_eq!(reading(Grade::NoCompile), Reading::Uncallable);
+        let mut r = RowReadings::new("bucket");
+        r.push(Reading::Uncallable);
+        assert!(!r.underspecified(), "uncallable flags nothing");
+        assert_eq!(r.measured(), 0, "and it is not in the denominator");
+        assert_eq!(r.verdict(), "not measured");
+    }
+
+    #[test]
+    fn the_denominator_names_only_what_was_graded() {
+        // `.:B4`: a ratio must name what is in its denominator. 1 of 2, never
+        // 1 of 3 -- the third pair never ran.
+        let mut r = RowReadings::new("escape_cell");
+        for x in [Reading::Agree, Reading::Disagree, Reading::Uncallable] {
+            r.push(x);
+        }
+        assert_eq!(r.measured(), 2);
+        assert_eq!(r.uncallable, 1);
+        assert!(r.underspecified());
+        assert_eq!(r.verdict(), "UNDERSPECIFIED");
+    }
+
+    #[test]
+    fn one_disagreement_is_enough_to_flag_a_row() {
+        // Ever, not mostly. R52 measured the signal deterministic per item,
+        // so a majority rule would discard the first evidence of a gap.
+        let mut r = RowReadings::new("for_path");
+        r.push(Reading::Agree);
+        r.push(Reading::Agree);
+        assert_eq!(r.verdict(), "no gap found");
+        r.push(Reading::Disagree);
+        assert_eq!(r.verdict(), "UNDERSPECIFIED");
+    }
+
+    #[test]
+    fn the_three_readings_are_named_distinctly() {
+        // DISAGREE and uncallable must never read alike in a report someone
+        // acts on: one names a gap in the row, the other names a run that
+        // measured nothing at all.
+        assert_eq!(Reading::Agree.word(), "agree");
+        assert_eq!(Reading::Disagree.word(), "DISAGREE");
+        assert_eq!(Reading::Uncallable.word(), "uncallable");
+    }
+
+    #[test]
+    fn cross_is_graded_by_rustc_and_never_by_a_model() {
+        assert_eq!(three_readings(), Ok(()));
+    }
+
+    /// All three outcomes off one corpus row, compiled for real.
+    fn three_readings() -> Result<(), String> {
+        let it = GEN_CORPUS.get(1).ok_or("corpus")?;
+        let x = |code, test| cross(code, test, it.preamble, "rustc");
+        assert_eq!(x(GOOD, it.tests)?, Reading::Agree);
+        let stub = stub_for(it.sig).ok_or("mutant")?;
+        assert_eq!(
+            x(stub, it.tests)?,
+            Reading::Disagree,
+            "two readings of one row -- the signal"
+        );
+        assert_eq!(x(GOOD, "not rust at all")?, Reading::Uncallable);
+        Ok(())
+    }
+
+    #[test]
+    fn the_report_flags_a_row_without_certifying_the_others() {
+        // R52: `is_yes` agreed 3/3 while every implementation of it was
+        // wrong. A report where silence reads as `sharp` would state the
+        // stronger claim the measurement cannot support.
+        let mut bad = RowReadings::new("escape_cell");
+        bad.push(Reading::Disagree);
+        let mut ok = RowReadings::new("bucket");
+        ok.push(Reading::Agree);
+        let out = ambiguity_report(&[bad, ok]);
+        assert!(out.contains("1 UNDERSPECIFIED"), "{out}");
+        assert!(out.contains("UNDERSPECIFIED escape_cell"), "{out}");
+        assert!(out.contains("no gap found   bucket"), "{out}");
+        assert!(out.contains("agreement ⊥ sharpness"), "{out}");
+    }
+
+    #[test]
+    fn an_empty_report_flags_nothing_and_still_says_why() {
+        // A run where every call errored must not render as a clean spec.
+        let out = ambiguity_report(&[]);
+        assert!(out.contains("0 rows, 0 UNDERSPECIFIED"), "{out}");
+        assert!(out.contains(AGREEMENT_IS_NOT_SHARPNESS), "{out}");
     }
 }

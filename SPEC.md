@@ -303,7 +303,7 @@ T93|x|promote `src/code` — SIBLING of `src/spec`, ⊥ child of `src/tdd`: dept
 T94|x|promote `src/assay` — SIBLING @ depth 2 (V110). owns the corpora + the grader: `GEN_CORPUS`·`RECORDED`·`VAGUE`·`SUBTLE`·`TIERS`, `grade`, `titrate_tier` & their types — ~460 lines, the LARGEST cluster in `src/tdd`. an assay tests a sample against what it is CLAIMED to be & reports when the claim is false, which is what a corpus + a compiler-grader do|V73,V109,V110,R48
 T95|x|split METHOD from FINDINGS w/ T94. RESOLVED as: `.:V103`/`.:V108` STAY @ root & the `src/assay` dupes deleted — the checker cannot express a cross-node cite in the CITES column, so an invariant cited by a root `§T` row ! live @ root. the harness cluster (`.:tdd:V27`→`assay:V1`, T17/T18→T5/T6, B25→B1) moved whole. root T74-T84 STAY: moving them renumbers & dangles every `.:T82`-style cite, for a saving V110 measures @ ~1 tok/chain/row|V110,B14
 T96|.|move the `#[ignore]`d titrations from `src/assay` inline tests to `tests/` — an ignored body counts in the coverage denominator & never runs, so every experiment LOWERS the number & a better instrument reads worse (`.coverage` records 75.50→75.11). integration-level anyway|V16,R50
-T97|.|build the AMBIGUITY DETECTOR (V112): ∀ `§V` row ask for a test & an impl BLIND, compile them against each other, flag DISAGREEMENT as an underspecified row. a REPORT ⊥ a gate. it grades the spec, ⊥ the model|V112,R54
+T97|x|build the AMBIGUITY DETECTOR (V112): ∀ `§V` row ask for a test & an impl BLIND, compile them against each other, flag DISAGREEMENT as an underspecified row. a REPORT ⊥ a gate. it grades the spec, ⊥ the model|V112,R54
 
 ## §B BUGS
 
