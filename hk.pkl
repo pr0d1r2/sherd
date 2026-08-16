@@ -42,10 +42,31 @@ local fast = new Mapping<String, Step> {
   // `../itok`. RUSTFLAGS was the old hook's way and it reached every path dep:
   // itok landing two `dead_code` warnings of its own turned blackbox's gate red
   // for code blackbox does not own.
+  // `-D warnings` still holds for everything EXCEPT the thirteen lints under
+  // ratchet. Those are allowed HERE and counted by `lint-debt` below, because
+  // a tree with 290 pre-existing violations cannot compile under `-D` and
+  // could not even be measured. Every other warning stays fatal.
   ["clippy"] {
     glob = List("**/*.rs")
     depends = List("fmt")
-    check = "cargo clippy --all-targets -- -D warnings"
+    check = "cargo clippy --all-targets -- -D warnings -A clippy::too_many_lines -A clippy::cognitive_complexity -A clippy::excessive_nesting -A clippy::fn_params_excessive_bools -A clippy::struct_excessive_bools -A clippy::unwrap_used -A clippy::expect_used -A clippy::panic -A clippy::indexing_slicing -A clippy::arithmetic_side_effects -A clippy::todo -A clippy::unimplemented -A clippy::dbg_macro -A clippy::too_many_arguments -A clippy::type_complexity"
+  }
+  // THE RATCHET. The count may fall, never rise. `.lint-debt` carries the
+  // number and the reasoning; `clippy.toml` carries the thresholds.
+  ["lint-debt"] {
+    glob = List("**/*.rs", "clippy.toml", ".lint-debt")
+    depends = List("clippy")
+    check = """
+      now=$(cargo clippy --all-targets --message-format=short 2>&1 | grep -cE '^src/.*: warning')
+      was=$(awk '/^total /{print $2}' .lint-debt)
+      [ "$now" -le "$was" ] || { echo "hk: lint debt ROSE, $was -> $now. The limits in clippy.toml are the shape the target model handles (.:R44); adding to the debt walks away from the §G TARGET. Fix the new sites, or record WHY in .lint-debt with the raise." >&2; exit 1; }
+      [ "$now" -eq "$was" ] || echo "hk: lint debt fell $was -> $now. Run \\`hk run fix\\` to record it."
+      """
+    fix = """
+      now=$(cargo clippy --all-targets --message-format=short 2>&1 | grep -cE '^src/.*: warning')
+      awk -v n="$now" '/^total /{print "total " n; next} {print}' .lint-debt > .lint-debt.new
+      mv .lint-debt.new .lint-debt
+      """
   }
   ["test"] {
     // SPEC.md and every node's SPEC.md are inputs: `src/spec`, `src/fed` and

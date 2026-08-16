@@ -75,3 +75,36 @@ serde_json = { version = "1", optional = true }
 
 [lints.rust]
 unsafe_code = "forbid"
+
+# The thresholds live in `clippy.toml`; these denies are what make them fire.
+# `too_many_lines`, `cognitive_complexity` and `excessive_nesting` are
+# pedantic/nursery lints, silent by default -- a threshold with no deny is a
+# number nothing reads, which is `.:V74` in a config file.
+#
+# `warn`, not `deny`, and the reason is the ratchet rather than softness.
+#
+# MEASURED at adoption: 288 violations -- 83 structural, 198 safety. Denying
+# outright makes the tree not compile, which blocks every other task and
+# cannot even be counted; a blanket `allow` is the reflex `clippy.toml` says
+# these limits exist to catch. So the lints warn, `.lint-debt` records the
+# count, and the GATE fails when the count rises.
+#
+# That keeps `.:B6`'s rule intact -- a check that cannot fail is no check --
+# because the thing that can fail is the ratchet, not clippy. A lint flips to
+# `deny` individually the moment its debt reaches zero.
+[lints.clippy]
+too_many_lines = "warn"
+cognitive_complexity = "warn"
+excessive_nesting = "warn"
+fn_params_excessive_bools = "warn"
+struct_excessive_bools = "warn"
+# A panic in a tool that runs unattended is a run that stops with no record.
+unwrap_used = "warn"
+expect_used = "warn"
+panic = "warn"
+indexing_slicing = "warn"
+arithmetic_side_effects = "warn"
+# A stub that compiles is the failure mode this repo has recorded three times.
+todo = "warn"
+unimplemented = "warn"
+dbg_macro = "warn"

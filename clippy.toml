@@ -1,0 +1,52 @@
+# Code limits. One file, repo root, no per-module dialect.
+#
+# PROVENANCE, stated rather than cited. These thresholds are Sandi Metz's
+# rules, adapted for Rust, and they reached this repo from a sibling. The
+# sibling's copy carried invariant ids from the project that seeded IT --
+# numbers that resolve in no namespace this repo can reach and read as
+# authoritative anyway. So the reasoning is restated here in full: nobody
+# should have to fetch another repo to understand a threshold, and a citation
+# nothing can check is not a citation.
+#
+# Every number is a REVIEWED decision, not a default. Raising one to make a
+# build pass is the reflex these limits exist to catch (AGENTS.md).
+#
+# WHY THIS REPO SPECIFICALLY. `.:R44` measured the local 20B writing 10 of 11
+# correct implementations when the unit was one pure function with one clear
+# rule and no deep branching. `src/tdd:T13` has never once seen a merit win on
+# `drive_from`, which is 313 lines. These limits push every function toward
+# the shape the target model demonstrably handles, so they are a lever on the
+# §G TARGET rather than housekeeping beside it.
+
+# Sandi's "four parameters", verbatim. Past four, the call site stops being
+# readable and the argument order starts being memorized.
+too-many-arguments-threshold = 4
+
+# Sandi's "five lines per method", adapted to 15: Rust spends lines on
+# signatures, match arms and closing braces that Ruby does not.
+too-many-lines-threshold = 15
+
+# The companion to the line limit, and the more important half: 15 short
+# lines of straight-line code are fine, 15 lines of nested branching are not.
+cognitive-complexity-threshold = 7
+
+# Clippy's own default here is 0, which DISABLES the lint rather than
+# forbidding all nesting -- worth stating, because 0 reads like the strictest
+# possible setting and is the opposite.
+#
+# `src/tdd:B25` is this limit's case in one bug: two error paths six lines
+# apart at depth 3, written inconsistently, and one transient killed a run
+# and threw away 33 completed measurements.
+excessive-nesting-threshold = 4
+
+type-complexity-threshold = 150
+
+# A bool parameter is a hidden mode switch: the call site reads `f(x, true)`
+# and says nothing about what is true. One is tolerable; two means the
+# function is really two functions.
+max-fn-params-bools = 1
+max-struct-bools = 3
+
+# Interface segregation: a caller should not have to satisfy bounds it does
+# not use.
+max-trait-bounds = 3

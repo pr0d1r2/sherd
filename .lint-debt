@@ -1,0 +1,22 @@
+# Lint debt, ratcheted. This number may go DOWN, never up.
+#
+# The limits in `clippy.toml` were adopted whole (T85) against a tree that
+# predates them, so 290 sites tripped at once. Denying outright would stop the
+# tree compiling and block every other task; a blanket `allow` is the reflex
+# the limits exist to catch. So the lints WARN, this file records the count,
+# and the gate fails when the count RISES.
+#
+# The check that can fail is this comparison, not clippy -- which is what
+# keeps `.:B6` satisfied: a check that cannot fail is no check.
+#
+# When a lint's own debt reaches zero, flip it from `warn` to `deny` in
+# Cargo.toml individually and it stops needing this file.
+#
+# GROUPS, measured 2026-08-19:
+#   structural  83   too_many_lines, cognitive_complexity, excessive_nesting,
+#                    too_many_arguments -- the decomposition signal (.:V109)
+#   safety     198   indexing_slicing, arithmetic_side_effects, unwrap, expect
+#
+# Lowering this belongs to `.:T92` (split src/tdd) and the pay-down tasks, and
+# a drop should arrive WITH the refactor that earned it.
+total 290
