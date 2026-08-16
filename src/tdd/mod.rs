@@ -230,7 +230,9 @@ impl<'a> Caller<'a> {
             &mut |chunk| n = tick(chunk, n),
         )?;
         eprintln!();
-        ollama::observe_gen(label, r.eval_tokens);
+        if self.t.timings_are_real() {
+            ollama::observe_gen(label, r.eval_tokens);
+        }
         if ollama::verbose() {
             if !r.thinking.is_empty() {
                 eprintln!(
@@ -1277,6 +1279,10 @@ mod loop_tests {
     }
 
     impl ollama::Transport for Scripted {
+        fn timings_are_real(&self) -> bool {
+            false
+        }
+
         fn post(
             &self,
             _url: &str,
