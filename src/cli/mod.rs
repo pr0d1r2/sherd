@@ -787,6 +787,45 @@ mod tests {
         );
     }
 
+    /// The read-only verbs, run against THIS repo.
+    ///
+    /// A fixture would be a second repo to keep honest; the gate already
+    /// requires these green here, so running them on the real tree asserts
+    /// the same thing the gate does and covers the dispatch that reaches
+    /// them. `.:V27` -- this repo must be a valid federation -- is exactly
+    /// the claim being exercised.
+    #[test]
+    fn the_read_only_verbs_succeed_on_this_repo() {
+        for a in [
+            vec!["graph"],
+            vec!["graph", "--dot"],
+            vec!["graph", "--table"],
+            vec!["graph", "--tree"],
+            vec!["fed"],
+            vec!["check"],
+            vec!["budget"],
+            vec!["slice", "--list"],
+        ] {
+            let code = run_args(argv(&a));
+            assert_eq!(
+                code,
+                ExitCode::SUCCESS,
+                "`bbx {}` must exit 0",
+                a.join(" ")
+            );
+        }
+    }
+
+    #[test]
+    fn a_dir_matching_no_node_is_usage_not_a_vacuous_pass() {
+        // Examining NOTHING is not passing. An empty table and a clean repo
+        // were indistinguishable until T10, which is `src/tdd:V26`'s shape.
+        assert_eq!(
+            run_args(argv(&["budget", "no-such-dir"])),
+            ExitCode::from(2)
+        );
+    }
+
     #[test]
     fn the_usage_text_names_every_exit_code_it_returns() {
         // The three codes the tests above assert are the three §I documents.
