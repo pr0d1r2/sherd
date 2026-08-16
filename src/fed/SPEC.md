@@ -9,7 +9,7 @@ Federation edges. `§F` table, parent→child, chain to a node.
 V1: `§F` row = `dir|owns|⊥owns|tokens`. 4 cells or ⊥ a row
 V2: edge depth = parent + 1 exactly. ⊥ skip levels
 V3: `⊥owns` ! present — positive lens decides DESCEND, negative one decides STOP. the negative is the byte that prevents loading
-V4: literal `|` in a cell escaped `\|`. `\` is an escape ONLY before `|` — anywhere else it is LITERAL & kept ∴ `C:\path` survives `edges()`. a splitter consuming `\` before ANY char eats data silently, & `\\` before a pipe yields ≠4 cells which V1 then drops as a non-row (B11)
+V4: `\` escapes the NEXT char only when that char is `\` or `\|` — before anything else it is LITERAL & kept ∴ `C:\path` survives `edges()` & a cell may END in a backslash. a splitter consuming `\` before ANY char eats data silently, & leaves a cell ending in one unrepresentable, which V1 then drops as a non-row (B11, B12)
 V5: `tokens` = `-` means UNRECORDED, ⊥ zero
 V6: header row (`dir|owns|…`) ⊥ an edge
 V7: `§F` parse stops @ next `## §` header
@@ -39,7 +39,7 @@ T13|~|replace the hand-rolled walk with `itok::walk`/`itok::glob`|`.:V23`
 T14|.|blocked — recomputing needs `crate::tokens`, ⊥ in this node's surface. see B10|`.:V21`
 T15|.|fixture: 4 levels deep, one module with two parents — self-repo is a tree|`.:V4`
 T16|.|parse `§N` rows, line-anchored|`.:V34`
-T17|.|`split_row()` ! keep `\` LITERAL except before `\|` (V4). test through `edges()`, ⊥ the encoder alone (V13): a lone `\`, `C:\path`, `\|`, & a row that splits to ≠4 cells & so vanishes|V13,V4,V1
+T17|x|`split_row()` ! keep `\` LITERAL except before `\|` (V4). test through `edges()`, ⊥ the encoder alone (V13): a lone `\`, `C:\path`, `\|`, & a row that splits to ≠4 cells & so vanishes|V13,V4,V1
 
 ## §B BUGS
 
@@ -55,3 +55,4 @@ B8|2026-08-01|`unused import: Path` in a test module COMMITTED through a `-D war
 B9|2026-08-01|`bbx apply` wrote `find_flat_rs_promotions` filtering `§F` rows on `dir == "." && owns.ends_with(".rs")`. NO `§F` row has `dir == "."` — the shape ⊥ exist. gates green, judge YES, test & impl agreed w/ each other & neither related to `.:V73`. REVERTED|the ROW was wrong, ⊥ the model: `.:V73` is a policy about when to create a dir & answering it needs Rust SOURCE, which `fed` ⊥ read. `classify` says actionable because it parses as "add one fn" ∴ shape is necessary & ⊥ sufficient
 B10|2026-08-01|`bbx apply` wrote `find_token_mismatches` summing FILE SIZES in bytes & comparing them to `§F`.tokens. bytes ⊥ tokens; `.:R8` measured bytes/4 48% off on caveman text & §C says counting is `itok`'s job. gate refused the commit for an UNUSED IMPORT, ⊥ for being wrong — luck|discarded. same class as B9: the node cannot compute the invariant, so the model invents a proxy. row now names the blocker
 B11|2026-08-21|`split_row()` treats `\` as an escape before ANY char & DROPS it, while V4 only ever defined `\|` ∴ a backslash anywhere in a cell is EATEN, & a cell ending in `\\` yields 5 cells where V1 demands 4, so `edges()` returns NO row & a `§F` edge vanishes w/ no error — B6's shape (something that finds nothing passes cleanly) one level over. MEASURED through `edges()` on a 3-row table: an `owns` of `C:\path notes` parsed as `C:path notes`, a row whose `owns` ended `tail\\` produced NO edge, & 2 of 3 rows survived. FIRST CAUSE WRONG, mine, one commit earlier: I wrote that `cell()` & `split_row()` are a broken CODEC PAIR & that `cell()`'s output makes an edge vanish. VERIFIED FALSE — `cell()`'s only caller is `table()` → `bbx graph --table`, a MARKDOWN render, & nothing parses its output back ∴ the EFFECTS were real & the MECHANISM I named was ⊥. `.:V59`, & B1 is the same correction on this node's own log. FOUND by `.:T97`'s detector flagging the `escape_cell` corpus row 3/3 (`.:R55`), followed from fixture into live code|V4 & V13 restated. T17 fixes `split_row()` & tests through `edges()`
+B12|2026-08-21|SPEC defect, mine, caught by T17's own test before any code shipped. B11's first restatement of V4 said `\` escapes ONLY before `\|` ∴ a cell ending in a backslash was UNREPRESENTABLE: `tail\\` reads as literal-backslash-then-escaped-pipe, the column break is swallowed & the row drops to 3 cells — the SAME vanishing V4 had just been rewritten to stop. the rule now escapes `\` & `\|` & nothing else, which keeps `C:\path` literal AND makes a trailing backslash expressible|V4 restated a 2nd time. GENERALLY: an escape scheme ! be able to express its own escape char, & the test that finds that is a ROUND TRIP over a cell that ENDS in it
