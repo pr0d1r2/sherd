@@ -108,7 +108,23 @@
             # The gate runner: `hk.pkl` holds the ops, hk decides when they run.
             # From nix-hk via the overlay, because nixos-26.05 has no `hk`.
             pkgs.hk
+            # Coverage. Here to MEASURE before any floor is chosen: picking a
+            # threshold before knowing the number is what `.context-limits`
+            # warns against, and adopting a sibling's 98% because it is the
+            # sibling's is how a number arrives unreviewed.
+            pkgs.cargo-llvm-cov
+            # `llvm-cov` and `llvm-profdata` themselves: nixpkgs' rustc does not
+            # ship `llvm-tools-preview`, so they come from the LLVM package and
+            # are wired through the env vars `cargo-llvm-cov` looks for. Both
+            # siblings solve it exactly this way.
+            pkgs.llvmPackages.llvm
           ];
+
+          # `cargo-llvm-cov` looks these up by name and gives up if they are
+          # absent, which is what "failed to find llvm-tools-preview" means on
+          # a nixpkgs toolchain.
+          LLVM_COV = "${pkgs.llvmPackages.llvm}/bin/llvm-cov";
+          LLVM_PROFDATA = "${pkgs.llvmPackages.llvm}/bin/llvm-profdata";
 
           # Derived, never hardcoded: direnv enters with PWD = the directory
           # holding this flake, which is also the crate root.
