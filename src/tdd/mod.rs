@@ -41,7 +41,7 @@ pub use crate::spec::rule_depth;
 
 /// Reading Rust source moved to `crate::code`, which owns it for BOTH this
 /// node and `src/review` (`.:B13`). Re-exported so the loop reads unchanged.
-pub use crate::code::{expected_calls, signatures, split_module};
+pub use crate::code::{expected_calls, signatures, split_module, test_decls};
 
 /// Append a test into the tests module. The ONLY function that writes there --
 /// steps 2 and 4 structurally cannot touch the test, which is the guard
@@ -708,6 +708,11 @@ pub fn drive_run(r: &Run) -> Result<Vec<Step>, String> {
 
     let spec_rules = rule_depth(&spec_txt);
     let surface = signatures(impl_r);
+    // The judge is shown the impl half and told to check names against it,
+    // but the test it judges lives in the OTHER half and may legitimately
+    // reuse a double declared there. Without these it rejects a good test
+    // for referring to something that "does not appear" (B27).
+    let in_scope = test_decls(tests_r);
     let mut c = Caller::new(r.transport);
 
     // 1 -- RED test, with the judge's objection fed back on rejection. The
@@ -767,7 +772,7 @@ pub fn drive_run(r: &Run) -> Result<Vec<Step>, String> {
 
         let verdict = c.run(
             &format!(
-                "{NOTATION}\n--- data model ---\n{surface}\n\nInvariant:\n  {inv}\n\n\
+                "{NOTATION}\n--- data model ---\n{surface}\n--- already available to a test ---\n{in_scope}\n\nInvariant:\n  {inv}\n\n\
              Proposed test:\n```rust\n{test_fn}\n```\n\n\
              Answer YES only if BOTH hold: (a) the test exercises the quantity the \
              invariant is actually about -- check the field names against the data model \
