@@ -87,13 +87,22 @@ pub fn gate(root: &Path) -> Result<(bool, String), String> {
 }
 
 pub fn gate_with(root: &Path, cargo: &str) -> Result<(bool, String), String> {
-    // Same strictness as `.githooks/pre-commit`, deliberately: the loop's gate
-    // and the commit's gate must be ONE rule. `-D warnings` in BOTH, because
-    // `cargo build` does not compile `#[cfg(test)]` code and an unused import
-    // in a test module shipped through a gate that never saw it (fed B8).
+    // Plain `cargo test`, exactly `hk`'s test step. NOT `RUSTFLAGS=-D
+    // warnings`: RUSTFLAGS reaches every path dep, so `itok`'s own two
+    // `dead_code` warnings turned this gate red for code blackbox does not
+    // own -- and then every candidate and every repair was judged against a
+    // gate that could not go green whatever the model wrote (B26).
+    //
+    // `.:B6` found this and fixed `hk.pkl` by moving `-D warnings` after `--`
+    // on the CLIPPY step, where it scopes to this crate. The loop kept the
+    // old mechanism, which is `src/fed:B9`: fixing a shared rule must be
+    // followed by finding who does not use it.
+    //
+    // BOUNDED: warnings are now clippy's job and clippy is `hk`'s step, not
+    // this one. The loop's gate no longer catches a warnings-only regression;
+    // the commit gate still does, and `bbx apply` cannot commit without it.
     let out = Command::new(cargo)
         .args(["test", "--offline"])
-        .env("RUSTFLAGS", "-D warnings")
         .current_dir(root)
         .output();
     let (tests_ok, mut report) = match out {
