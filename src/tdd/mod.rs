@@ -341,6 +341,9 @@ pub fn oneshot(r: &Run) -> Result<Vec<Step>, String> {
         .ok_or_else(|| format!("{} not declared", r.invariant))?
         .to_string();
 
+    // A cold endpoint's first call carries a disk load the eta was never
+    // taught about, and the 4x ceiling then kills step 1 (`.:ollama:prewarm`).
+    ollama::prewarm(r.transport);
     let mut c = Caller::new(r.transport);
     let reply = c.run(
         &format!(
@@ -731,6 +734,9 @@ pub fn drive_run(r: &Run) -> Result<Vec<Step>, String> {
     // reuse a double declared there. Without these it rejects a good test
     // for referring to something that "does not appear" (B27).
     let in_scope = test_decls(tests_r);
+    // A cold endpoint's first call carries a disk load the eta was never
+    // taught about, and the 4x ceiling then kills step 1 (`.:ollama:prewarm`).
+    ollama::prewarm(r.transport);
     let mut c = Caller::new(r.transport);
 
     // 1 -- RED test, with the judge's objection fed back on rejection. The
