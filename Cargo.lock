@@ -146,6 +146,8 @@ checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 [[package]]
 name = "itok"
 version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2439668248ba288d1945716c58e8f39115aca39ac047b38973407c218df996b1"
 dependencies = [
  "tiktoken-rs",
 ]

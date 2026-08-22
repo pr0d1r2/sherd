@@ -115,7 +115,7 @@ decode. Federation is worth *more* on the slower machine.
 ## Use
 
 ```sh
-cargo build                      # microlith from crates.io; itok is a path dep
+cargo build                      # every dep from crates.io; no sibling checkout
 export BBX_ENDPOINT=http://your-box:11434
 export BBX_MODEL=gpt-oss:20b
 
