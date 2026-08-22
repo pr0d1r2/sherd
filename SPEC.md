@@ -24,7 +24,7 @@ src|code nodes — tokens, spec, fed, lens facades & logic|inference harness, en
 - federation edge = parent dir → child dir, depth **+1 exactly**. ⊥ skip.
 - graph ! DAG. cycle ⊥. re-parent (2+ parents) OK.
 - intra-file spec ops = `microlith` lib dep (crates.io 0.6, zero-dep, pure fn over `&str`). ⊥ reimpl parse/fmt/check/anchors.
-- token counting = `itok` lib dep (`../itok`, 0.3.0). ⊥ own tokenizer, ⊥ own bytes/4.
+- token counting = `itok` lib dep (crates.io 0.3). ⊥ own tokenizer, ⊥ own bytes/4.
 - fs walk + ignore globs = `itok::walk`/`itok::glob`. ⊥ reimpl.
 - SPEC syntax = FORMAT **4.1.0**, sections `G C I R V T B` fixed & ordered + `§F`/`§N`. `§F`/`§N` ! land in FORMAT/microlith upstream, ⊥ invented locally (V47).
 - layout: **one crate**. module = **dir + `mod.rs`** (the `default.nix` shape — dir is the unit, entry is conventional). ⊥ 2018 `foo.rs`+`foo/`: that puts the facade OUTSIDE the dir it fronts ∴ module entry & its `SPEC.md` land in different federation nodes.
