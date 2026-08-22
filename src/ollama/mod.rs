@@ -702,6 +702,39 @@ pub struct Streamed {
     pub first_chunk: Option<Instant>,
 }
 
+/// Load the model BEFORE the first measured call.
+///
+/// The first call after an endpoint wakes includes a disk load -- measured at
+/// ~11s for `gpt-oss:20b`'s 12.7GB -- while the eta is learned from WARM
+/// calls. The abort ceiling is 4x that eta, so the first step of a run is
+/// killed before it can finish: T13's first re-measure died at 96s for
+/// exactly this, and the second did too because the box had unloaded again
+/// between runs.
+///
+/// `V15` already keeps a cold call out of rate LEARNING. This keeps it out of
+/// the CEILING as well, which is the half that discards work.
+///
+/// One tiny call, discarded, through `stream` so it persists nothing (`V20`).
+/// Skipped for a double, whose timings are fiction and which loads nothing.
+pub fn prewarm(t: &dyn Transport) {
+    if !t.timings_are_real() {
+        return;
+    }
+    let eta = Eta {
+        prefill_s: 60.0,
+        decode_s: 60.0,
+        gen_est: 1,
+    };
+    // An empty label: this call is not a step and must not key the pace model.
+    let _ = stream(t, "ok", "", Sampling::DETERMINISTIC, eta, &mut |_| {});
+    let ms = last_load_ms();
+    if ms > 500 {
+        eprintln!(
+            "  warm: model loaded from disk in {ms}ms -- not charged to the run"
+        );
+    }
+}
+
 /// Stream a reply AND fold it into the pace model.
 ///
 /// The production path: [`stream`] measures, [`learn_from`] persists, and
@@ -945,6 +978,17 @@ mod tests {
             !Canned(String::new()).timings_are_real(),
             "a double must declare itself -- B9 is the absence of this"
         );
+    }
+
+    #[test]
+    fn prewarming_a_double_costs_nothing_and_asks_it_nothing() {
+        // A scripted transport loads no model and its timings are fiction
+        // (V20), so warming one would burn a scripted reply and shift every
+        // later call in the script by one -- the run would then be driven by
+        // the wrong answers.
+        let t = Canned("{\"response\":\"x\",\"done\":true}\n".into());
+        prewarm(&t);
+        assert!(drain(&t).is_ok(), "the double's first reply is still there");
     }
 
     #[test]
