@@ -18,6 +18,7 @@ V4: `ignored-input` — a NEW `pub fn` w/ an `_`-prefixed param. `-D warnings` c
 V5: ⊥ claim clean. report what was CHECKED — 3 mechanical rules of ~6 review questions
 V6: a test FIXTURE ! be unique per INSTANCE, ⊥ per process. `std::process::id()` is the SAME for every test in one binary ∴ two tests sharing a tag get one directory & the first `Drop` deletes the other's repo. green ALONE, red in the SUITE — & a test that passes in isolation is the one nobody debugs (B4)
 V7: a subprocess's EXIT STATUS ! be read, ⊥ only its spawn result. `Command::output()` returns `Ok` for a process that RAN & FAILED ∴ `let Ok(out) = ..` catches only "git ⊥ on PATH", & `git show <unknown rev>` yields Ok w/ EMPTY stdout — the diff then reads as "nothing changed" & the review reports no findings (B5). an empty result & a failed command ! be distinguishable, which is V5 one level down in the plumbing
+V8: `undocumented` — a NEW `pub fn` w/ no doc comment. NEW only
 
 
 ## §T TASKS

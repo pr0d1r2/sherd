@@ -110,6 +110,55 @@ fn is_detector(impl_src: &str, f: &str) -> bool {
     })
 }
 
+/// A new public fn with no doc comment.
+///
+/// Doc comments are not decoration here: `code::signatures` emits the `///`
+/// lines into the worker's surface, and `src/code:B4` is a judge that could
+/// not tell whether `not_owns` held a path or prose without them. So an
+/// undocumented `pub fn` degrades every prompt built from that node
+/// afterwards -- the loop's own next run included.
+///
+/// Scoped to NEW functions, like every rule here. The 69 undocumented public
+/// items already in the tree are a separate debt, and flagging them would
+/// make this rule fire on work nobody just did.
+#[must_use]
+pub fn undocumented(impl_src: &str, new_fns: &[String]) -> Vec<Finding> {
+    new_fns
+        .iter()
+        .filter(|f| declared_without_doc(impl_src, f))
+        .map(|f| Finding {
+            rule: "undocumented",
+            detail: format!(
+                "`{f}` is a new `pub fn` with no doc comment -- \
+                 `signatures` puts those lines in the next prompt"
+            ),
+        })
+        .collect()
+}
+
+/// Is `f` declared with no `///` line above it?
+///
+/// Scans BACK past attributes: `#[must_use]` sits between the doc and the fn
+/// all over this crate, so reading only the immediately preceding line would
+/// flag the house style as undocumented.
+fn declared_without_doc(impl_src: &str, f: &str) -> bool {
+    let lines: Vec<&str> = impl_src.lines().collect();
+    let decl = format!("fn {f}(");
+    let Some(i) = lines.iter().position(|l| {
+        let s = l.trim();
+        s.starts_with("pub fn ") && s.contains(&decl)
+    }) else {
+        return false;
+    };
+    lines.get(..i).is_none_or(|before| {
+        !before
+            .iter()
+            .rev()
+            .find(|p| !p.trim().starts_with("#["))
+            .is_some_and(|p| p.trim().starts_with("///"))
+    })
+}
+
 /// A new public fn with an `_`-prefixed parameter.
 ///
 /// `-D warnings` catches an unused parameter, which is how one stub was
@@ -168,6 +217,7 @@ pub fn node(path: &Path, added: &[String]) -> std::io::Result<Vec<Finding>> {
     let mut out = unwired(&crate_src, tests_r, added);
     out.extend(negative_only(impl_r, tests_r, added));
     out.extend(ignored_input(impl_r, added));
+    out.extend(undocumented(impl_r, added));
     Ok(out)
 }
 
@@ -308,6 +358,46 @@ mod tests {
 
     /// A DETECTOR: something that can find nothing.
     const DETECTOR: &str = "pub fn detect(e: &[u8]) -> Vec<String> { vec![] }";
+
+    #[test]
+    fn a_new_pub_fn_without_a_doc_is_flagged() {
+        // T13's first merit win shipped `post_with_retry` with no doc, and
+        // `signatures` would have put a bare signature in every later
+        // prompt for that node (`src/code:B4`).
+        let f = undocumented(
+            "pub fn post_with_retry(t: &T) -> u8 { 1 }",
+            &["post_with_retry".into()],
+        );
+        assert_eq!(f.len(), 1, "{f:?}");
+    }
+
+    #[test]
+    fn a_documented_one_is_not() {
+        let f = undocumented(
+            "/// Retries a failing post.\npub fn post_with_retry() -> u8 { 1 }",
+            &["post_with_retry".into()],
+        );
+        assert!(f.is_empty(), "{f:?}");
+    }
+
+    #[test]
+    fn an_attribute_between_the_doc_and_the_fn_still_counts_as_documented() {
+        // `#[must_use]` sits between them all over this crate, so reading
+        // only the immediately preceding line would flag the house style.
+        let f = undocumented(
+            "/// Retries.\n#[must_use]\npub fn go() -> u8 { 1 }",
+            &["go".into()],
+        );
+        assert!(f.is_empty(), "{f:?}");
+    }
+
+    #[test]
+    fn a_fn_the_commit_did_not_add_is_not_judged() {
+        // Scoped to NEW functions, like every rule here: 69 undocumented
+        // public items already exist and are a separate debt.
+        let f = undocumented("pub fn old() -> u8 { 1 }", &["new_one".into()]);
+        assert!(f.is_empty(), "{f:?}");
+    }
 
     #[test]
     fn flags_a_detector_tested_only_on_empty() {
