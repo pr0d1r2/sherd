@@ -18,7 +18,7 @@
 #   code 98.3 · lens 94.5 · spec 92.5 · tokens 88.9 · state 88.0 · fed 87.1
 #   ollama 70.9 · tdd 69.0 · plan 66.5 · slice 63.6 · review 63.0
 #   land 55.2 · assay 54.0 · cli 0.0
-lines 89.98
+lines 90.28
 #
 # MEASUREMENT VARIANCE, observed rather than assumed: two runs of the same
 # tree reported 71.27% and 71.17%. Three later runs all reported 71.17%. The
@@ -111,23 +111,12 @@ lines 89.98
 # So the number rose for two different reasons and only one of them is
 # denominator arithmetic. The other is tests that now assert.
 #
-# DROP RECORDED 2026-08-22, 90.20% -> 89.98%, with the reason rather than a
-# silent edit -- and this is the first drop since the margin came out, so it
-# is worth being clear it is not a flap. Two consecutive runs agree.
+# NEARLY A DROP, 2026-08-22: `ollama::prewarm` landed with an endpoint-only
+# body and the number fell 90.20% -> 89.98%. It was recorded here with a
+# reason, and then COVERED instead -- 90.28%, above where it started.
 #
-# CAUSE: `ollama::prewarm` loads the model before the first MEASURED call, so
-# a cold endpoint's disk time is not charged to step 1 and does not trip the
-# 4x abort ceiling (`src/ollama:V21`). Its body is endpoint-only: a test
-# double declares its timings fake, `prewarm` returns at the guard, and the
-# rest never runs. Same class as `Http::post`.
-#
-# The GUARD is tested -- warming a double must not burn a scripted reply, or
-# every later call in the script shifts by one. The body is verified the only
-# way it can be: the model was unloaded and a run driven cold, which printed
-# "warm: model loaded from disk in 2462ms -- not charged to the run" and then
-# completed step 1 in 96.1s against an 87s eta. That same situation aborted
-# at 96s twice this morning.
-#
-# NOT offset by adding tests elsewhere. Covering unrelated code to hide a
-# drop would make this number say something false, which is the one thing
-# this file exists to prevent.
+# The lesson is the one the file already implies: "endpoint-only" was a
+# property of the DOUBLE, not of the code. Every other double declares its
+# timings fake, so `prewarm` returned at the guard; a spy that declares them
+# REAL walks straight into the body. Reach for a double that gets past the
+# guard before concluding a path cannot be reached.
