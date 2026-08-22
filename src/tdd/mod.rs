@@ -982,11 +982,11 @@ pub fn drive_run(r: &Run) -> Result<Vec<Step>, String> {
         // weakened -- `land::evidence` runs `review::commit` over every
         // commit on the branch, which is where "landed" applies (T19).
         //
-        // These two DO belong here: both judge the candidate's own quality,
-        // which is complete the moment it is written.
+        // These three DO belong here: each judges the candidate's own
+        // quality, which is complete the moment it is written.
         let mut found = crate::review::negative_only(&code, ct, &added);
         found.extend(crate::review::ignored_input(&code, &added));
-        found.extend(crate::review::ignored_input(&code, &added));
+        found.extend(crate::review::undocumented(&code, &added));
         if n > 1 {
             // Name them. Three candidates scoring "1 finding" told me nothing
             // about whether it was one shared defect or three different ones.
@@ -1659,7 +1659,7 @@ mod loop_tests {
         Scripted::new(&[
             "```rust\n#[test]\nfn doubles() { assert_eq!(double(2), 4); }\n```",
             "YES it exercises the invariant",
-            "```rust\npub fn double(n: u8) -> u8 { n * 2 }\n```",
+            "```rust\n/// Twice its input.\npub fn double(n: u8) -> u8 { n * 2 }\n```",
             "YES it reads its input",
         ])
     }
@@ -1833,8 +1833,8 @@ mod loop_tests {
         Scripted::new(&[
             "```rust\n#[test]\nfn doubles() { assert_eq!(double(2), 4); }\n```",
             "YES it exercises the invariant",
-            "```rust\npub fn double(n: u8) -> u8 { n + n }\n```",
-            "```rust\npub fn double(n: u8) -> u8 { n * 2 }\n```",
+            "```rust\n/// Twice its input.\npub fn double(n: u8) -> u8 { n + n }\n```",
+            "```rust\n/// Twice its input.\npub fn double(n: u8) -> u8 { n * 2 }\n```",
             "YES it reads its input",
         ])
     }
