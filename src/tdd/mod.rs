@@ -41,7 +41,7 @@ pub use crate::spec::rule_depth;
 
 /// Reading Rust source moved to `crate::code`, which owns it for BOTH this
 /// node and `src/review` (`.:B13`). Re-exported so the loop reads unchanged.
-pub use crate::code::{expected_calls, signatures, split_module};
+pub use crate::code::{expected_calls, signatures, split_module, test_decls};
 
 /// Append a test into the tests module. The ONLY function that writes there --
 /// steps 2 and 4 structurally cannot touch the test, which is the guard
@@ -82,6 +82,24 @@ pub fn cargo_bin() -> String {
 ///
 /// # Errors
 /// The toolchain could not be RUN. That is not a red gate (V26).
+/// What to tell the judge about a function the row asks the loop to WRITE.
+///
+/// The row asks for a function that does not exist yet -- a call to it is
+/// what a RED test IS. Unsaid, the judge reads that call as a mistake and
+/// answers NO to every row that ADDS a function, which is every row the loop
+/// can drive (B28). Empty when the row names no function, so a row that
+/// modifies existing behaviour is unaffected.
+#[must_use]
+pub fn red_note(task: &str) -> String {
+    named_fn(task).map_or(String::new(), |n| {
+        format!(
+            "`{n}` does NOT exist yet: this is the RED step, writing it is \
+             the next one, so a call to it is EXPECTED and is not a reason \
+             to answer NO. "
+        )
+    })
+}
+
 pub fn gate(root: &Path) -> Result<(bool, String), String> {
     gate_with(root, &cargo_bin())
 }
@@ -708,6 +726,11 @@ pub fn drive_run(r: &Run) -> Result<Vec<Step>, String> {
 
     let spec_rules = rule_depth(&spec_txt);
     let surface = signatures(impl_r);
+    // The judge is shown the impl half and told to check names against it,
+    // but the test it judges lives in the OTHER half and may legitimately
+    // reuse a double declared there. Without these it rejects a good test
+    // for referring to something that "does not appear" (B27).
+    let in_scope = test_decls(tests_r);
     let mut c = Caller::new(r.transport);
 
     // 1 -- RED test, with the judge's objection fed back on rejection. The
@@ -765,11 +788,12 @@ pub fn drive_run(r: &Run) -> Result<Vec<Step>, String> {
             continue;
         }
 
+        let red_note = red_note(task);
         let verdict = c.run(
             &format!(
-                "{NOTATION}\n--- data model ---\n{surface}\n\nInvariant:\n  {inv}\n\n\
+                "{NOTATION}\n--- data model ---\n{surface}\n--- already available to a test ---\n{in_scope}\n\nInvariant:\n  {inv}\n\n\
              Proposed test:\n```rust\n{test_fn}\n```\n\n\
-             Answer YES only if BOTH hold: (a) the test exercises the quantity the \
+             {red_note}Answer YES only if BOTH hold: (a) the test exercises the quantity the \
              invariant is actually about -- check the field names against the data model \
              above, a test asserting on the wrong field proves nothing; and (b) an \
              implementation violating the invariant would fail it. If the function \
@@ -1234,6 +1258,33 @@ mod tests {
 #[cfg(test)]
 mod loop_tests {
     use super::*;
+
+    #[test]
+    fn a_row_naming_a_function_tells_the_judge_it_is_not_written_yet() {
+        // B28: the judge rejected the test for calling something that does
+        // not exist, which is what a RED test IS. The note is what stops it.
+        // BACKTICKED, as a real §T row writes it -- `named_fn` reads only
+        // backticked segments, so an unquoted name yields no note at all.
+        let n = red_note("`post_with_retry(&dyn Transport, url)` -- a NEW fn");
+        assert!(n.contains("post_with_retry"), "names the target: {n}");
+        assert!(
+            n.contains("does NOT exist yet"),
+            "says why it is absent: {n}"
+        );
+        assert!(n.contains("not a reason"), "and that it is not a NO: {n}");
+    }
+
+    #[test]
+    fn a_row_naming_no_function_says_nothing_to_the_judge() {
+        // A row that changes existing behaviour has no absent target, and
+        // telling the judge otherwise would excuse a test calling anything.
+        assert_eq!(red_note("tighten the ceiling comparison"), "");
+        assert_eq!(
+            red_note("post_with_retry(url) with no backticks"),
+            "",
+            "an unbackticked name is not a named function"
+        );
+    }
 
     #[test]
     fn a_gate_that_could_not_run_is_an_error_not_a_verdict() {

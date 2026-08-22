@@ -208,9 +208,78 @@ pub fn signatures(impl_src: &str) -> String {
     out
 }
 
+/// The names a TEST module declares, one per line.
+///
+/// Not [`signatures`], and deliberately a different shape. `signatures`
+/// answers "what API may a writer call", so it carries doc comments and
+/// field lines. This answers "what names are in scope for a judge reading a
+/// test", where the field bodies are noise the prompt pays for by the token
+/// (R17: prefill cost is superlinear).
+///
+/// It also does not require `pub`: a test module's doubles are private to it
+/// -- `struct Flaky` is never `pub` -- so `signatures` extracts NOTHING from
+/// a test half, and the judge was told to check names against a data model
+/// that could not contain them (`.:tdd:B27`).
+#[must_use]
+pub fn test_decls(tests_src: &str) -> String {
+    let mut out = String::new();
+    for line in tests_src.lines() {
+        let s = line.trim().trim_start_matches("pub ");
+        let keep = s.starts_with("fn ")
+            || s.starts_with("struct ")
+            || s.starts_with("enum ")
+            || s.starts_with("const ")
+            || s.starts_with("impl ");
+        if keep {
+            let head = s.split('{').next().unwrap_or(s).trim_end();
+            out.push_str(head);
+            out.push('\n');
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A test module's doubles are PRIVATE to it, so `signatures` -- which
+    /// requires `pub` -- extracts nothing from a test half. The judge was
+    /// shown only the impl half and told to check names against it, so an
+    /// authored test reusing an existing double was rejected for referring
+    /// to something that "does not appear" (`.:tdd:B27`).
+    const TEST_HALF: &str = "#[cfg(test)]\nmod tests {\n    use super::*;\n\n    \
+         struct Flaky {\n        fail_times: Cell<u32>,\n    }\n\n    \
+         impl Transport for Flaky {\n        fn post(&self) -> u8 { 1 }\n    }\n\n    \
+         fn slow_eta() -> Eta {\n        Eta::default()\n    }\n\n    \
+         #[test]\n    fn a_case() {\n        assert!(true);\n    }\n}\n";
+
+    #[test]
+    fn a_private_double_is_invisible_to_signatures_and_visible_to_test_decls() {
+        assert_eq!(
+            signatures(TEST_HALF).lines().count(),
+            0,
+            "nothing in a test module is `pub`, so the API surface is empty"
+        );
+        let d = test_decls(TEST_HALF);
+        assert!(
+            d.contains("struct Flaky"),
+            "the double is a NAME in scope: {d}"
+        );
+        assert!(d.contains("fn slow_eta"), "so is its helper: {d}");
+        assert!(d.contains("impl Transport for Flaky"), "and the impl: {d}");
+    }
+
+    #[test]
+    fn test_decls_carries_names_not_bodies() {
+        // The judge pays for this prompt by the token and R17 says prefill
+        // cost is superlinear, so it gets what names EXIST and not every
+        // field. Measured on `src/ollama`: 42 lines rather than 386.
+        let d = test_decls(TEST_HALF);
+        assert!(!d.contains("fail_times"), "field lines are not names: {d}");
+        assert!(!d.contains("assert!"), "bodies are not names: {d}");
+        assert!(!d.contains('{'), "declarations are truncated at the brace");
+    }
 
     const SRC: &str = "pub fn a() {}\n\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn t() {}\n}\n";
 
