@@ -56,10 +56,13 @@ ollama = ["dep:ureq", "dep:serde_json"]
 # V72: these are named ONLY inside their facade module -- src/tokens/,
 # src/spec/, src/ollama/. Everything else goes through the facade, and module
 # privacy makes the compiler enforce it (error[E0603]).
-itok = { path = "../itok", default-features = false, features = ["bpe"] }
-# microlith is public (crates.io, github.com/pr0d1r2/microlith), so it is a
-# registry dep -- no sibling checkout required. itok is not published, and that
-# is now the only reason this crate cannot be built from a clean clone.
+itok = { version = "0.3", default-features = false, features = ["bpe"] }
+# Both are public -- crates.io, github.com/pr0d1r2/{itok,microlith} -- so both
+# are registry deps and a clean clone builds with no sibling checkout. `itok`
+# was the last path dep in the tree (T71): a path dep is a shared working tree,
+# so the gate's green expired silently whenever the sibling moved, which is B5.
+# A registry version plus the lock checksum is an immutable artifact instead
+# (V101), and the runner in `src/lib.rs` now allows no exceptions at all.
 microlith = "0.6"
 # ureq 3 with `rustls`, so `BBX_ENDPOINT` may be an `https://` host. What
 # gets POSTed is the PROMPT -- slices of your spec and your source, because

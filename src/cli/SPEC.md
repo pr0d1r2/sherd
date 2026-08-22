@@ -16,6 +16,7 @@ V2: a MISS is exit 2 naming what was tried, ⊥ exit 0 empty (`.:V20`)
 V3: usage names commands that EXIST. inventing a verb in help or a message gives one operation two names (`.:plan` B3)
 V4: `-v`/`--verbose` is a MODE, positional-agnostic ⊥ an argument
 V5: repo root = the dir holding `.git` AND `SPEC.md`, ⊥ CWD. `bbx` is a shim over `cargo run` ∴ CWD is wherever it was typed
+V6: a test reaches only the repo it was HANDED. V5 walks up ∴ a test naming no fixture finds whatever tree the runner sits in, & the crate root IS one — green about its LOCATION, ⊥ the code (B1)
 
 ## §T TASKS
 
@@ -28,3 +29,9 @@ T5|.|`bbx route "<query>"` — resolve a query to a node, exit 3 ambiguous|V2
 T6|.|`bbx check` drift spec↔code|`.:V21`
 T7|.|`bbx graph --json`|`.:V83`
 T8|.|`bbx review` verb over the last commit|`.:V48`
+T9|.|hand `repo_root_finds…` & `review_of_a_real_revision…` a FIXTURE repo, + a test asserting the cwd is ⊥ inside one. then the flake package w/ `doCheck` ON|V6,B1
+
+## §B BUGS
+
+id|date|cause|fix
+B1|2026-08-22|2 tests pass ONLY ∵ the runner sits in this checkout: V5's walk finds THIS repo when handed none. MEASURED proving T71's dep swap — `git archive HEAD` to a non-repo dir, same tree: 280 pass, `repo_root_finds…` & `review_of_a_real_revision…` fail ∴ the suite in the crate TARBALL is red & a nix sandbox build cannot run it, which is why `packages.default` stayed absent|V6. T9 hands both a fixture & asserts the cwd is ⊥ a repo. GENERALLY: a test that DISCOVERS its input is green about WHERE it ran

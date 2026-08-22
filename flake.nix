@@ -88,13 +88,13 @@
         '';
     in
     {
-      # No `packages.default`. blackbox depends on ../itok by PATH, and a path
-      # dep outside the flake root is not visible to a pure build -- the same
-      # reason `git worktree` could not resolve it, and the same fragility a
-      # sibling rename exposed on 2026-08-01. microlith was the other half of
-      # this and is no longer: it is published, so it resolves from the
-      # registry like any dep. itok alone is what remains of the fleet
-      # packaging work (§R R20).
+      # Still no `packages.default`, but the reason has MOVED. The path dep is
+      # gone -- itok and microlith both resolve from the registry now (T71), so
+      # a pure build can see every source it needs. What blocks it is B15: two
+      # tests walk up for a git repo and find whichever tree the runner sits
+      # in, so they pass in a checkout and fail in a sandbox. Shipping the
+      # package with `doCheck = false` would hide exactly the defect the
+      # sandbox is worth having, so T98 fixes the tests first.
 
       devShells = forAll (pkgs: {
         default = pkgs.mkShell {

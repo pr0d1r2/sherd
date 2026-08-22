@@ -18,6 +18,13 @@ rather than implied by the version number.
 
 ### Changed
 
+- **`itok` is a registry dependency**, `0.3` from crates.io with a lock
+  checksum, and the last path dep in the tree is gone. A clean clone now
+  builds with no sibling checkout: the `V101` allow-list in `src/lib.rs` is
+  empty, so a path dep added later fails the suite rather than being noticed
+  by a reader. What made this possible is upstream, not here -- `itok` was
+  published -- and the manifest comment claiming it was unpublished had
+  outlived the fact.
 - **The gate is now [`hk`](https://hk.jdx.dev)**, with its ops declared in
   `hk.pkl` instead of written as a shell body in `.githooks/pre-commit`. The
   ops are file-scoped, so a SPEC-only commit skips the compile; they are
