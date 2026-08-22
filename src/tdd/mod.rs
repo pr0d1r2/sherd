@@ -52,9 +52,20 @@ fn insert_test(src: &str, test_fn: &str) -> String {
 }
 
 /// Append to the implementation region, above `#[cfg(test)]`.
+///
+/// The reply's OWN test half is dropped first. Step 2 is told "write only the
+/// new function(s) to ADD to the implementation" and "do not modify the
+/// test", but a reply that carries a `#[cfg(test)] mod tests` anyway gets
+/// spliced ABOVE the module's real one -- two top-level `mod tests`, `E0428`,
+/// and a gate that no repair can turn green because each repair may do it
+/// again. MEASURED: that is what killed the live run (B29).
+///
+/// Deterministic, local, zero tokens -- the same shape as the `named_fn`
+/// pre-check that rejects a test which does not call its target (B23).
 fn insert_impl(src: &str, code: &str) -> String {
     let (impl_r, tests) = split_module(src);
-    format!("{}\n{}\n\n{}", impl_r.trim_end(), code.trim(), tests)
+    let (code_impl, _) = split_module(code);
+    format!("{}\n{}\n\n{}", impl_r.trim_end(), code_impl.trim(), tests)
 }
 
 /// Step 3. Local, deterministic, zero tokens. Reports what RAN, not only what
@@ -1238,6 +1249,39 @@ mod tests {
             "test region must be byte-identical"
         );
         assert!(out.contains("pub fn b"));
+    }
+
+    /// A module with one implementation fn and one test.
+    const MODULE: &str = "pub fn a() {}\n\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn t() {}\n}\n";
+
+    /// A step-2 reply that carries a test module, against its instructions.
+    const REPLY_WITH_TEST: &str = "pub fn b() -> u8 { 1 }\n\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn u() {}\n}";
+
+    /// B29. Splicing a reply's own `mod tests` above the module's real one
+    /// gives TWO top-level test modules and `E0428` -- and no repair can fix
+    /// it, because each repair may do it again, so the whole budget burns on
+    /// a defect the loop introduced itself.
+    #[test]
+    fn a_reply_carrying_its_own_test_module_leaves_one_module() {
+        let out = insert_impl(MODULE, REPLY_WITH_TEST);
+        let n = out.matches("\nmod tests {").count();
+        assert_eq!(n, 1, "exactly one test module survives: {out}");
+    }
+
+    #[test]
+    fn the_implementation_lands_and_the_replys_test_does_not() {
+        let out = insert_impl(MODULE, REPLY_WITH_TEST);
+        assert!(out.contains("pub fn b()"), "the implementation lands");
+        assert!(!out.contains("fn u()"), "step 2 must not write tests");
+        assert!(out.contains("fn t()"), "the module's own test is kept");
+    }
+
+    #[test]
+    fn a_well_behaved_reply_is_unchanged_by_the_guard() {
+        // The common case must not pay for the guard.
+        let out = insert_impl(MODULE, "pub fn b() -> u8 { 1 }");
+        assert!(out.contains("pub fn b()"));
+        assert_eq!(out.matches("\nmod tests {").count(), 1);
     }
 
     #[test]
