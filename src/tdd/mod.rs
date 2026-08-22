@@ -882,9 +882,20 @@ pub fn drive_run(r: &Run) -> Result<Vec<Step>, String> {
         let added = crate::code::public_fns(&code);
         let cur =
             std::fs::read_to_string(&mod_path).map_err(|e| e.to_string())?;
-        let (ci, ct) = split_module(&cur);
-        let mut found = crate::review::unwired(ci, ct, &added);
-        found.extend(crate::review::negative_only(ct, &added));
+        let (_ci, ct) = split_module(&cur);
+        // NOT `unwired` here. Its own wording is "a `pub fn` called only from
+        // tests LANDED but was never wired in" -- the subject is code that
+        // shipped and STAYED unwired. A function born in the same breath as
+        // its test has landed nothing yet, and at the moment of judgement
+        // nothing else can call it: the loop only appends, so EVERY correct
+        // run tripped it and V23 made that fatal (V29). The rule is not
+        // weakened -- `land::evidence` runs `review::commit` over every
+        // commit on the branch, which is where "landed" applies (T19).
+        //
+        // These two DO belong here: both judge the candidate's own quality,
+        // which is complete the moment it is written.
+        let mut found = crate::review::negative_only(&code, ct, &added);
+        found.extend(crate::review::ignored_input(&code, &added));
         found.extend(crate::review::ignored_input(&code, &added));
         if n > 1 {
             // Name them. Three candidates scoring "1 finding" told me nothing
@@ -1698,20 +1709,30 @@ mod loop_tests {
     /// called only by its own new test is exactly what `unwired` flags, so
     /// the revert is the honest outcome for this script rather than a broken
     /// harness, and asserting it proves every step ran.
+    /// THE MERIT WIN, asserted.
+    ///
+    /// This used to require a REVERT: "a candidate with findings must not
+    /// land". That was the honest outcome while `unwired` judged a candidate
+    /// (V29) and `negative_only` flagged every scalar (`src/review:B6`) --
+    /// the test was encoding two defects as expected behaviour.
+    ///
+    /// It is not weakened by inverting. The old form asserted that the loop
+    /// FAILS; this asserts it SUCCEEDS and that the implementation is really
+    /// in the module afterwards, which is the stronger claim and the one
+    /// `src/tdd:T13` has been asking for since the loop was built.
     fn check_outcome(
         out: &Result<Vec<Step>, String>,
         after: &str,
     ) -> Result<(), String> {
-        let Err(err) = out else {
-            return Err("a candidate with findings must not land".into());
+        let steps = match out {
+            Ok(s) => s,
+            Err(e) => return Err(format!("the run must be KEPT, got: {e}")),
         };
+        assert!(!steps.is_empty(), "a kept run records what it cost");
         assert!(
-            err.contains("findings"),
-            "the loop must say WHY it reverted, got: {err}"
-        );
-        assert!(
-            !after.contains("double"),
-            "an unkept run restores the module -- the guard must have fired"
+            after.contains("double"),
+            "the implementation must be IN the module, not restored away: \
+             {after}"
         );
         Ok(())
     }
