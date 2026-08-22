@@ -56,7 +56,7 @@ T9|x|step 2 ! define exactly the fn the test calls — pass the expected signatu
 T10|x|blind impl judge after green — `blind_prompt`, `is_yes`|V22,V11
 T11|x|MEASURE V22 — `blind_lens_vs_the_recorded_stubs` 5/5 reject + `blind_lens_vs_working_code` 5/5 accept. the CONTROL is ⊥ optional: a lens answering NO to everything scores 5/5 on stubs alone|V22
 T12|x|`Candidate`, `best`, `candidate_count` + N-candidate step 2|V23
-T13|~|MEASURE V23 @ N=3, 2 runs: BOTH 3/3 red, 0 merit wins observed. run 1 reverted (B21); run 2 repaired candidate 0, 3 repairs, still red — but ⊥ WORSE than N=1, which was the fix. cost/run ~3 gen + 3 gate runs, 2m27s & 4m20s. a merit win is STILL UNOBSERVED|V23
+T13|~|FIRST MERIT WIN 2026-08-22, live, after 6 blockers fell (`.:state:B1`, B26-B29, `.:review:B6`): 5 round-trips, 20,559 tok, `MERGEABLE -- gates green + second lens`. it did ⊥ SURVIVE REVIEW: row said bounded BACKOFF, fn retries tight w/ none, no doc, lint 271→276 ∴ `hk` refuses what the loop calls mergeable. REMAINING: a rung whose output survives a READER|V23,`.:V106`
 T14|.|`bbx tdd` on `src/ollama` T3 failed 2x (8 round-trips, 17,551 tok, 4 compile errors incl `E0428` redefined). per `.:sit` a row failing twice is EVIDENCE ABOUT THE ROW — retry ⊥ productive until it is split|V23
 T15|x|`named_fn` + pre-judge contract check|V25
 T16|x|`gate` returns `Result` — unrunnable ⊥ red|V26
