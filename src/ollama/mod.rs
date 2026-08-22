@@ -980,6 +980,71 @@ mod tests {
         );
     }
 
+    /// Claims REAL timings, so `prewarm` does not skip it, and counts the
+    /// calls it is asked to make.
+    ///
+    /// The only double here that does NOT override `timings_are_real`: the
+    /// point is to get PAST the guard and exercise the body.
+    struct WarmSpy {
+        calls: std::cell::Cell<usize>,
+    }
+
+    impl Transport for WarmSpy {
+        fn post(
+            &self,
+            _u: &str,
+            _b: &str,
+            _t: Duration,
+        ) -> Result<Box<dyn BufRead + Send>, String> {
+            self.calls.set(self.calls.get().saturating_add(1));
+            Ok(Box::new(std::io::Cursor::new(
+                "{\"response\":\"ok\",\"done\":true}\n".as_bytes().to_vec(),
+            )))
+        }
+    }
+
+    #[test]
+    fn prewarming_makes_exactly_one_discarded_call() {
+        // ONE: zero would warm nothing and leave the load inside step 1,
+        // which is what V21 exists to stop; two would pay for a second
+        // round-trip on every run for no further benefit.
+        let t = WarmSpy {
+            calls: std::cell::Cell::new(0),
+        };
+        prewarm(&t);
+        assert_eq!(t.calls.get(), 1, "one call, and only one");
+    }
+
+    #[test]
+    fn prewarming_learns_nothing_from_the_call_it_makes() {
+        // V19/V20: a warm-up is not a measurement. It goes through `stream`,
+        // so no `gen` row is keyed and no pace row is written -- otherwise
+        // the first run after a cold start would teach the model that a
+        // one-token reply is what a step costs.
+        let (_f, p) = scratch_state("warm");
+        let before = crate::state::State::at(&p).all("gen").len();
+        prewarm(&WarmSpy {
+            calls: std::cell::Cell::new(0),
+        });
+        assert_eq!(
+            crate::state::State::at(&p).all("gen").len(),
+            before,
+            "a warm-up records nothing"
+        );
+    }
+
+    /// A state file of its own (`src/review:V6`).
+    fn scratch_state(tag: &str) -> ((), std::path::PathBuf) {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static N: AtomicUsize = AtomicUsize::new(0);
+        let n = N.fetch_add(1, Ordering::Relaxed);
+        (
+            (),
+            std::env::temp_dir()
+                .join(format!("bbx-warm-{tag}-{}-{n}", std::process::id())),
+        )
+    }
+
     #[test]
     fn prewarming_a_double_costs_nothing_and_asks_it_nothing() {
         // A scripted transport loads no model and its timings are fiction
