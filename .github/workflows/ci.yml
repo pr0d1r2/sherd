@@ -1,0 +1,177 @@
+name: ci
+
+# The gate, run exactly the way it runs locally: `nix develop` supplies the
+# toolchain pinned in flake.lock, and `hk check` runs the ops declared in
+# hk.pkl. One declaration of the op set (V102), one toolchain, no second
+# install path, and no version skew between a runner and a laptop.
+#
+# hk stays a LOCAL tool: CI reaches it *through* the dev shell rather than
+# installing it, so it never becomes a dependency of the crate. Same for
+# cargo-llvm-cov and the LLVM binaries the coverage op needs -- they arrive
+# from the same pinned shell, which is why this file installs none of them.
+#
+# Propagated from `itok`, whose workflow this is modelled on. What differs is
+# listed rather than left for a reader to diff.
+#
+# NO `nix build` JOB, and it is a gap with a named cause rather than an
+# oversight. This flake declares no `packages.default` at all: `src/cli:B1`
+# records that two tests walk up for a git repo and find whichever tree the
+# runner sits in, so they pass in a checkout and fail in a sandbox. Shipping
+# the package with `doCheck = false` would hide exactly the defect a sandbox
+# is worth having. `src/cli:T9` fixes the tests; the job lands with it, and
+# `nix build` is the thing that would have caught B1 years earlier than a
+# tarball extract did.
+#
+# NO MSRV AXIS, and that is a decision rather than an omission. An MSRV job
+# is worth having when the declared minimum is BELOW the toolchain CI runs,
+# because only then can it fail while the normal build passes. Here they are
+# the same number: `rust-version = "1.95"` in Cargo.toml, and nixpkgs-lock
+# pins rustc 1.95.0, which the job below already uses. An axis would
+# recompile the identical toolchain and report the identical answer, and a
+# check that cannot fail is `.:B6` wearing a green tick.
+#
+# NO MODEL IN CI, by construction. `§C` puts inference behind a local HTTP
+# endpoint and the suite is hermetic: the tests that need a 20B are
+# `#[ignore]`d and live in `tests/`, so a runner with nothing on :11434 runs
+# the deterministic core and does not hang waiting for one.
+#
+# PENDING -- listed rather than silently absent:
+#   * `nix build` job                                   src/cli:T9
+#   * `bbx validate` self-check, once the verb exists   T55
+#   * release automation and a crates.io publish        unversioned
+#   * x86_64-darwin, DECLARED in flake.nix `systems` and not gated here.
+#     GitHub's Intel macOS runners are retired, so gating it needs a runner
+#     label verified to still exist -- naming one from memory would assert a
+#     platform claim nothing checks, which is the failure `§F`.tokens exists
+#     to prevent.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # Re-run the gate without inventing a commit.
+  workflow_dispatch:
+
+# A second push to the same branch makes the first run's answer worthless.
+# Without this they both run to completion and compete for the same cache.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Everything hk declares, in hk's own order -- fmt, clippy, lint-debt, test,
+  # slice, check, budget, coverage -- on every system the flake declares and
+  # GitHub can run.
+  #
+  #   ubuntu-latest     x86_64-linux
+  #   ubuntu-24.04-arm  aarch64-linux
+  #   macos-latest      aarch64-darwin
+  #
+  # A matrix REPLICATES the work, it does not divide it: each runner pays the
+  # whole gate. Wall clock stays roughly flat because they run concurrently;
+  # total compute triples. What it buys is the difference between "the suite
+  # passes" and "the suite passes where users are" -- and this repo counts
+  # tokens, so a tokenizer or a path rule behaving differently per platform
+  # would move a ceiling rather than crash.
+  gate:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # Every platform reports. Cancelling the others would hide whether a
+      # failure is platform-specific or universal, which is the first
+      # question anyone asks and the one a matrix exists to answer.
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest]
+    # PROVISIONAL, and said so rather than presented as measured. GitHub
+    # serves no logs for an in-progress job and defaults to 360 minutes, so an
+    # unbounded hang is six hours of silence followed by nothing to read --
+    # which is how itok's B21 stayed invisible. Nothing here has been timed in
+    # CI yet; locally the suite is 283 tests in ~10s and the instrumented
+    # coverage build dominates. 20 is a bound loose enough not to flap and
+    # tight enough to produce a log, and it gets TIGHTENED to ~2x the worst
+    # measured job once a green run exists. A bound nobody revisits drifts
+    # back toward the default that hid the problem.
+    timeout-minutes: 20
+    steps:
+      # Pinned to commit SHAs, not tags. A tag is mutable: whoever controls
+      # the action can move `v4` to different code, and every workflow that
+      # trusts the tag runs it on the next push. The tag stays in the comment
+      # because a SHA alone tells a reader nothing about which version they
+      # are on. Same SHAs as the sibling repos, so a bump is one review.
+      #
+      # fetch-depth: 0 -- `bbx review` reads a real revision and its test
+      # asserts the verb succeeds against one, so a shallow clone would fail
+      # it for having no history rather than for anything about the code.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      # The fleet's binary cache. `hk` is not in nixos-26.05 at all -- it
+      # landed on nixpkgs master after the branch-off -- so without this
+      # substituter every entry into the dev shell BUILDS hk from source, and
+      # the gate spends its budget compiling its own runner.
+      #
+      # flake.nix already declares the same substituter in `nixConfig`, which
+      # covers a trusted user and silently does not cover anyone else. Naming
+      # it here makes CI's read of the cache independent of who the runner is
+      # trusted as, and the key is pinned beside the URL either way.
+      - uses: cachix/install-nix-action@630ae543ea3a38a9a4166f03376c02c50f408342 # v31.11.0
+        with:
+          extra_nix_config: |
+            extra-substituters = https://pr0d1r2.cachix.org
+            extra-trusted-public-keys = pr0d1r2.cachix.org-1:NfWjbhgAj41byXhCKiaE+av3Vnphm1fTezHXEGsiQIM=
+
+      # Keyed on `runner.os`-AND-`runner.arch`, not `runner.os` alone:
+      # `ubuntu-latest` and `ubuntu-24.04-arm` both report `Linux`, so an
+      # os-only key would be one entry holding two different closures, each
+      # evicting the other on every run -- a cache that silently never hits,
+      # which reads exactly like a cache that works.
+      #
+      # The prefix restore means a flake.lock bump warms from the previous
+      # closure instead of starting cold.
+      - uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7
+        with:
+          primary-key: nix-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('flake.nix', 'flake.lock') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-${{ runner.arch }}-
+          # The repo-wide Actions cache budget is 10 GB and it is SHARED with
+          # the cargo cache below, times three platforms. Capping the store
+          # keeps one job from evicting another's entry and turning a cache
+          # into a coin flip.
+          gc-max-store-size-linux: 4G
+          gc-max-store-size-macos: 4G
+
+      # Cargo keys artifacts by feature set and by instrumentation, so one
+      # run compiles the dependency graph more than once: `--all-targets` for
+      # clippy, the default set for `cargo test`, and the llvm-cov build,
+      # which is instrumented and shares nothing with either.
+      #
+      # `actions/cache` rather than `Swatinem/rust-cache`: that action keys on
+      # `rustc -vV`, and rustc only exists INSIDE the dev shell, so it would
+      # need the shell's PATH exported into the job first. Keying on
+      # `flake.lock` says the same thing -- the toolchain is pinned there --
+      # without a second way to name the compiler.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: cargo-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'flake.lock') }}
+          restore-keys: cargo-${{ runner.os }}-${{ runner.arch }}-
+
+      # --check, because `hk check` defaults to running FIX commands and two
+      # of this repo's ops write files: `slice` regenerates distilled slices
+      # and `fmt` rewrites source. CI must report, never rewrite -- a runner
+      # that fixes its own tree is a green tick over a diff nobody has seen.
+      # --all, because CI has no staged set for the file-scoped globs to
+      # narrow against.
+      #
+      # `--no-fail-fast` on PUSH only. On a PR the merge is blocked by a red
+      # check either way, so the only thing that matters is time-to-first
+      # signal; on a push to main nobody is waiting, and the complete list is
+      # worth the extra minutes. The ops are `depends`-chained cheapest-first,
+      # so a failing `fmt` otherwise reports nothing about coverage.
+      - run: >
+          nix develop --command hk check --all --check
+          ${{ github.event_name == 'push' && '--no-fail-fast' || '' }}

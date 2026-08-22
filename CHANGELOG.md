@@ -16,6 +16,18 @@ rather than implied by the version number.
 
 ## [Unreleased]
 
+### Added
+
+- **CI runs the gate, on three platforms.** `.github/workflows/ci.yml` enters
+  the dev shell and runs `hk check --all --check` -- the same op set the
+  hooks run locally, from the same pinned toolchain, so there is no second
+  definition of what "green" means. `x86_64-linux`, `aarch64-linux` and
+  `aarch64-darwin` each pay the whole gate; `x86_64-darwin` is declared in
+  the flake and named in the workflow as ungated rather than left to look
+  covered. There is no `nix build` job yet, because `src/cli:B1` would make
+  a sandboxed build fail for a reason that has nothing to do with the
+  package.
+
 ### Changed
 
 - **`itok` is a registry dependency**, `0.3` from crates.io with a lock
