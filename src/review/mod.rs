@@ -52,9 +52,14 @@ pub fn unwired(
 /// `detect_cycles` returned `Vec::new()` and passed, because the test asserted
 /// only that no cycle was found (`.:fed` B6).
 #[must_use]
-pub fn negative_only(tests_src: &str, new_fns: &[String]) -> Vec<Finding> {
+pub fn negative_only(
+    impl_src: &str,
+    tests_src: &str,
+    new_fns: &[String],
+) -> Vec<Finding> {
     new_fns
         .iter()
+        .filter(|f| is_detector(impl_src, f))
         .filter_map(|f| {
             if !tests_src.contains(&format!("{f}(")) {
                 return None;
@@ -80,6 +85,29 @@ pub fn negative_only(tests_src: &str, new_fns: &[String]) -> Vec<Finding> {
             })
         })
         .collect()
+}
+
+/// Does `f` RETURN something that can be empty?
+///
+/// The rule is about a DETECTOR -- `src/fed:B6` is `detect_cycles(edges) ->
+/// Vec::new()` shipped under a doc comment reading "stub ... satisfies the
+/// current test suite". "Found nothing" is only a failure mode where nothing
+/// is expressible, so `Vec` and `Option` are the shapes, and the seven
+/// positive markers it looks for are all collection-shaped too.
+///
+/// Applied to every new `pub fn`, it flagged `double(n) -> u8` and every
+/// other scalar the loop writes, which V23 then made FATAL (B6 here).
+fn is_detector(impl_src: &str, f: &str) -> bool {
+    impl_src.lines().any(|l| {
+        let s = l.trim();
+        s.starts_with("pub fn ")
+            && s.contains(&format!("fn {f}("))
+            && s.split("->").nth(1).is_some_and(|r| {
+                r.contains("Vec<")
+                    || r.contains("Option<")
+                    || r.contains("Map<")
+            })
+    })
 }
 
 /// A new public fn with an `_`-prefixed parameter.
@@ -138,7 +166,7 @@ pub fn node(path: &Path, added: &[String]) -> std::io::Result<Vec<Finding>> {
     }
     let (impl_r, _) = split_module(&src);
     let mut out = unwired(&crate_src, tests_r, added);
-    out.extend(negative_only(tests_r, added));
+    out.extend(negative_only(impl_r, tests_r, added));
     out.extend(ignored_input(impl_r, added));
     Ok(out)
 }
@@ -278,9 +306,13 @@ mod tests {
         );
     }
 
+    /// A DETECTOR: something that can find nothing.
+    const DETECTOR: &str = "pub fn detect(e: &[u8]) -> Vec<String> { vec![] }";
+
     #[test]
     fn flags_a_detector_tested_only_on_empty() {
         let f = negative_only(
+            DETECTOR,
             "let c = detect(&e); assert!(c.is_empty());",
             &["detect".into()],
         );
@@ -290,10 +322,39 @@ mod tests {
     #[test]
     fn accepts_a_detector_with_a_positive_case() {
         let f = negative_only(
+            DETECTOR,
             "let c = detect(&e); assert!(!c.is_empty());",
             &["detect".into()],
         );
         assert!(f.is_empty(), "{f:?}");
+    }
+
+    #[test]
+    fn a_scalar_returning_fn_is_not_a_detector() {
+        // V1 says the subject is a DETECTOR, and `src/fed:B6` is
+        // `detect_cycles -> Vec::new()`. "Found nothing" is only a failure
+        // mode where nothing is expressible. Applied to every new `pub fn`,
+        // the rule flagged `double(n) -> u8` and every other scalar the loop
+        // writes -- and V23 made that FATAL, so no scalar could ever land
+        // (B6 here).
+        let f = negative_only(
+            "pub fn double(n: u8) -> u8 { n * 2 }",
+            "assert_eq!(double(2), 4);",
+            &["double".into()],
+        );
+        assert!(f.is_empty(), "a scalar cannot 'find nothing': {f:?}");
+    }
+
+    #[test]
+    fn an_option_returning_fn_is_still_a_detector() {
+        // `Option` is the other shape where absence is the answer, so the
+        // narrowing must not let a real stub through.
+        let f = negative_only(
+            "pub fn find(k: &str) -> Option<u8> { None }",
+            "assert!(find(\"x\").is_none());",
+            &["find".into()],
+        );
+        assert_eq!(f.len(), 1, "None-only is the same defect: {f:?}");
     }
 
     #[test]
