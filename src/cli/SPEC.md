@@ -30,7 +30,7 @@ T5|.|`bbx route "<query>"` — resolve a query to a node, exit 3 ambiguous|V2
 T6|.|`bbx check` drift spec↔code|`.:V21`
 T7|.|`bbx graph --json`|`.:V83`
 T8|.|`bbx review` verb over the last commit|`.:V48`
-T9|.|hand `repo_root_finds…` & `review_of_a_real_revision…` a FIXTURE repo, + a test asserting the cwd is ⊥ inside one. then the flake package w/ `doCheck` ON|V6,B1
+T9|x|hand `repo_root_finds…` & `review_of_a_real_revision…` a FIXTURE repo, + a test asserting the cwd is ⊥ inside one. then the flake package w/ `doCheck` ON|V6,B1
 
 ## §B BUGS
 

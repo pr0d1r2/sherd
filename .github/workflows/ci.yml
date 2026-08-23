@@ -13,14 +13,11 @@ name: ci
 # Propagated from `itok`, whose workflow this is modelled on. What differs is
 # listed rather than left for a reader to diff.
 #
-# NO `nix build` JOB, and it is a gap with a named cause rather than an
-# oversight. This flake declares no `packages.default` at all: `src/cli:B1`
-# records that two tests walk up for a git repo and find whichever tree the
-# runner sits in, so they pass in a checkout and fail in a sandbox. Shipping
-# the package with `doCheck = false` would hide exactly the defect a sandbox
-# is worth having. `src/cli:T9` fixes the tests; the job lands with it, and
-# `nix build` is the thing that would have caught B1 years earlier than a
-# tarball extract did.
+# THE `nix build` JOB EXISTS NOW, with `doCheck` on, and it is the job that
+# would have caught `src/cli:B1` at the first push rather than at a tarball
+# extract. It builds in a sandbox with no `.git`, which is precisely the
+# condition the two ambient tests could not survive until `src/cli:T9` handed
+# them a fixture. A package that skips its own tests is a build, not a check.
 #
 # NO MSRV AXIS, and that is a decision rather than an omission. An MSRV job
 # is worth having when the declared minimum is BELOW the toolchain CI runs,
@@ -36,7 +33,6 @@ name: ci
 # the deterministic core and does not hang waiting for one.
 #
 # PENDING -- listed rather than silently absent:
-#   * `nix build` job                                   src/cli:T9
 #   * `bbx validate` self-check, once the verb exists   T55
 #   * release automation and a crates.io publish        unversioned
 #   * x86_64-darwin, DECLARED in flake.nix `systems` and not gated here.
@@ -175,3 +171,47 @@ jobs:
       - run: >
           nix develop --command hk check --all --check
           ${{ github.event_name == 'push' && '--no-fail-fast' || '' }}
+
+  # The sandbox build. A SEPARATE job from the gate, because it shares nothing
+  # with it: no cargo artifact crosses between them, so running it after the
+  # gate would only add its cost to the gate's wall clock.
+  #
+  # `doCheck` is on, which is the entire reason this job is worth its minutes:
+  # the sandbox copies the source WITHOUT `.git`, so it is the one environment
+  # that can catch a test asserting facts about the tree it runs in. That is
+  # `src/cli:B1`, which lived for the project's life because nothing ran the
+  # suite anywhere but a checkout.
+  #
+  # Same three platforms as the gate. The claim being gated here is "a clean
+  # clone builds and its tests pass", and that claim is per-platform or it is
+  # not a claim.
+  nix-build:
+    runs-on: ${{ matrix.os }}
+    # PROVISIONAL, like the gate's. Locally this build takes about three
+    # minutes warm; nothing is timed on a runner yet, and the rule for
+    # replacing this number is ~2x the worst measured job once a green run
+    # exists.
+    timeout-minutes: 20
+    strategy:
+      # One package failing on one system is a fact about that system.
+      # Cancelling the rest would hide whether the defect is shared.
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: cachix/install-nix-action@630ae543ea3a38a9a4166f03376c02c50f408342 # v31.11.0
+        with:
+          extra_nix_config: |
+            extra-substituters = https://pr0d1r2.cachix.org
+            extra-trusted-public-keys = pr0d1r2.cachix.org-1:NfWjbhgAj41byXhCKiaE+av3Vnphm1fTezHXEGsiQIM=
+
+      # RESTORE ONLY. The `gate` job for each system is the one writer; six
+      # jobs each saving a multi-gigabyte store would exhaust the 10 GB
+      # Actions budget in a single run and evict each other continuously.
+      - uses: nix-community/cache-nix-action/restore@7df957e333c1e5da7721f60227dbba6d06080569 # v7
+        with:
+          primary-key: nix-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('flake.nix', 'flake.lock') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-${{ runner.arch }}-
+
+      - run: nix build .#default

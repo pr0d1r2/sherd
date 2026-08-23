@@ -18,6 +18,15 @@ rather than implied by the version number.
 
 ### Added
 
+- **`nix build .#default`, with `doCheck` on** (`T71`, `src/cli:T9`). The
+  package builds in a sandbox that copies the source without `.git`, which is
+  the one environment able to catch a test asserting facts about the tree it
+  runs in — `src/cli:B1`, invisible for the project's life because nothing
+  ever ran the suite outside a checkout. The two tests that failed there are
+  handed fixture repositories now, and the whole suite passes from a non-repo
+  tree: 284 tests, 0 failures. CI gains a `nix-build` job on the same three
+  platforms. The build produces `bbx` only; `bbx-dev` is compiled and tested
+  in the sandbox but never installed.
 - **Six linters in the gate**: `actionlint` (the workflow is code no local run
   exercises), `shellcheck` (`.envrc` runs on every shell entry), `nixfmt`,
   `taplo`, `typos` and `lychee --offline` for relative links. All arrive from

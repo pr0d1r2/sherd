@@ -175,14 +175,26 @@ pub fn run_args(mut args: Vec<String>) -> ExitCode {
 /// chain, and no error to say so. Walk up to the git root instead.
 fn repo_root() -> PathBuf {
     let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-    let mut d = cwd.as_path();
+    repo_root_from(&cwd)
+}
+
+/// The walk, given a starting directory (V6).
+///
+/// Split from [`repo_root`] so a test can be HANDED a tree instead of
+/// discovering one. `B1` is what the unsplit version cost: the test asserted
+/// that `repo_root()` finds a `.git` and a `SPEC.md`, which it always does
+/// when the runner sits in this checkout and never does anywhere else -- so
+/// the suite passed here and failed in a tarball, and the assertion was
+/// about the runner's location rather than about the walk.
+fn repo_root_from(start: &Path) -> PathBuf {
+    let mut d = start;
     loop {
         if d.join(".git").exists() && d.join("SPEC.md").is_file() {
             return d.to_path_buf();
         }
         match d.parent() {
             Some(p) => d = p,
-            None => return cwd,
+            None => return start.to_path_buf(),
         }
     }
 }
@@ -958,15 +970,63 @@ mod tests {
     fn review_of_a_real_revision_reports_and_succeeds() {
         // ADVISORY by design -- findings do not fail the command -- so the
         // assertion is that it runs and classifies, not that it is silent.
-        assert_eq!(run_args(argv(&["review", "HEAD"])), ExitCode::SUCCESS);
+        //
+        // Handed a FIXTURE repository rather than run against whatever tree
+        // the runner sits in (V6/B1): `run_args` would resolve the root from
+        // the CWD, which is this checkout here and is not a repository at
+        // all inside a crate tarball or a nix sandbox.
+        let Ok(repo) = crate::testrepo::TestRepo::new("cli-review") else {
+            unreachable!("a fixture repository is buildable")
+        };
+        assert_eq!(review_cmd(repo.path(), "HEAD"), ExitCode::SUCCESS);
     }
 
-    /// `repo_root` walks UP to the tree that has both markers.
+    /// `repo_root_from` walks UP to the tree that has both markers.
+    ///
+    /// Every assertion is about a tree this test built. The version this
+    /// replaces asserted that the ambient root carries a `.git` and a
+    /// `SPEC.md`, which is true of this checkout, false of a tarball, and
+    /// says nothing about the walk either way (B1).
     #[test]
     fn repo_root_finds_the_tree_that_has_both_markers() {
-        let root = repo_root();
-        assert!(root.join("SPEC.md").is_file(), "root must carry a SPEC.md");
-        assert!(root.join(".git").exists(), "and a .git");
+        let Ok(repo) = crate::testrepo::TestRepo::new("cli-root") else {
+            unreachable!("a fixture repository is buildable")
+        };
+        let root = repo.path();
+        assert_eq!(repo_root_from(root), root);
+
+        let nested = root.join("src").join("deep");
+        let Ok(()) = std::fs::create_dir_all(&nested) else {
+            unreachable!("a nested dir is creatable")
+        };
+        assert_eq!(repo_root_from(&nested), root, "the walk goes UP");
+    }
+
+    /// A directory that is not inside any repository resolves to ITSELF
+    /// rather than escaping upward into one.
+    ///
+    /// This is the half B1 needed and did not have: the failure mode is not
+    /// "the walk is wrong", it is "the walk finds someone else's repository
+    /// and the caller cannot tell". A `SPEC.md` with no `.git` beside it
+    /// must not satisfy the search.
+    #[test]
+    fn a_tree_that_is_not_a_repository_resolves_to_itself() {
+        let dir = std::env::temp_dir().join(format!(
+            "bbx-notarepo-{}-{}",
+            std::process::id(),
+            line!()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        let Ok(()) = std::fs::create_dir_all(&dir) else {
+            unreachable!("a scratch dir is creatable")
+        };
+        let Ok(()) = std::fs::write(dir.join("SPEC.md"), "# SPEC\n") else {
+            unreachable!("a scratch file is writable")
+        };
+
+        // `/tmp` has no `.git` above it, so the walk runs out of parents.
+        assert_eq!(repo_root_from(&dir), dir);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
