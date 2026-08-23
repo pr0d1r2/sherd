@@ -1,0 +1,16 @@
+# `typos` config. Every entry below is an exemption, not a suppression: each
+# names something that is deliberately spelled the way it is.
+
+[files]
+# `pkl/` is upstream's hk schema, vendored so the gate runs with no network
+# (§C). Correcting a typo in it would silently fork it from the version
+# pinned, and `docs/THIRD-PARTY-NOTICES.md` says it is verbatim.
+# `vendor/` is the set-and-setting principle docs, vendored for the same
+# reason and described the same way.
+extend-exclude = ["pkl/", "vendor/"]
+
+[default.extend-words]
+# NOT a typo: it is a test INPUT. `content_hash(b"abc") != content_hash(b"abd")`
+# asserts that two one-byte-apart inputs hash differently, so the second
+# string has to be the neighbour of the first rather than a word.
+abd = "abd"

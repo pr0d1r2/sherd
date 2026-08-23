@@ -54,10 +54,7 @@
       # is exactly one `pkgs` in this file: a second lookup path is a second
       # place to forget, and the package list stays a list of names.
       forAll =
-        f:
-        nixpkgs.lib.genAttrs systems (
-          s: f (nixpkgs.legacyPackages.${s}.extend nix-hk.overlays.default)
-        );
+        f: nixpkgs.lib.genAttrs systems (s: f (nixpkgs.legacyPackages.${s}.extend nix-hk.overlays.default));
 
       # blackbox dogfoods itself (V27) -- `bbx check` gates its own commits --
       # so the dev shell must PROVIDE `bbx`, not merely the toolchain to build
@@ -118,6 +115,29 @@
             # are wired through the env vars `cargo-llvm-cov` looks for. Both
             # siblings solve it exactly this way.
             pkgs.llvmPackages.llvm
+            # The linters the `hk util` family cannot cover, because each
+            # needs a real parser rather than a byte scan. Dev-time only:
+            # none is a dependency of the crate, and CI reaches all of them
+            # through this shell rather than installing its own copies, so
+            # a laptop and a runner cannot disagree about a version.
+            #
+            # `actionlint` earned its place the day `ci.yml` landed -- a
+            # workflow is a file nothing else here parses, and its failure
+            # mode is a run that never starts.
+            pkgs.actionlint
+            # `.envrc` is shell without a `.sh` name, and it runs on every
+            # shell entry, which is where a silent mistake costs most.
+            pkgs.shellcheck
+            # The flake decides what every other step runs with, so drift
+            # here is drift everywhere.
+            pkgs.nixfmt
+            pkgs.taplo
+            pkgs.typos
+            # Relative links only (`--offline`). A link breaks when its
+            # TARGET moves, and the target's referrer is usually not in the
+            # changed set -- so this is the one check that must see files
+            # nobody staged.
+            pkgs.lychee
           ];
 
           # `cargo-llvm-cov` looks these up by name and gives up if they are

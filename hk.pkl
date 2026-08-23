@@ -188,6 +188,77 @@ local fast = new Mapping<String, Step> {
     check_diff = "hk util mixed-line-ending --diff {{files}}"
     fix = "hk util mixed-line-ending --fix {{files}}"
   }
+
+  // Below this line the steps need a REAL BINARY, unlike the `hk util`
+  // family above. Each is pinned in the dev shell and reached from CI
+  // through that same shell, so there is one version rather than two.
+  //
+  // Every one of them opens with a `command -v` guard, and that is not
+  // decoration: the first commit after this set landed died on `sh: line
+  // 1: nixfmt: command not found`, because a shell entered before the
+  // flake changed does not have the new tools. Without the guard a MISSING
+  // TOOL reports as a step failure, which reads as a finding about the
+  // code -- `.:B6`'s shape, a verdict that names the wrong thing. With it
+  // the message says what actually happened and what to do about it.
+  //
+  // Each landed with its findings MEASURED, and two of the six found
+  // something the moment they were pointed at the tree: `flake.nix` had
+  // never been formatted, and three doc comments carried a spelling the dictionary rejects.
+  // Both had been in the tree since the file was written, seen by every
+  // reader and caught by nothing -- which is the argument for the steps
+  // rather than for the fixes.
+
+  // The workflow is code, and it is the one file no local run exercises:
+  // a mistake in it is found by pushing, and its failure mode is a run
+  // that never starts.
+  ["actionlint"] {
+    glob = List(".github/workflows/*.yml", ".github/workflows/*.yaml")
+    check = "command -v actionlint >/dev/null 2>&1 || { echo 'hk: actionlint is not on PATH -- re-enter the dev shell (`nix develop`, or `direnv reload`). This is a MISSING TOOL, not a finding.' >&2; exit 1; }; actionlint {{files}}"
+  }
+  // `.envrc` is shell without a `.sh` name, and it runs on every shell
+  // entry -- exactly where a silent mistake costs most.
+  ["shellcheck"] {
+    glob = List("**/*.sh", "**/*.bash", ".envrc")
+    check = "command -v shellcheck >/dev/null 2>&1 || { echo 'hk: shellcheck is not on PATH -- re-enter the dev shell (`nix develop`, or `direnv reload`). This is a MISSING TOOL, not a finding.' >&2; exit 1; }; shellcheck --shell=bash {{files}}"
+  }
+  // The flake is the toolchain definition: it decides what every other
+  // step runs with, so drift here is drift everywhere. It arrived
+  // UNFORMATTED, so the fix half is declared -- but `nixfmt` reflows the
+  // hand-written comment blocks this file is mostly made of, so it is run
+  // deliberately (`hk fix`) rather than on every commit.
+  ["nixfmt"] {
+    glob = List("**/*.nix")
+    check = "command -v nixfmt >/dev/null 2>&1 || { echo 'hk: nixfmt is not on PATH -- re-enter the dev shell (`nix develop`, or `direnv reload`). This is a MISSING TOOL, not a finding.' >&2; exit 1; }; nixfmt --check {{files}}"
+    fix = "command -v nixfmt >/dev/null 2>&1 || { echo 'hk: nixfmt is not on PATH -- re-enter the dev shell (`nix develop`, or `direnv reload`). This is a MISSING TOOL, not a finding.' >&2; exit 1; }; nixfmt {{files}}"
+  }
+  ["taplo"] {
+    glob = List("**/*.toml")
+    exclude = List("pkl/**")
+    check = "command -v taplo >/dev/null 2>&1 || { echo 'hk: taplo is not on PATH -- re-enter the dev shell (`nix develop`, or `direnv reload`). This is a MISSING TOOL, not a finding.' >&2; exit 1; }; taplo format --check --diff {{files}}"
+    fix = "command -v taplo >/dev/null 2>&1 || { echo 'hk: taplo is not on PATH -- re-enter the dev shell (`nix develop`, or `direnv reload`). This is a MISSING TOOL, not a finding.' >&2; exit 1; }; taplo format {{files}}"
+  }
+  // `--force-exclude`, because `.typos.toml`'s excludes are ignored for
+  // paths passed explicitly and hk always passes them explicitly. Without
+  // it the vendored schema and the vendored principles get scanned, and
+  // the step reports someone else's spelling as our finding.
+  ["typos"] {
+    glob = List("**/*")
+    check = "command -v typos >/dev/null 2>&1 || { echo 'hk: typos is not on PATH -- re-enter the dev shell (`nix develop`, or `direnv reload`). This is a MISSING TOOL, not a finding.' >&2; exit 1; }; typos --force-exclude {{files}}"
+    fix = "command -v typos >/dev/null 2>&1 || { echo 'hk: typos is not on PATH -- re-enter the dev shell (`nix develop`, or `direnv reload`). This is a MISSING TOOL, not a finding.' >&2; exit 1; }; typos --force-exclude --write-changes {{files}}"
+  }
+  // OFFLINE ONLY. Relative paths are the half that breaks when a file
+  // moves and the half no other step can see; external URLs need the
+  // network this gate refuses, and a 404 on someone else's site is not a
+  // reason to reject a commit.
+  //
+  // Checks EVERY document, ignoring {{files}} deliberately. A link breaks
+  // when its TARGET moves, and the target's referrer is usually not in the
+  // changed set -- scoping this to changed files would make it pass on
+  // exactly the commit that breaks the link.
+  ["links"] {
+    glob = List("**/*")
+    check = "command -v lychee >/dev/null 2>&1 || { echo 'hk: lychee is not on PATH -- re-enter the dev shell (`nix develop`, or `direnv reload`). This is a MISSING TOOL, not a finding.' >&2; exit 1; }; lychee --offline --no-progress . || { echo 'hk: a relative link does not resolve. Fix the path, or the file it points at.' >&2; exit 1; }"
+  }
 }
 
 /// One set today. `all` exists as the name CI and pre-push use, so adding an

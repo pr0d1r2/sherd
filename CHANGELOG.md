@@ -18,6 +18,13 @@ rather than implied by the version number.
 
 ### Added
 
+- **Six linters in the gate**: `actionlint` (the workflow is code no local run
+  exercises), `shellcheck` (`.envrc` runs on every shell entry), `nixfmt`,
+  `taplo`, `typos` and `lychee --offline` for relative links. All arrive from
+  the dev shell, so CI and a laptop run the same versions and none is a
+  dependency of the crate. Two found something on their first run: `flake.nix`
+  had never been formatted, and five spellings had been read past by every
+  reviewer since they were written.
 - **Nine hygiene steps in the gate** (`T87`): merge conflicts, private keys,
   oversized files, byte-order marks, case conflicts, broken symlinks,
   trailing whitespace, missing final newlines and mixed line endings. All

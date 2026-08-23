@@ -54,7 +54,7 @@ pub fn default_path() -> PathBuf {
 impl State {
     /// Read state, or an empty one. A missing file is a cold start, not an
     /// error; a malformed LINE is skipped, but never silently -- an
-    /// unparseable file would otherwise read as "nothing cached" forever.
+    /// unparsable file would otherwise read as "nothing cached" forever.
     #[must_use]
     pub fn load() -> Self {
         Self::at(default_path())
@@ -84,7 +84,7 @@ impl State {
                     s.map.insert((k.into(), unescape_key(key)), v.into());
                 }
                 _ => {
-                    eprintln!("bbx-state:{}: unparseable line, ignored", n + 1)
+                    eprintln!("bbx-state:{}: unparsable line, ignored", n + 1)
                 }
             }
         }

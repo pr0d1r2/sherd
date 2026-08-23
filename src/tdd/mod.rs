@@ -1342,7 +1342,7 @@ mod tests {
     }
 
     #[test]
-    fn the_implementation_lands_and_the_replys_test_does_not() {
+    fn the_implementation_lands_and_the_replies_test_does_not() {
         let out = insert_impl(MODULE, REPLY_WITH_TEST);
         assert!(out.contains("pub fn b()"), "the implementation lands");
         assert!(!out.contains("fn u()"), "step 2 must not write tests");
