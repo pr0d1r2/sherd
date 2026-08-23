@@ -23,9 +23,9 @@ use std::process::ExitCode;
 const USAGE: &str = "\
 bbx-dev -- tooling for the blackbox repository itself
 
-  bbx-dev badges [--check]   regenerate the README badge block from the files
-                             that own each number. --check reports staleness
-                             and writes nothing.
+  bbx-dev readme [--check]   regenerate every generated block in README.md --
+                             the badges, and the three `bbx graph` renderings.
+                             --check reports staleness and writes nothing.
 
 exit: 0 clean · 1 violation · 2 usage
 ";
@@ -34,7 +34,7 @@ fn main() -> ExitCode {
     let argv: Vec<String> = std::env::args().skip(1).collect();
     let args: Vec<&str> = argv.iter().map(String::as_str).collect();
     match args.split_first() {
-        Some((&"badges", rest)) => badges(rest.contains(&"--check")),
+        Some((&"readme", rest)) => readme(rest.contains(&"--check")),
         _ => {
             eprint!("{USAGE}");
             ExitCode::from(2)
@@ -72,11 +72,31 @@ fn sources(root: &Path) -> Result<badge::Sources, String> {
         pkl: read(root, "hk.pkl")?,
         lock: read(root, "flake.lock")?,
         workflow: read(root, ".github/workflows/ci.yml")?,
-        readme: read(root, "README.md")?,
     })
 }
 
-fn badges(check_only: bool) -> ExitCode {
+/// Every generated block, and the owner each one is rendered from.
+///
+/// The three graph renderings come from `bbx`'s own `fed` module rather than
+/// by shelling out to the binary and reading its stdout: §C forbids a second
+/// reading of a rule that already has an owner, and a pipe is one.
+fn blocks(root: &Path, nodes: usize) -> Result<badge::Blocks, String> {
+    let facts = badge::facts(&sources(root)?, nodes)?;
+    Ok(vec![
+        ("badges".to_string(), badge::render(&facts)),
+        (
+            "graph-tree".to_string(),
+            format!("```\n{}```\n", bbx::fed::tree(root)),
+        ),
+        (
+            "graph-mermaid".to_string(),
+            format!("```mermaid\n{}```\n", bbx::fed::mermaid(root)),
+        ),
+        ("graph-table".to_string(), bbx::fed::table(root)),
+    ])
+}
+
+fn readme(check_only: bool) -> ExitCode {
     let Some(root) = repo_root() else {
         eprintln!(
             "bbx-dev: not inside the repository -- no ancestor holds both .git and SPEC.md"
@@ -87,8 +107,10 @@ fn badges(check_only: bool) -> ExitCode {
     // reimplementing a rule that already has an owner, and the DAG this badge
     // reports is exactly what `fed::discover` enumerates.
     let nodes = bbx::fed::discover(&root).len();
-    let outcome =
-        sources(&root).and_then(|s| badge::run(&s, nodes, check_only));
+    let outcome = blocks(&root, nodes).and_then(|b| {
+        let text = read(&root, "README.md")?;
+        Ok(badge::apply(&text, &b, check_only))
+    });
     match outcome {
         Err(e) => {
             eprintln!("{e}");
@@ -97,15 +119,13 @@ fn badges(check_only: bool) -> ExitCode {
         Ok(Outcome::Fresh) => ExitCode::SUCCESS,
         Ok(Outcome::NoMarkers) => {
             eprintln!(
-                "bbx-dev: README.md carries no `{}` / `{}` markers -- add them where the block belongs.",
-                badge::BEGIN,
-                badge::END
+                "bbx-dev: README.md is missing a block's markers. Each generated block needs a `<!-- BEGIN <name> -->` / `<!-- END <name> -->` pair: badges, graph-tree, graph-mermaid, graph-table."
             );
             ExitCode::from(1)
         }
         Ok(Outcome::Stale(diff)) => {
             eprintln!(
-                "bbx-dev: the README badge block is STALE. Run `bbx-dev badges` (or `hk fix`) to regenerate it from Cargo.toml, hk.pkl, .coverage, .lint-debt, flake.lock and ci.yml."
+                "bbx-dev: a generated README block is STALE. Run `bbx-dev readme` (or `hk fix`) to regenerate it from the files that own each number -- Cargo.toml, hk.pkl, .coverage, .lint-debt, flake.lock, ci.yml and the §F tables."
             );
             for line in diff {
                 eprintln!("  {line}");

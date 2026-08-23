@@ -24,6 +24,11 @@ use std::process::{Command, Output};
 const BEGIN: &str = "<!-- BEGIN badges -->";
 const END: &str = "<!-- END badges -->";
 
+/// Every block `bbx-dev readme` generates. A fixture missing one is reported
+/// as NOT OPTED IN rather than stale, so the tests that assert staleness
+/// have to carry all four.
+const GRAPH_MARKERS: &str = "\n<!-- BEGIN graph-tree -->\n<!-- END graph-tree -->\n<!-- BEGIN graph-mermaid -->\n<!-- END graph-mermaid -->\n<!-- BEGIN graph-table -->\n<!-- END graph-table -->\n";
+
 /// A repository-shaped directory: the files `bbx-dev badges` reads, and
 /// nothing else.
 fn fixture(name: &str) -> PathBuf {
@@ -72,7 +77,7 @@ fn a_fixture_is_not_this_repository() {
 fn an_unknown_verb_is_a_usage_error() {
     let out = run(&fixture("usage"), &["nonsense"]);
     assert_eq!(out.status.code(), Some(2));
-    assert!(String::from_utf8_lossy(&out.stderr).contains("bbx-dev badges"));
+    assert!(String::from_utf8_lossy(&out.stderr).contains("bbx-dev readme"));
 }
 
 #[test]
@@ -88,7 +93,7 @@ fn a_readme_without_markers_is_named_and_left_alone() {
     let dir = fixture("nomarkers");
     fs::write(dir.join("README.md"), "# f\n\nno markers here\n")
         .expect("readme");
-    let out = run(&dir, &["badges"]);
+    let out = run(&dir, &["readme"]);
     assert_eq!(out.status.code(), Some(1));
     assert!(String::from_utf8_lossy(&out.stderr).contains("markers"));
     let after = fs::read_to_string(dir.join("README.md")).expect("readme");
@@ -98,10 +103,13 @@ fn a_readme_without_markers_is_named_and_left_alone() {
 #[test]
 fn a_missing_owning_file_is_an_error_naming_it() {
     let dir = fixture("missing");
-    fs::write(dir.join("README.md"), format!("# f\n{BEGIN}\n{END}\n"))
-        .expect("readme");
+    fs::write(
+        dir.join("README.md"),
+        format!("# f\n{BEGIN}\n{END}\n{GRAPH_MARKERS}"),
+    )
+    .expect("readme");
     fs::remove_file(dir.join(".lint-debt")).expect("remove");
-    let out = run(&dir, &["badges"]);
+    let out = run(&dir, &["readme"]);
     assert_eq!(out.status.code(), Some(1));
     assert!(String::from_utf8_lossy(&out.stderr).contains(".lint-debt"));
 }
@@ -113,21 +121,21 @@ fn writing_then_checking_is_clean_and_idempotent() {
     let dir = fixture("roundtrip");
     fs::write(
         dir.join("README.md"),
-        format!("# f\n\n{BEGIN}\n{END}\n\ntail\n"),
+        format!("# f\n\n{BEGIN}\n{END}\n{GRAPH_MARKERS}\ntail\n"),
     )
     .expect("readme");
 
-    let out = run(&dir, &["badges"]);
+    let out = run(&dir, &["readme"]);
     assert_eq!(out.status.code(), Some(0));
     let once = fs::read_to_string(dir.join("README.md")).expect("readme");
     assert!(once.contains("edition-2024"));
     assert!(once.contains("MSRV-1.95"));
     assert!(once.ends_with("\ntail\n"));
 
-    let out = run(&dir, &["badges", "--check"]);
+    let out = run(&dir, &["readme", "--check"]);
     assert_eq!(out.status.code(), Some(0));
 
-    let out = run(&dir, &["badges"]);
+    let out = run(&dir, &["readme"]);
     assert_eq!(out.status.code(), Some(0));
     let twice = fs::read_to_string(dir.join("README.md")).expect("readme");
     assert_eq!(once, twice);
@@ -139,10 +147,11 @@ fn writing_then_checking_is_clean_and_idempotent() {
 #[test]
 fn check_refuses_a_stale_block_without_touching_it() {
     let dir = fixture("stale");
-    let stale = format!("# f\n\n{BEGIN}\nstale content\n{END}\n");
+    let stale =
+        format!("# f\n\n{BEGIN}\nstale content\n{END}\n{GRAPH_MARKERS}");
     fs::write(dir.join("README.md"), &stale).expect("readme");
 
-    let out = run(&dir, &["badges", "--check"]);
+    let out = run(&dir, &["readme", "--check"]);
     assert_eq!(out.status.code(), Some(1));
     let err = String::from_utf8_lossy(&out.stderr);
     assert!(err.contains("STALE"));
