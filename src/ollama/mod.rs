@@ -159,12 +159,19 @@ pub fn record_obs_in(
 ) {
     const KEEP: usize = 200;
     let line = row.line(label);
+    // Ordered append: the key carries a sequence, so the cap drops the
+    // genuinely oldest. Keyed by content hash alone the retained set was a
+    // hash-sampled slice of ALL history, so day-one measurements outlived
+    // recent ones and the pace model stopped learning (`.:src/state:B2`).
     let key = crate::state::content_hash(line.as_bytes());
-    if st.get("obs", &key).is_some() {
-        return; // idempotent: this exact observation is already recorded
-    }
-    st.set("obs", &key, line);
-    st.trim_kind("obs", KEEP);
+    st.push(
+        crate::state::Log {
+            kind: "obs",
+            cap: KEEP,
+        },
+        &key,
+        line,
+    );
 }
 
 /// One call's raw telemetry.
