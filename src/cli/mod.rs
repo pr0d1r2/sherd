@@ -383,17 +383,22 @@ fn print_structure(proposed: &[plan::Proposed], weight: &[plan::Candidate]) {
         }
     }
     let named: usize = proposed.iter().map(|p| p.members.len()).sum();
+    let tally =
+        |e: plan::Evidence| proposed.iter().filter(|p| p.evidence == e).count();
     println!(
-        "\n  {} node(s) read off the crate. `evidence` is how explicitly the \
-         author drew the boundary: a directory, then `pub mod`, then a naming \
-         family. `rows` are spec lines naming that node -- a line naming two \
-         counts for both.",
-        proposed.len()
+        "\n  {} node(s) over {named} module(s): {} directory · {} pub mod · \
+         {} family · {} declared.",
+        proposed.len(),
+        tally(plan::Evidence::Drawn),
+        tally(plan::Evidence::Published),
+        tally(plan::Evidence::Cohesion),
+        tally(plan::Evidence::Declared),
     );
     println!(
-        "  {named} module(s) accounted for. Anything else the crate declares \
-         is PRIVATE with no family: it attaches to one of these or stays at \
-         root, and that is a judgement this does not make."
+        "  Evidence is how explicitly the author drew the boundary. A \
+         `declared` node is a module and nothing more -- real, and the \
+         weakest reason to promote one. Grouping those is a judgement this \
+         does not make."
     );
 }
 
@@ -1728,6 +1733,34 @@ mod tests {
     /// The structure-first proposal on a fixture whose modules the spec
     /// never names: `.:plan:B12` is that a row ranking sees nothing here,
     /// while the code plainly declares two nodes.
+    /// Every grade, including the bottom rung that always fires: a plain
+    /// `mod` and a `pub(crate) mod` are both DECLARED, which is what
+    /// `microlith` is made of (`.:plan:B13`).
+    #[test]
+    fn a_private_or_crate_visible_module_is_still_a_node() {
+        let repo = routing_fixture("cli-split-grades");
+        let root = repo.path();
+        let Ok(()) = std::fs::create_dir_all(root.join("src")) else {
+            unreachable!("a src dir is creatable")
+        };
+        let Ok(()) = std::fs::write(
+            root.join("src").join("lib.rs"),
+            "pub mod api;\npub(crate) mod inner;\nmod hidden;\n",
+        ) else {
+            unreachable!("a lib.rs is writable")
+        };
+        let found = plan::structure(root);
+        let grade =
+            |n: &str| found.iter().find(|p| p.name == n).map(|p| p.evidence);
+        assert_eq!(grade("api"), Some(plan::Evidence::Published));
+        assert_eq!(
+            grade("inner"),
+            Some(plan::Evidence::Declared),
+            "pub(crate) is not published"
+        );
+        assert_eq!(grade("hidden"), Some(plan::Evidence::Declared));
+    }
+
     #[test]
     fn split_proposes_nodes_the_spec_never_mentions() {
         let repo = routing_fixture("cli-split-structure");
@@ -1743,7 +1776,11 @@ mod tests {
         };
         let found = plan::structure(root);
         let names: Vec<&str> = found.iter().map(|p| p.name.as_str()).collect();
-        assert_eq!(names, vec!["widget"], "pub mod only: {found:?}");
+        assert_eq!(
+            names,
+            vec!["widget", "helper"],
+            "published first, then declared: {found:?}"
+        );
         assert_eq!(split_cmd(root, root, false), ExitCode::SUCCESS);
     }
 
