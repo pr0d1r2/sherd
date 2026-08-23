@@ -4,15 +4,37 @@ All notable changes to `sherd` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com), and this project adheres to
 [Semantic Versioning](https://semver.org).
 
-The crate is `sherd`; the binary it installs is `sherd`. Those are two names
-on purpose — `sherd` was taken on crates.io by an unrelated BBCode parser, and
-the binary name was verified free rather than renamed to match.
+## Version ladder
 
-## Versioning
+A minor version here is a level of **guarantee**, not a feature count. Each
+rung answers one question: *what can you rely on at this tag?*
 
-Pre-`1.0`, a minor bump may change behaviour. `sherd` is early: what works
-and what is specced-but-unbuilt is listed in the README's Status section
-rather than implied by the version number.
+**An even minor is stable; an odd minor is functional but not for
+production** — the Linux 2.x and GNOME convention, and the rule
+[`microlith`](https://github.com/pr0d1r2/microlith) states as its §V34, so
+one reading serves both. The parity describes the *release*, not the work
+that went into it. `SPEC.md` §V114 is the source; this table is its public
+rendering, because a consumer arriving from crates.io never opens our spec.
+
+| version | parity | what you can rely on | status |
+|---|---|---|---|
+| `0.1` | odd | the deterministic core runs on any repository — `budget`, `lens`, `fed`, `graph`, `check`, `slice`, `review`, `plan` — gated on three platforms and built with its tests in a sandbox | reached |
+| `0.2` | even | `§I` is what ships: `init` scaffolds a `SPEC.md`, and a runner closes the interface-vs-binary drift in both directions | next |
+| `0.3` | odd | the DAG answers questions — `route` resolves a query to a node, `validate` self-checks the federation | planned |
+| `0.4` | even | the federation is maintainable rather than only readable — `split` proposes a split, `sync` regenerates `§N` | planned |
+| `0.5` | odd | **first public artifact.** The loop's verdict means what the gate means, measured over more than one attempt, on a repository that is neither `itok` nor this one | planned |
+| `0.6` | even | the surface settles: what the first users found, and `§F`/`§N` upstreamed rather than forked | planned |
+| `1.0` | — | the contract freezes; every minor after is stable by definition, and the parity retires | planned |
+
+`0.1` through `0.4` are rungs **reached but not published**. They are listed
+rather than omitted, because a ladder that hides its unpublished rungs makes
+the first release look like a first version instead of a fifth.
+
+Pre-`1.0` SemVer permits a minor to break, and here each rung *is* a
+behaviour change, so that permission is used honestly rather than worked
+around. crates.io is immutable — yanking hides a version, it does not delete
+it — so the first public artifact will be `0.5.0-rc.1`, which cargo does not
+select by default.
 
 ## [Unreleased]
 
@@ -95,15 +117,15 @@ rather than implied by the version number.
 - `hk.pkl` and `pkl/` are excluded from the published crate. They gate this
   working tree and mean nothing in a tarball.
 
-## [0.1.0] - unreleased
+## [0.1.0] - rung reached, not published
 
-The first version, and it has not been published yet. The date this section
-carried -- 2026-08-07 -- was the day the version number was chosen, and the
-heading called it a "first public release" before any release existed: no
-tag, no crates.io entry, no repository a reader could reach. It becomes a
-date when `v0.1.0` is tagged.
+The first rung of the ladder above, and deliberately not an artifact. There
+is no tag and no crates.io entry: `0.1` records that the deterministic core
+runs on any repository and is gated, which is a guarantee worth stating and
+not yet worth publishing. The first published version is `0.5.0-rc.1`.
 
-Early, and honest about it.
+This section previously read "First public release" and carried the date the
+version number was chosen. It claimed an event that had not happened.
 
 `sherd` splits a repository so that no single model call has to hold all
 of it — a directory DAG where every directory may carry its own `SPEC.md`,
@@ -149,5 +171,3 @@ Stated rather than left to be discovered:
 - Two functions in `src/fed/` were written by `gpt-oss:20b` through
   `sherd tdd`. Their defects are recorded in that node's `§B` rather than
   smoothed over.
-
-[0.1.0]: https://github.com/pr0d1r2/sherd/releases/tag/v0.1.0

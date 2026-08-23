@@ -304,15 +304,30 @@ violation would disappear.
 
 ## Status
 
-Early. `budget`, `lens`, `fed`, `graph`, `check`, `ask`, `tdd` and `oneshot`
-work. `route`, `split`, `sync`, `validate`, `SPEC.why.md` and the file ceilings
-are specced and unbuilt. `§F`/`§N` are extensions
-[microlith](https://github.com/pr0d1r2/microlith) cannot yet parse —
-they need to go upstream rather than fork the format.
+**Rung `0.1` of the [version ladder](CHANGELOG.md#version-ladder), reached
+and not published.** An even minor is stable, an odd minor is functional but
+not for production, and the first published artifact will be `0.5.0-rc.1` —
+so there is nothing on crates.io yet, on purpose.
+
+What runs today is the deterministic core: `budget`, `lens`, `fed`, `graph`,
+`check`, `slice`, `review`, `plan`, plus the model-facing `ask`, `tdd` and
+`oneshot`. `init`, `route`, `split`, `sync`, `validate` and `SPEC.why.md` are
+specced and unbuilt. `§F`/`§N` are extensions
+[microlith](https://github.com/pr0d1r2/microlith) cannot yet parse — they
+need to go upstream rather than fork the format.
+
+**The claim this project exists to test is not settled.** `§G` targets *most
+modules buildable on the 20B, not merely readable by it*, and `src/tdd:T13`
+records exactly one merit win — five round-trips, 20,559 tokens, the loop
+reporting `MERGEABLE` — which then **failed review**: the row asked for
+bounded backoff, the function retried tight with none, and the lint ratchet
+rose. The loop's verdict and the gate's verdict disagreed, and the loop was
+the optimistic one. Rung `0.5` is where those two have to mean the same
+thing, measured over more than one attempt.
 
 Two LLM-authored functions live in `src/fed/`, written by gpt-oss:20b through
-`sherd tdd`, with their defects recorded in that node's `§B` rather than smoothed
-over.
+`sherd tdd`, with their defects recorded in that node's `§B` rather than
+smoothed over.
 
 ## The name
 
