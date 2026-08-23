@@ -235,3 +235,105 @@ mod tests {
         let _: Vec<Violation> = check(SAMPLE);
     }
 }
+
+/// A `SPEC.md` skeleton for a directory, with `§F` rows for its children.
+///
+/// EMPTY WITH PROMPTS, and zero ids. A seeded `T1|.|replace me` is `T1`
+/// forever -- ids are monotonic and never reused (`.:V74`'s neighbour in
+/// FORMAT) -- and a `T1` citing a placeholder `V1` is a spec that lies from
+/// its first commit. Prompts are prose a human replaces; an id is a promise
+/// nothing can take back.
+///
+/// NO INFERENCE. `§G` is never guessed from the directory name, and an `§F`
+/// row's `owns`/`⊥owns` cells are prompts rather than a model's guess at what
+/// a directory is for -- §C keeps the deterministic core away from the model,
+/// and a scaffold that invents ownership is exactly the drift `sherd check`
+/// exists to catch.
+///
+/// FOUR SECTIONS, not seven. Absence is legal in FORMAT, an empty `§B`
+/// asserts nothing, and `§R` needs research nobody has done at scaffold time.
+/// What is here is what a node cannot be a node without: a goal, its
+/// children, its rules, and its remaining work.
+/// The `§F` table, or nothing.
+///
+/// NOTHING when there are no children, because an empty table is a CLAIM of
+/// no children rather than an absence of information, and a node that grows
+/// one later would have to notice the difference.
+fn federation_table(children: &[String]) -> String {
+    if children.is_empty() {
+        return String::new();
+    }
+    let mut s =
+        String::from("## \u{a7}F FEDERATION\n\ndir|owns|\u{22a5}owns|tokens\n");
+    for c in children {
+        s.push_str(&format!(
+            "{c}|WHAT IT OWNS|WHAT IT DOES \u{22a5} OWN, & WHERE THAT LIVES|-\n"
+        ));
+    }
+    s.push('\n');
+    s
+}
+
+#[must_use]
+pub fn scaffold(dir_name: &str, children: &[String]) -> String {
+    let mut s = String::from("# SPEC\n\n## \u{a7}G GOAL\n\n");
+    s.push_str(&format!(
+        "WHAT `{dir_name}` OWNS, in one sentence. Delete this line.\n\n"
+    ));
+    s.push_str(&federation_table(children));
+    s.push_str(
+        "## \u{a7}V INVARIANTS\n\n\
+         WHAT MUST STAY TRUE HERE, one line each, numbered from the first id. Delete this line.\n\n\
+         ## \u{a7}T TASKS\n\n\
+         id|status|task|cites\n",
+    );
+    s
+}
+
+#[cfg(test)]
+mod scaffold_tests {
+    use super::*;
+
+    /// The output is the first thing `check` must accept, because a
+    /// generator whose output its own checker rejects has shipped a second
+    /// dialect (`.:V27` dogfooding, one verb over).
+    #[test]
+    fn a_scaffold_passes_the_checker_that_gates_every_other_spec() {
+        let out = scaffold("src/lens", &["deep".to_string()]);
+        assert!(
+            check(&out).is_empty(),
+            "our own checker rejects our own scaffold: {:?}",
+            check(&out)
+        );
+    }
+
+    #[test]
+    fn a_childless_directory_gets_no_federation_table() {
+        let out = scaffold("src/leaf", &[]);
+        assert!(!out.contains("\u{a7}F"));
+        assert!(check(&out).is_empty());
+    }
+
+    /// Ids are monotonic and never reused, so a placeholder id is permanent.
+    /// The scaffold emits section headers and a table header, and not one
+    /// `V1`, `T1` or `B1`.
+    #[test]
+    fn a_scaffold_carries_no_ids_at_all() {
+        let out = scaffold("src/x", &["a".to_string(), "b".to_string()]);
+        for line in out.lines() {
+            assert!(
+                !line.starts_with("V1")
+                    && !line.starts_with("T1")
+                    && !line.starts_with("B1"),
+                "a seeded id is permanent: {line}"
+            );
+        }
+    }
+
+    #[test]
+    fn every_child_gets_a_row_naming_what_it_does_not_own() {
+        let out = scaffold("src", &["fed".to_string(), "lens".to_string()]);
+        assert!(out.contains("fed|WHAT IT OWNS|WHAT IT DOES \u{22a5} OWN"));
+        assert!(out.contains("lens|WHAT IT OWNS|WHAT IT DOES \u{22a5} OWN"));
+    }
+}

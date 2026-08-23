@@ -371,6 +371,7 @@ line fails the gate (`src/cli:V7`, after `src/cli:B2`).
 <!-- BEGIN commands -->
 | command | what it does |
 |---|---|
+| `sherd init [dir] [--stdout]` | scaffold a SPEC.md, §F rows from child dirs |
 | `sherd budget [dir]` | token cost of every node, against the working budget |
 | `sherd lens <dir> [--depth rule\|why\|all]` | the context pack for one node |
 | `sherd fed [dir]` | the federation edges declared by a node |
