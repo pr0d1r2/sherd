@@ -9,8 +9,8 @@
 
 [![gate hk](https://img.shields.io/badge/gate-hk-6E4AFF)](hk.pkl)
 [![gate steps 27](https://img.shields.io/badge/gate_steps-27-6E4AFF)](hk.pkl)
-[![coverage floor 92.0%](https://img.shields.io/badge/coverage_floor-%E2%89%A592.0%25-brightgreen)](.coverage)
-[![lint debt 14.4/KLoC](https://img.shields.io/badge/lint_debt-%E2%89%A414.4%2FKLoC-orange)](.lint-debt)
+[![coverage floor 92.1%](https://img.shields.io/badge/coverage_floor-%E2%89%A592.1%25-brightgreen)](.coverage)
+[![lint debt 14.5/KLoC](https://img.shields.io/badge/lint_debt-%E2%89%A414.5%2FKLoC-orange)](.lint-debt)
 [![federated nodes 18](https://img.shields.io/badge/federated_nodes-18-6E4AFF)](SPEC.md)
 
 [![nix flake](https://img.shields.io/badge/nix-flake-5277C3?logo=nixos&logoColor=white)](flake.nix)
@@ -393,6 +393,7 @@ line fails the gate (`src/cli:V7`, after `src/cli:B2`).
 | `sherd lens <dir> [--depth rule\|why\|all]` | the context pack for one node |
 | `sherd fed [dir]` | the federation edges declared by a node |
 | `sherd check [dir]` | microlith structural check of every node |
+| `sherd debt [--check\|--record]` | lint ratchet: density & shape vs .lint-debt |
 | `sherd validate` | DAG + ids + ceilings + slice drift, one verdict |
 | `sherd split [dir]` | propose a federation split. writes nothing |
 | `sherd sync [dir] [--check]` | regenerate §N from §F. exit 1 if it wrote |

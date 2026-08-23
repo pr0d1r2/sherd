@@ -265,8 +265,30 @@
 #   48 arithmetic are index expressions (`i + 1` for a 1-indexed line) and
 #     counters; `saturating_add` on a line counter is noise, not safety.
 #   98 too_many_lines is the SHAPE ratchet's business, not this one.
-density 14.4
-shape 9.2
-count 253
-excess 1614
-loc 17472
+#
+# RAISED 14.4 -> 14.5 and 9.2 -> 9.5% on 2026-08-24 for `src/debt:T1` -- the
+# gate now CALLS `sherd debt` instead of re-deriving the ratchet in awk.
+#
+# The trade is 47 lines of shell in `hk.pkl` for ~200 lines of Rust that the
+# ratio measures. Shell is not counted and Rust is, so moving a rule from one
+# to the other RAISES the number while removing a reading. That is the honest
+# cost of the fix and it is recorded rather than absorbed.
+#
+# What was paid rather than recorded: `verdict` and `record` were split into
+# `breach_density`, `breach_shape` and `restate`; `debt_cmd` gave up its
+# `--record` branch; and the standalone `density()` was DELETED once
+# `Measured::density()` existed -- two ways to compute one number, in the node
+# that exists to stop exactly that, introduced by me and caught on the first
+# measurement after.
+#
+# The shape half is the TESTS: `debt` and the new verb are covered by
+# fixtures that build a tree, script a toolchain and assert on a written
+# file, and each is one measurement that cannot be shortened without
+# splitting the claim it makes. Two WERE split -- the missing-ratchet case
+# and the broken-build case each earned their own name -- and the rest is
+# recorded. Coverage went 92.07 -> 92.14 buying it.
+density 14.5
+shape 9.5
+count 262
+excess 1710
+loc 17976

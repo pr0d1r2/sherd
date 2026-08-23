@@ -910,7 +910,8 @@ pub(crate) fn lint_debt_ok(root: &Path, cargo: &str) -> (bool, String) {
     let Some(was) = crate::debt::recorded(root) else {
         return (true, String::new());
     };
-    let Some(now) = crate::debt::density(root, cargo) else {
+    let Some(now) = crate::debt::measure(root, cargo).map(|m| m.density())
+    else {
         return (true, String::new());
     };
     let ok = now <= was;

@@ -21,6 +21,7 @@ sherd -- federated SPEC.md for small-context local models
   sherd lens <dir> [--depth rule|why|all]  the context pack for one node
   sherd fed [dir]        the federation edges declared by a node
   sherd check [dir]      microlith structural check of every node
+  sherd debt [--check|--record]  lint ratchet: density & shape vs .lint-debt
   sherd validate         DAG + ids + ceilings + slice drift, one verdict
   sherd split [dir]      propose a federation split. writes nothing
   sherd sync [dir] [--check]  regenerate §N from §F. exit 1 if it wrote
@@ -67,6 +68,11 @@ pub fn run_args(mut args: Vec<String>) -> ExitCode {
     crate::ollama::load_pace();
     match args.first().map(String::as_str) {
         Some("budget") => budget(&root, arg_dir(&args, &root)),
+        Some("debt") => debt_cmd(
+            &root,
+            args.get(1).map(String::as_str),
+            &crate::land::cargo_bin(),
+        ),
         Some("lens") => match (args.get(1), depth_arg(&args)) {
             // B9: this passed `PathBuf::from(d)` while `budget` and `fed`
             // went through `arg_dir`, so it never got T10's root resolution
@@ -637,6 +643,55 @@ fn usage(msg: &str) -> ExitCode {
 /// Working budget on the confirmed target tier: gpt-oss:20b at its full
 /// 131,072 window, minus measured harness entry cost.
 const WINDOW: u64 = 131_072;
+
+/// `--record`: bring `.lint-debt`'s numbers current, refusing a raise.
+fn record_debt(root: &Path, now: crate::debt::Measured) -> ExitCode {
+    match crate::debt::record(root, now) {
+        Ok(msg) => {
+            println!("{msg}");
+            ExitCode::SUCCESS
+        }
+        Err(e) => {
+            eprintln!("sherd: {e}");
+            ExitCode::from(1)
+        }
+    }
+}
+
+/// `sherd debt [--check|--record]` -- the ratchet, as `hk` runs it.
+///
+/// The gate CALLS this instead of re-deriving the formula in awk. It was
+/// stated three times before -- twice in `hk.pkl`, once in `src/land` -- and
+/// the Rust copy diverged on all three of its inputs at once
+/// (`src/debt:B6`). One caller cannot disagree with itself.
+fn debt_cmd(root: &Path, mode: Option<&str>, cargo: &str) -> ExitCode {
+    let Some(now) = crate::debt::measure(root, cargo) else {
+        eprintln!(
+            "sherd: clippy did not COMPILE, so its count is not a \
+             measurement -- a target that fails to build emits no warnings \
+             at all (sherd/debt:V3)."
+        );
+        return ExitCode::from(2);
+    };
+    let Some(was) = crate::debt::recorded_ceilings(root) else {
+        eprintln!("sherd: .lint-debt has no `density`/`shape` rows to read");
+        return ExitCode::from(2);
+    };
+    if mode == Some("--record") {
+        return record_debt(root, now);
+    }
+    let (ok, report) = crate::debt::verdict(now, was);
+    if ok {
+        println!("{report}");
+    } else {
+        eprintln!("{report}");
+    }
+    if ok {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::from(1)
+    }
+}
 
 fn budget(root: &Path, dir: PathBuf) -> ExitCode {
     let work = tokens::working(WINDOW);
@@ -1608,6 +1663,69 @@ mod tests {
         r.write("src/tiny.rs", "pub fn f() -> u8 { 1 }\n")?;
         r.commit("one small file")?;
         assert!(file_ceilings(r.path()).is_empty());
+        Ok(())
+    }
+
+    /// `sherd debt` end to end, over a scripted toolchain: `SHERD_CARGO` is
+    /// what makes the verb testable at all, and a verb the gate runs on every
+    /// commit that no test can reach is a verb nobody has checked.
+    ///
+    /// Serial, because `SHERD_CARGO` is process-wide.
+    #[test]
+    fn the_debt_verb_checks_records_and_refuses() -> Result<(), String> {
+        let r = crate::testrepo::TestRepo::new("cli-debt")?;
+        r.write("SPEC.md", "# SPEC\n\n## \u{a7}G GOAL\n\ndebt\n")?;
+        r.write("src/a.rs", &"fn f() {}\n".repeat(100))?;
+        r.write(
+            ".lint-debt",
+            "# the reason\ndensity 20.0\nshape 25.0\ncount 0\nexcess 0\nloc 0\n",
+        )?;
+        r.commit("a tree with a ratchet")?;
+        let fake = r.path().join("fake-cargo");
+        std::fs::write(
+            &fake,
+            "#!/bin/sh\necho 'src/a.rs:1:1: warning: too many lines (35/15)' >&2\nexit 0\n",
+        )
+        .map_err(|e| e.to_string())?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(
+                &fake,
+                std::fs::Permissions::from_mode(0o755),
+            )
+            .map_err(|e| e.to_string())?;
+        }
+        let fake = fake.display().to_string();
+
+        // 1 warning over 100 lines is 10.0 per KLoC, and 20 excess lines is
+        // 20.0% -- both under the recorded ceilings.
+        assert_eq!(
+            debt_cmd(r.path(), Some("--check"), &fake),
+            ExitCode::SUCCESS
+        );
+        // `--record` brings it current and keeps the reason.
+        assert_eq!(
+            debt_cmd(r.path(), Some("--record"), &fake),
+            ExitCode::SUCCESS
+        );
+        let after = std::fs::read_to_string(r.path().join(".lint-debt"))
+            .unwrap_or_default();
+        assert!(after.contains("density 10.0"), "{after}");
+        assert!(after.contains("shape 20.0"), "{after}");
+        assert!(after.contains("# the reason"), "the reason survives");
+        // Recorded at 10.0, so recording again is a no-op and still passes.
+        assert_eq!(
+            debt_cmd(r.path(), Some("--check"), &fake),
+            ExitCode::SUCCESS
+        );
+        // A tree with no `.lint-debt` is a usage error, not a clean bill.
+        let _ = std::fs::remove_file(r.path().join(".lint-debt"));
+        assert_eq!(
+            debt_cmd(r.path(), Some("--check"), &fake),
+            ExitCode::from(2)
+        );
+
         Ok(())
     }
 
