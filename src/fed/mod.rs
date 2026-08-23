@@ -308,19 +308,25 @@ fn disp(p: &Path) -> String {
 }
 /// Return `true` if the directory name should be ignored by the walker.
 ///
-/// The repository contains a handful of directories that are not part of the
-/// source tree and should never be traversed: `target`, `.git`,
-/// `node_modules`, and `.direnv`.  All other names are considered valid.
+/// BUILD OUTPUT and TOOLING, never a federation node. The list was tuned to
+/// this repository and `.:B19` is what that cost: run against `rekall`, the
+/// checker advised `§F` rows for `result/` -- a nix build symlink -- and
+/// `pkl/`, a vendored schema every repo in the fleet carries. Neither is
+/// source, in any repository, and advising a row for them tells a stranger
+/// to federate their build directory.
 pub fn is_ignored_dir(name: &str) -> bool {
     matches!(
         name,
         "target" | ".git" | "node_modules" | ".direnv"
+        // `nix build` leaves `result` (and `result-<n>` for multiple outputs)
+        // as symlinks into the store. `pkl` is the vendored hk schema.
+        | "result" | "pkl" | "vendor"
         // SUPERVISOR assets: instructions for the higher agent. They must
         // never become federation nodes, because a node's SPEC.md reaches the
         // local model's prompt and supervisor instructions are not for it
         // (V13). Excluded by discovery, not by convention.
         | ".claude" | ".github" | ".codex" | ".githooks"
-    )
+    ) || name.starts_with("result-")
 }
 pub fn find_exhaustive_violations<'a>(
     edges: &'a [Edge],

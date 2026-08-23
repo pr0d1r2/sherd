@@ -22,6 +22,7 @@ sherd -- federated SPEC.md for small-context local models
   sherd fed [dir]        the federation edges declared by a node
   sherd check [dir]      microlith structural check of every node
   sherd validate         DAG + ids + ceilings + slice drift, one verdict
+  sherd split [dir]      propose a federation split. writes nothing
   sherd sync [dir] [--check]  regenerate §N from §F. exit 1 if it wrote
   sherd route <query>    which node owns a question. 0 hit · 2 miss · 3 ambiguous
   sherd review [rev]     mechanical checks on what a commit added (default HEAD)
@@ -89,6 +90,15 @@ pub fn run_args(mut args: Vec<String>) -> ExitCode {
         }
         Some("check") => check(&root),
         Some("validate") => validate(&root),
+        Some("split") => {
+            let apply = args.iter().any(|a| a == "--apply");
+            let dir = args.get(1).filter(|a| !a.starts_with("--"));
+            split_cmd(
+                &root,
+                &dir.map_or_else(|| root.clone(), |d| root.join(d)),
+                apply,
+            )
+        }
         Some("sync") => {
             let check = args.iter().any(|a| a == "--check");
             let dir = args.get(1).filter(|a| !a.starts_with("--"));
@@ -304,6 +314,77 @@ fn init_dir(root: &Path, args: &[String]) -> PathBuf {
         .skip(1)
         .find(|a| !a.starts_with("--"))
         .map_or_else(|| root.to_path_buf(), |d| root.join(d))
+}
+
+/// `sherd split <dir> [--apply]` -- propose a federation split, write nothing.
+///
+/// A PROPOSAL, and the refusal to write without `--apply` is the point: which
+/// module owns which rule is a judgement, and a tool that moved spec rows on
+/// its own would be rewriting law it cannot read. `--apply` is not built, and
+/// says so rather than silently doing nothing.
+fn split_cmd(root: &Path, dir: &Path, apply: bool) -> ExitCode {
+    if apply {
+        eprintln!(
+            "sherd: --apply is not built. `split` proposes; moving rows between \
+             specs is a judgement a reader makes."
+        );
+        return ExitCode::from(2);
+    }
+    if !dir.join("SPEC.md").is_file() {
+        eprintln!("sherd: {} carries no SPEC.md", dir.display());
+        return ExitCode::from(2);
+    }
+    let (cost, ceiling) = split_budget(root, dir);
+    println!("{}: chain {cost} tok of {ceiling}", node_label(root, dir));
+
+    let found = plan::candidates(root, dir);
+    if found.is_empty() {
+        println!("  nothing to promote -- every module here is already a node");
+        return ExitCode::SUCCESS;
+    }
+    print_candidates(&found);
+    println!(
+        "\n  {} candidate(s). `rows` are the spec lines naming that module, \
+         which its own SPEC.md would carry -- a line naming two modules is \
+         counted for both, so the columns overlap and do not sum to the \
+         chain.",
+        found.len()
+    );
+    ExitCode::SUCCESS
+}
+
+/// A node's path relative to root, with the root itself as `.` rather than
+/// the empty string it strips to.
+fn node_label(root: &Path, dir: &Path) -> String {
+    let rel = dir.strip_prefix(root).unwrap_or(dir).display().to_string();
+    if rel.is_empty() { ".".to_string() } else { rel }
+}
+
+/// The proposal table. What a promotion COSTS the reader is the last column:
+/// a flat module has to become a directory first, and a module that is both
+/// a file and a directory has to be merged before either can carry a spec.
+fn print_candidates(found: &[plan::Candidate]) {
+    println!("\n  module         rows   tok  promote with");
+    for c in found {
+        let how = if c.split_layout {
+            format!("MERGE {n}.rs into {n}/mod.rs first", n = c.name)
+        } else if c.is_dir {
+            format!("sherd init {}", c.name)
+        } else {
+            format!("mv {n}.rs {n}/mod.rs && sherd init {n}", n = c.name)
+        };
+        println!("  {:<14} {:>4}  {:>4}  {how}", c.name, c.rows, c.tokens);
+    }
+}
+
+/// A node's chain cost and the ceiling it inherits, or zeroes when either
+/// cannot be read -- `budget` is the verb that reports why.
+fn split_budget(root: &Path, dir: &Path) -> (u64, u64) {
+    let cost = lens::pack(root, dir, lens::Depth::Rule)
+        .map(|p| p.cost.tokens)
+        .unwrap_or_default();
+    let ceiling = lens::ceiling_for(root, dir).unwrap_or_default();
+    (cost, ceiling)
 }
 
 /// `sherd sync [dir]` -- regenerate `§N` from the `§F` tables above it.
@@ -667,16 +748,29 @@ fn route_cmd(root: &Path, query: &str) -> ExitCode {
             );
             ExitCode::SUCCESS
         }
-        plan::Route::Miss => route_miss(),
+        plan::Route::Miss => route_miss(root),
         plan::Route::Ambiguous(nodes) => route_ambiguous(root, &nodes),
     }
 }
 
 /// A miss is REPORTED, and points at the table that lists what exists.
-fn route_miss() -> ExitCode {
-    println!(
-        "no node matched. `sherd graph --table` lists what each one owns."
-    );
+///
+/// An UNFEDERATED repository is a different answer wearing the same exit
+/// code: with only a root node there is nothing `route` can ever return,
+/// because the root owns everything and therefore answers nothing. Saying
+/// "no node matched" there sends the asker off to rephrase a query that
+/// could not have succeeded (`.:B19`, found on a foreign repository).
+fn route_miss(root: &Path) -> ExitCode {
+    if fed::discover(root).len() <= 1 {
+        println!(
+            "this repository has one node, so there is nothing to route to. \
+             `sherd init <dir>` starts a federation."
+        );
+    } else {
+        println!(
+            "no node matched. `sherd graph --table` lists what each one owns."
+        );
+    }
     ExitCode::from(2)
 }
 
@@ -1579,6 +1673,47 @@ mod tests {
         assert_eq!(route_cmd(root, "sprockets"), ExitCode::SUCCESS);
         assert_eq!(route_cmd(root, "wombat"), ExitCode::from(2));
         assert_eq!(route_cmd(root, "widgets gizmos"), ExitCode::from(3));
+    }
+
+    /// `split` PROPOSES and never writes, which is the property worth
+    /// pinning: `--apply` refuses, and a federated node has nothing left to
+    /// promote so the table is empty rather than noise.
+    #[test]
+    fn split_proposes_and_refuses_to_apply() {
+        let repo = routing_fixture("cli-split");
+        let root = repo.path();
+        // `alpha` and `beta` are nodes already; a flat module is not.
+        let Ok(()) =
+            std::fs::write(root.join("gamma.rs"), "pub fn gamma() {}\n")
+        else {
+            unreachable!("a module file is writable")
+        };
+        write_spec(root, "alpha", "widgets and sprockets");
+        let Ok(spec) = std::fs::read_to_string(root.join("SPEC.md")) else {
+            unreachable!("the fixture spec is readable")
+        };
+        let Ok(()) = std::fs::write(
+            root.join("SPEC.md"),
+            format!("{spec}\nV1: gamma holds the gamma rule\n"),
+        ) else {
+            unreachable!("the fixture spec is writable")
+        };
+
+        assert_eq!(split_cmd(root, root, true), ExitCode::from(2), "--apply");
+        assert_eq!(split_cmd(root, root, false), ExitCode::SUCCESS);
+        // Proposing must not have written anything.
+        assert!(!root.join("gamma").exists(), "split created a directory");
+    }
+
+    /// A node with no `SPEC.md` is a usage error, not an empty proposal.
+    #[test]
+    fn split_on_a_directory_with_no_spec_is_usage() {
+        let repo = routing_fixture("cli-split-nospec");
+        let bare = repo.path().join("bare");
+        let Ok(()) = std::fs::create_dir_all(&bare) else {
+            unreachable!("a dir is creatable")
+        };
+        assert_eq!(split_cmd(repo.path(), &bare, false), ExitCode::from(2));
     }
 
     /// `sync` is idempotent, `--check` never writes, and a stale `§N` is
