@@ -950,6 +950,40 @@ fn dangling_citations(root: &Path, text: &str) -> Vec<String> {
     out
 }
 
+/// `.:V50` -- the per-file code and test ceilings, measured at last.
+///
+/// Reports as kind `judgment`, which `§I` defines as the finding whose call
+/// belongs to the reader: a file over the limit is a design question, not a
+/// defect, and the same wording that made `review` advisory applies. It is
+/// NOT fatal, and `.:B23` records why -- eleven of fourteen nodes sit over
+/// the test ceiling, which says 2,000 was set before the suite reached this
+/// size. Re-derive that number before this refuses a commit.
+///
+/// Counted SEPARATELY per `§V50`, never as one ceiling over both.
+fn file_ceilings(root: &Path) -> Vec<String> {
+    let mut out = Vec::new();
+    for f in fed::rust_files(root) {
+        let Ok(src) = std::fs::read_to_string(&f) else {
+            continue;
+        };
+        let (impl_r, tests_r) = crate::code::split_module(&src);
+        let rel = f.strip_prefix(root).unwrap_or(&f).display().to_string();
+        for (half, text, ceiling) in [
+            ("code", impl_r, tokens::CEILING_FILE),
+            ("tests", tests_r, tokens::CEILING_TEST),
+        ] {
+            let n = tokens::count(text).tokens;
+            if n > ceiling {
+                out.push(format!(
+                    "{rel}: sherd/V50: {half} {n} tok over {ceiling} -- \
+                     the node carries more than one worker can hold (judgment)"
+                ));
+            }
+        }
+    }
+    out
+}
+
 fn check(root: &Path) -> ExitCode {
     let nodes = fed::discover(root);
     let mut bad: usize = 0;
@@ -1012,6 +1046,19 @@ fn check(root: &Path) -> ExitCode {
             );
         }
     }
+    // `.:V50` at last (`.:T105`). Reported once for the whole tree rather
+    // than per node: the ceiling is per FILE (`.:V119`), and a file belongs
+    // to exactly one node, so walking nodes would visit each twice.
+    let over = file_ceilings(root);
+    for v in &over {
+        println!("{v}");
+    }
+    // `.:V48`: state what was EXAMINED, not only what failed.
+    println!(
+        "\n  {} .rs files measured against V50 · {} over ceiling (advisory)",
+        fed::rust_files(root).len(),
+        over.len()
+    );
     println!("\n  {} nodes examined · {bad} violations", nodes.len());
     if bad > 0 {
         ExitCode::from(1)
@@ -1512,6 +1559,54 @@ mod tests {
         )?;
         r.commit("a clean tree")?;
         assert_eq!(check(r.path()), ExitCode::SUCCESS);
+        Ok(())
+    }
+
+    /// `.:V50`: the two halves are counted SEPARATELY, never as one ceiling
+    /// over both. A tiny implementation with a large suite is a different
+    /// thing from the reverse, and one number over the pair cannot tell them
+    /// apart -- so this fixture is exactly that shape.
+    #[test]
+    fn the_code_and_test_halves_have_their_own_ceilings() -> Result<(), String>
+    {
+        let r = crate::testrepo::TestRepo::new("cli-v50")?;
+        r.write("SPEC.md", "# SPEC\n\n## \u{a7}G GOAL\n\nceilings\n")?;
+        let big = "    assert_eq!(one_plus_one(), 2, \"a wordy message\");\n"
+            .repeat(400);
+        r.write(
+            "src/small.rs",
+            &format!(
+                "pub fn one_plus_one() -> u32 {{ 2 }}\n\
+                 #[cfg(test)]\nmod t {{\n use super::*;\n #[test]\n \
+                 fn a() {{\n{big}}}\n}}\n"
+            ),
+        )?;
+        r.commit("a small impl and a large suite")?;
+        let found = file_ceilings(r.path());
+        assert_eq!(found.len(), 1, "one half over, not both: {found:?}");
+        let Some(one) = found.first() else {
+            unreachable!("just asserted a length of one")
+        };
+        assert!(
+            one.contains("tests"),
+            "the TEST half is the one over: {one}"
+        );
+        assert!(
+            one.contains("(judgment)"),
+            "kind is judgment -- the call is the reader's: {one}"
+        );
+        Ok(())
+    }
+
+    /// A file inside both ceilings reports nothing at all -- the check must
+    /// not fire on every file merely for existing.
+    #[test]
+    fn a_file_within_both_ceilings_is_silent() -> Result<(), String> {
+        let r = crate::testrepo::TestRepo::new("cli-v50-quiet")?;
+        r.write("SPEC.md", "# SPEC\n\n## \u{a7}G GOAL\n\nquiet\n")?;
+        r.write("src/tiny.rs", "pub fn f() -> u8 { 1 }\n")?;
+        r.commit("one small file")?;
+        assert!(file_ceilings(r.path()).is_empty());
         Ok(())
     }
 

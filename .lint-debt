@@ -243,8 +243,8 @@
 # That is the argument for the shape ratchet from the other end: the long
 # function was not merely hard to read, it was where the unsafe indexing
 # lived, and splitting it removed both.
-density 15.5
-shape 9.1
-count 259
-excess 1531
-loc 16645
+density 15.6
+shape 9.3
+count 263
+excess 1566
+loc 16813

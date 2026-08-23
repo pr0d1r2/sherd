@@ -371,6 +371,35 @@ pub fn find_exhaustive_violations<'a>(
     (duplicates, missing)
 }
 
+/// Every `.rs` file under a directory, sorted, so a report is stable.
+///
+/// `target` and hidden directories are skipped: a build product is not source
+/// and a ceiling over it measures the compiler.
+#[must_use]
+pub fn rust_files(dir: &Path) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    collect_rust(dir, &mut out);
+    out.sort();
+    out
+}
+
+fn collect_rust(dir: &Path, out: &mut Vec<PathBuf>) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for e in entries.filter_map(Result::ok) {
+        let p = e.path();
+        let name = e.file_name().to_string_lossy().to_string();
+        if p.is_dir() {
+            if name != "target" && !name.starts_with('.') {
+                collect_rust(&p, out);
+            }
+        } else if p.extension().is_some_and(|x| x == "rs") {
+            out.push(p);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -886,5 +915,35 @@ mod nav_tests {
             nav_section(&rows),
             "## \u{a7}N NAV\n\nrel|path|lens\nself|.|-\n"
         );
+    }
+
+    /// The walk finds nested files and skips what is not source: a build
+    /// product is not code, and a ceiling over `target/` measures the
+    /// compiler. Sorted, so a report is stable between runs.
+    #[test]
+    fn the_walk_finds_nested_source_and_skips_build_output() {
+        let dir = std::env::temp_dir()
+            .join(format!("sherd-walk-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        for sub in ["src/deep", "target/debug", ".git"] {
+            let _ = std::fs::create_dir_all(dir.join(sub));
+        }
+        for f in [
+            "src/a.rs",
+            "src/deep/b.rs",
+            "target/debug/c.rs",
+            ".git/d.rs",
+            "src/notes.md",
+        ] {
+            let _ = std::fs::write(dir.join(f), "fn f() {}\n");
+        }
+        let found: Vec<String> = rust_files(&dir)
+            .iter()
+            .filter_map(|p| {
+                Some(p.strip_prefix(&dir).ok()?.display().to_string())
+            })
+            .collect();
+        assert_eq!(found, vec!["src/a.rs", "src/deep/b.rs"], "{found:?}");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
