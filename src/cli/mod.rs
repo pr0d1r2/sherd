@@ -819,8 +819,19 @@ fn fed_cmd(dir: &Path) -> ExitCode {
         eprintln!("sherd: no SPEC.md at {}", dir.display());
         return ExitCode::from(2);
     };
-    for e in fed::edges(&text) {
+    let edges = fed::edges(&text);
+    for e in &edges {
         println!("{:<16} {:<40} not: {}", e.dir, e.owns, e.not_owns);
+    }
+    // `.:V48`: state what was EXAMINED. An unfederated spec printed NOTHING
+    // and exited 0, which reads as "no problems" rather than "no §F table"
+    // -- the shape `src/fed:B6` records, met on a stranger (`B6` here).
+    if edges.is_empty() {
+        println!(
+            "{}: no §F table -- this node federates nothing. \
+             `sherd split` proposes where the boundaries are.",
+            dir.display()
+        );
     }
     ExitCode::SUCCESS
 }
@@ -1365,8 +1376,17 @@ fn review_cmd(root: &Path, rev: &str) -> ExitCode {
 }
 
 fn slice_cmd(root: &Path, mode: &str) -> ExitCode {
-    let decls = match std::fs::read_to_string(root.join(".sherd-slices"))
-        .map_err(|e| e.to_string())
+    let registry = root.join(".sherd-slices");
+    // `V12`: ABSENCE is not a finding. A repo with no registry has no slices
+    // to drift, and the raw `No such file or directory (os error 2)` named
+    // neither the file nor the fact that it is OPTIONAL -- `validate` has
+    // said "none required" for this same condition all along (`B6`).
+    if !registry.is_file() {
+        println!("slice: no registry (none required)");
+        return ExitCode::SUCCESS;
+    }
+    let decls = match std::fs::read_to_string(&registry)
+        .map_err(|e| format!("{}: {e}", registry.display()))
         .and_then(|t| slice::parse_decls(&t))
     {
         Ok(d) => d,
@@ -1708,11 +1728,32 @@ mod tests {
         Ok(())
     }
 
-    /// `sherd debt` end to end, over a scripted toolchain: `SHERD_CARGO` is
-    /// what makes the verb testable at all, and a verb the gate runs on every
+    /// `B6`: every verb must be run against a repo that has NONE of the thing
+    /// it looks for. Our own tree has all of them, so ABSENCE is the case only
+    /// a stranger tests -- and both of these were found on one.
+    #[test]
+    fn absence_is_reported_and_is_not_a_failure() -> Result<(), String> {
+        let r = crate::testrepo::TestRepo::new("cli-absence")?;
+        r.write("SPEC.md", "# SPEC\n\n## \u{a7}G GOAL\n\nnothing here\n")?;
+        r.commit("a repo with no §F and no slice registry")?;
+
+        // No `.sherd-slices` is "none required", never a bare OS error.
+        assert_eq!(slice_cmd(r.path(), "--list"), ExitCode::SUCCESS);
+        assert_eq!(slice_cmd(r.path(), "--check"), ExitCode::SUCCESS);
+
+        // No `§F` table says so rather than printing nothing at all
+        // (`.:V48`).
+        assert_eq!(fed_cmd(r.path()), ExitCode::SUCCESS);
+
+        // And a dir with no spec at all is still a usage error, not silence.
+        assert_eq!(fed_cmd(&r.path().join("nowhere")), ExitCode::from(2));
+        Ok(())
+    }
+
+    /// `sherd debt` end to end, over a scripted toolchain: the toolchain is a
+    /// PARAMETER, which is what makes the verb testable at all -- `tdd::Run`
+    /// carries `cargo` for the same reason. A verb the gate runs on every
     /// commit that no test can reach is a verb nobody has checked.
-    ///
-    /// Serial, because `SHERD_CARGO` is process-wide.
     #[test]
     fn the_debt_verb_checks_records_and_refuses() -> Result<(), String> {
         let r = crate::testrepo::TestRepo::new("cli-debt")?;
@@ -1761,13 +1802,21 @@ mod tests {
             debt_cmd(r.path(), Some("--check"), &fake),
             ExitCode::SUCCESS
         );
-        // A tree with no `.lint-debt` is a usage error, not a clean bill.
-        let _ = std::fs::remove_file(r.path().join(".lint-debt"));
+        Ok(())
+    }
+
+    /// A tree with no ratchet is a USAGE error, never a clean bill: absence
+    /// must not read as "zero allowed" (`sherd/debt:V3`).
+    #[test]
+    fn a_tree_with_no_ratchet_is_a_usage_error() -> Result<(), String> {
+        let r = crate::testrepo::TestRepo::new("cli-debt-none")?;
+        r.write("SPEC.md", "# SPEC\n\n## \u{a7}G GOAL\n\nnone\n")?;
+        r.write("src/a.rs", "fn f() {}\n")?;
+        r.commit("no ratchet here")?;
         assert_eq!(
-            debt_cmd(r.path(), Some("--check"), &fake),
+            debt_cmd(r.path(), Some("--check"), "true"),
             ExitCode::from(2)
         );
-
         Ok(())
     }
 
