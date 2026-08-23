@@ -44,6 +44,8 @@ pub enum Kind {
     NotAFunction,
     /// A root-level row: no `mod.rs` to add anything to.
     NoModule,
+    /// In a node the root spec declares FROZEN (`.:V117`).
+    Frozen,
 }
 
 impl Kind {
@@ -63,8 +65,29 @@ impl Kind {
                 "no new function to add -- edits specs or wiring"
             }
             Kind::NoModule => "root row -- no mod.rs to add to",
+            Kind::Frozen => "node FROZEN by the root spec until its rung lands",
         }
     }
+}
+
+/// Nodes the root spec declares FROZEN, derived rather than listed.
+///
+/// `.:V117` freezes the model half until rung 0.7, and `plan` offered
+/// `src/ollama` T3 as a step anyway -- work the spec forbids, ranked and
+/// recommended (B16). The list is read from the row that declares it and
+/// resolved against the tree, so a node added to or removed from the freeze
+/// needs no edit here: `V15` records what a hardcoded vocabulary costs.
+#[must_use]
+pub fn frozen_nodes(root: &Path) -> Vec<PathBuf> {
+    let Ok(text) = std::fs::read_to_string(root.join("SPEC.md")) else {
+        return Vec::new();
+    };
+    text.lines()
+        .filter(|l| l.contains("FROZEN"))
+        .flat_map(|l| l.split('`').skip(1).step_by(2))
+        .map(|p| root.join(p))
+        .filter(|p| p.join("SPEC.md").is_file())
+        .collect()
 }
 
 /// Classify by what the loop would have to touch. Deliberately conservative:
@@ -265,9 +288,18 @@ pub fn plan(root: &Path) -> Plan {
     let mut steps = Vec::new();
     let mut unmanaged = Vec::new();
     let st = crate::state::State::load();
+    let frozen = frozen_nodes(root);
     let mut candidates = Vec::new();
     for t in all {
-        let k = classify(&root.join(&t.node), &t.text);
+        let dir = root.join(&t.node);
+        // A frozen node is unmanaged whatever the row says: the freeze is
+        // root POLICY, not a property of the text, so no amount of reading
+        // the row can reach it (B16).
+        let k = if frozen.contains(&dir) {
+            Kind::Frozen
+        } else {
+            classify(&dir, &t.text)
+        };
         if k.actionable() && already_applied(&st, &t) {
             continue; // idempotent: same row, same text, already done
         }
@@ -446,6 +478,50 @@ mod tests {
             classify(&n, "`§N` derive from parent `§F`"),
             Kind::MultiFile
         );
+    }
+
+    /// `B16`: `plan` recommended `src/ollama` T3 as a step while `.:V117`
+    /// freezes that node until rung 0.7. The freeze is root POLICY, so no
+    /// amount of reading the row's text can reach it.
+    ///
+    /// Derived from the row that declares it, not listed: `V15` records what
+    /// a hardcoded vocabulary costs -- it knew nine of seventeen nodes and
+    /// silently missed every node added after it was written.
+    #[test]
+    fn a_frozen_node_is_never_offered_as_a_step() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let frozen = frozen_nodes(root);
+        assert!(
+            frozen.contains(&root.join("src/ollama")),
+            "the root spec freezes the model half: {frozen:?}"
+        );
+        let p = plan(root);
+        for s in &p.steps {
+            assert!(
+                !frozen.contains(&root.join(&s.node)),
+                "{} is frozen and was offered as a step",
+                s.node.display()
+            );
+        }
+        // Listed, not hidden -- `V3` says silence would read as coverage.
+        assert!(
+            p.unmanaged.iter().any(|(_, k)| *k == Kind::Frozen),
+            "frozen rows are reported with their reason"
+        );
+    }
+
+    /// The list resolves against the TREE, so a name in the row that is not a
+    /// node cannot silently freeze nothing -- or everything.
+    #[test]
+    fn the_freeze_names_only_real_nodes() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        for f in frozen_nodes(root) {
+            assert!(
+                f.join("SPEC.md").is_file(),
+                "{} is not a node",
+                f.display()
+            );
+        }
     }
 
     #[test]
