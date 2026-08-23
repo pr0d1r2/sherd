@@ -15,6 +15,7 @@
 //! end.
 
 mod badge;
+mod commands;
 mod select;
 
 use badge::Outcome;
@@ -142,6 +143,7 @@ fn blocks(root: &Path, nodes: usize) -> Result<badge::Blocks, String> {
             format!("```mermaid\n{}```\n", bbx::fed::mermaid(root)),
         ),
         ("graph-table".to_string(), bbx::fed::table(root)),
+        ("commands".to_string(), commands::render(bbx::cli::USAGE)),
     ])
 }
 
@@ -164,6 +166,28 @@ fn readme(check_only: bool, paths: &[String]) -> ExitCode {
     // reimplementing a rule that already has an owner, and the DAG this badge
     // reports is exactly what `fed::discover` enumerates.
     let nodes = bbx::fed::discover(&root).len();
+
+    // `src/cli:V7`, and the runner `src/cli:B2` never had: usage names EVERY
+    // verb that dispatches. It lives here rather than in a test because the
+    // comparison needs the dispatch SOURCE beside the const -- and the
+    // Commands table below is rendered from that same const, so one command
+    // keeps both halves of the contract.
+    match read(&root, "src/cli/mod.rs") {
+        Ok(src) => {
+            let missing = commands::undocumented(bbx::cli::USAGE, &src);
+            if !missing.is_empty() {
+                eprintln!(
+                    "bbx-dev: dispatched and named in no usage line (src/cli:V7): {}",
+                    missing.join(", ")
+                );
+                return ExitCode::from(1);
+            }
+        }
+        Err(e) => {
+            eprintln!("{e}");
+            return ExitCode::from(1);
+        }
+    }
     let outcome = blocks(&root, nodes).and_then(|b| {
         let text = read(&root, "README.md")?;
         let scoped: badge::Blocks = b

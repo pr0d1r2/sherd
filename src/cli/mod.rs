@@ -8,7 +8,12 @@ use crate::{fed, lens, plan, slice, spec, state, tokens};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-const USAGE: &str = "\
+/// The verb list, and the SOURCE the README's Commands section is generated
+/// from (`dev:T2`). Public so `bbx-dev` reads the text this binary actually
+/// prints rather than a second copy of it: two lists of one command set is
+/// the founding defect §C names, and `B2` is what it costs -- `oneshot`
+/// dispatched for weeks while appearing in no usage.
+pub const USAGE: &str = "\
 bbx -- federated SPEC.md for small-context local models
 
   bbx budget [dir]     token cost of every node, against the working budget
