@@ -396,9 +396,23 @@ fn node_label(root: &Path, dir: &Path) -> String {
 /// there means the spec never mentions a module the author already split
 /// out, which is a gap in the spec and not a reason to skip the node.
 fn print_structure(proposed: &[plan::Proposed], spec: &str) {
+    // Heaviest FIRST. The evidence grade discriminates in ONE of six
+    // repositories measured -- `itok` -- and in the other five every module
+    // carries the same grade, which leaves the row weight as the only signal
+    // present. Alphabetical order threw it away: `metope` spans 0 to 58 rows
+    // and put its 58-row node first by luck of the letter b (`plan:B16`).
+    let mut ranked: Vec<(&plan::Proposed, (usize, u64))> = proposed
+        .iter()
+        .map(|p| (p, plan::row_weight(spec, &p.name)))
+        .collect();
+    ranked.sort_by(|a, b| {
+        b.1.0
+            .cmp(&a.1.0)
+            .then_with(|| a.0.evidence.cmp(&b.0.evidence))
+            .then_with(|| a.0.name.cmp(&b.0.name))
+    });
     println!("\n  node           evidence    rows   tok  members");
-    for p in proposed {
-        let (rows, tokens) = plan::row_weight(spec, &p.name);
+    for (p, (rows, tokens)) in ranked {
         let members = if p.members.len() > 1 {
             format!("{} ({})", p.members.len(), p.members.join(" "))
         } else {
@@ -438,6 +452,15 @@ fn print_structure(proposed: &[plan::Proposed], spec: &str) {
          weakest reason to promote one. Grouping those is a judgement this \
          does not make."
     );
+    // A grade every module shares ranks nothing. Say so, or a reader takes
+    // the order for a verdict (`plan:B16`).
+    if plan::uniform_evidence(proposed) {
+        println!(
+            "  Every module carries the SAME grade, so it ranks nothing here \
+             -- the order above is by spec rows, which is the only signal \
+             this tree offers."
+        );
+    }
 }
 
 /// A node's chain cost and the ceiling it inherits, or zeroes when either
@@ -1114,6 +1137,74 @@ fn file_ceilings(root: &Path) -> Vec<String> {
     out
 }
 
+/// Structural checks over ONE node's spec. Returns how many were FATAL.
+///
+/// Split from [`check`], which had grown to five independent check families
+/// in one loop. Each is one question about one file, and the advisory ones
+/// say so in their own text rather than by where they sit.
+fn check_node(root: &Path, node: &Path, path: &Path, text: &str) -> usize {
+    let mut bad = 0usize;
+    for v in spec::check(text) {
+        // `v` prints itself already namespaced -- these are the caller's
+        // coordinates prefixed to it, which is all sherd owns here.
+        println!("{}:{}: {v}", path.display(), v.line);
+        bad = bad.saturating_add(1);
+    }
+    // A bug with no invariant will recur (spec V4). Advisory -- some bugs
+    // genuinely warrant no new rule, and forcing one would manufacture
+    // invariants to silence a gate.
+    for (id, cause) in spec::unreflected_bugs(text) {
+        println!(
+            "{}: sherd/spec:V4: {id} names no invariant -- `{cause}` \
+             will recur (advisory)",
+            path.display()
+        );
+    }
+    // A citation is a LINK: it names a node path and a row that exists
+    // there (`src/spec:V7`). Nothing resolved them until `src/spec:B2`.
+    for d in dangling_citations(root, text) {
+        println!("{}:{d}", path.display());
+        bad = bad.saturating_add(1);
+    }
+    // A finished `§T` row is history and every chain pays for it on every
+    // turn (`sherd/fed:V9`). Advisory -- some carry a MEASURED result that
+    // belongs in `§R` before the row goes.
+    for (id, task) in spec::completed_tasks(text) {
+        println!(
+            "{}: sherd/fed:V9: {id} is done -- `{task}` is history, and §T \
+             states remaining work (advisory)",
+            path.display()
+        );
+    }
+    bad.saturating_add(check_federation(node, path, text))
+}
+
+/// `§F` structure: duplicate rows (fed V12) and child dirs with no row (fed
+/// V11). A missing row is often a dir that is simply not a node yet, so it
+/// reports rather than fails.
+fn check_federation(node: &Path, path: &Path, text: &str) -> usize {
+    let edges = fed::edges(text);
+    let (dupes, missing) = fed::find_exhaustive_violations(&edges, node);
+    let mut bad = 0usize;
+    for e in dupes {
+        println!(
+            "{}: sherd/fed:V12: `{}` named twice in §F -- descent is ambiguous",
+            path.display(),
+            e.dir
+        );
+        bad = bad.saturating_add(1);
+    }
+    for m in missing {
+        let name = m.file_name().unwrap_or_default().to_string_lossy();
+        println!(
+            "{}: sherd/fed:V11: `{name}/` exists on disk with no §F row -- \
+             unreachable by descent (advisory)",
+            path.display()
+        );
+    }
+    bad
+}
+
 fn check(root: &Path) -> ExitCode {
     let nodes = fed::discover(root);
     let mut bad: usize = 0;
@@ -1122,59 +1213,7 @@ fn check(root: &Path) -> ExitCode {
         let Ok(text) = std::fs::read_to_string(&path) else {
             continue;
         };
-        for v in spec::check(&text) {
-            // `v` prints itself already namespaced -- these are the caller's
-            // coordinates prefixed to it, which is all sherd owns here.
-            println!("{}:{}: {v}", path.display(), v.line);
-            bad = bad.saturating_add(1);
-        }
-        // progress: a bug with no invariant will recur (spec V4). Advisory --
-        // some bugs genuinely warrant no new rule, and forcing one would
-        // manufacture invariants to silence a gate.
-        for (id, cause) in spec::unreflected_bugs(&text) {
-            println!(
-                "{}: sherd/spec:V4: {id} names no invariant -- `{cause}` \
-                      will recur (advisory)",
-                path.display()
-            );
-        }
-        // A citation is a LINK: it names a node path and a row that exists
-        // there (`src/spec:V7`). Nothing resolved them until `src/spec:B2`.
-        for d in dangling_citations(root, &text) {
-            println!("{}:{d}", path.display());
-            bad = bad.saturating_add(1);
-        }
-        // A finished `§T` row is history and every chain pays for it on
-        // every turn (`sherd/fed:V9`). Advisory -- some carry a MEASURED
-        // result that belongs in `§R` before the row goes.
-        for (id, task) in spec::completed_tasks(&text) {
-            println!(
-                "{}: sherd/fed:V9: {id} is done -- `{task}` is history, \
-                 and §T states remaining work (advisory)",
-                path.display()
-            );
-        }
-        // §F structure: duplicate rows (fed V12) and child dirs with no row
-        // (fed V11). Advisory -- a missing row is often a dir that is simply
-        // not a node yet, so it reports rather than fails.
-        let edges = fed::edges(&text);
-        let (dupes, missing) = fed::find_exhaustive_violations(&edges, node);
-        for e in dupes {
-            println!(
-                "{}: sherd/fed:V12: `{}` named twice in §F -- descent is ambiguous",
-                path.display(),
-                e.dir
-            );
-            bad = bad.saturating_add(1);
-        }
-        for m in missing {
-            let name = m.file_name().unwrap_or_default().to_string_lossy();
-            println!(
-                "{}: sherd/fed:V11: `{name}/` exists on disk with no §F row -- \
-                      unreachable by descent (advisory)",
-                path.display()
-            );
-        }
+        bad = bad.saturating_add(check_node(root, node, &path, &text));
     }
     // `.:V50` at last (`.:T105`). Reported once for the whole tree rather
     // than per node: the ceiling is per FILE (`.:V119`), and a file belongs

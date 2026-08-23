@@ -18,7 +18,7 @@
 #   code 98.3 · lens 94.5 · spec 92.5 · tokens 88.9 · state 88.0 · fed 87.1
 #   ollama 70.9 · tdd 69.0 · plan 66.5 · slice 63.6 · review 63.0
 #   land 55.2 · assay 54.0 · cli 0.0
-lines 92.28
+lines 92.27
 #
 # MEASUREMENT VARIANCE, observed rather than assumed: two runs of the same
 # tree reported 71.27% and 71.17%. Three later runs all reported 71.17%. The
@@ -133,3 +133,18 @@ lines 92.28
 # timings fake, so `prewarm` returned at the guard; a spy that declares them
 # REAL walks straight into the body. Reach for a double that gets past the
 # guard before concluding a path cannot be reached.
+
+# 92.28 -> 92.27 on 2026-08-24, RECORDED rather than covered, and this is the
+# first drop written down today after five that were covered instead.
+#
+# The difference is that those had a real uncovered branch behind them --
+# `rust_lines`' recursion, the two `dangling_citations` arms, `debt::record`,
+# `measure`'s failed build, `debt_cmd`'s malformed case. This one does not:
+# `plan::rank` and `uniform_evidence` are tested, `check_node` and
+# `check_federation` run in the suite, and the only uncovered line the split
+# added is a `continue` for a `SPEC.md` that cannot be read -- reachable by a
+# permission error or a race, and not worth manufacturing.
+#
+# What moved is the DENOMINATOR: ~120 lines of covered code shifted the ratio
+# by one hundredth. Rather than chase it with a test that asserts nothing,
+# the number is written down with its cause.
