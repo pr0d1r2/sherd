@@ -60,14 +60,19 @@ local fast = new Mapping<String, Step> {
       out=$(cargo clippy --workspace --all-targets --all-features --message-format=short 2>&1)
       printf '%s' "$out" | grep -qE '^error(\[|:)' && { echo "hk: clippy did not COMPILE, so its warning count is not a measurement -- a target that fails to build emits no warnings at all, and the ratchet would read that as an improvement (.:B18)." >&2; printf '%s\n' "$out" | grep -E '^error' | head -3 >&2; exit 1; }
       hits=$(printf '%s' "$out" | grep -E '^(src|dev)/.*: warning')
+      loc=$(find src dev -name "*.rs" -exec cat {} + | wc -l | tr -d " ")
       now=$(printf '%s' "$hits" | grep -c .)
-      was=$(awk '/^total /{print $2}' .lint-debt)
-      [ "$now" -le "$was" ] || { echo "hk: lint debt ROSE, $was -> $now. The limits in clippy.toml are the shape the target model handles (.:R44); adding to the debt walks away from the §G TARGET. Fix the new sites, or record WHY in .lint-debt with the raise." >&2; exit 1; }
-      [ "$now" -eq "$was" ] || echo "hk: lint debt fell $was -> $now. Run: hk run fix"
-      shape=$(printf '%s' "$hits" | grep -oE 'too many lines \([0-9]+/15\)' | grep -oE '[0-9]+/' | tr -d '/' | awk '{s+=$1-15} END{print s+0}')
+      excess=$(printf '%s' "$hits" | grep -oE 'too many lines \([0-9]+/15\)' | grep -oE '[0-9]+/' | tr -d '/' | awk '{s+=$1-15} END{print s+0}')
+      [ "$loc" -gt 0 ] || { echo 'hk: could not count lines of Rust -- that is an ERROR, not a debt fall (.:tdd:V26)' >&2; exit 1; }
+      den=$(awk -v n="$now" -v l="$loc" 'BEGIN{printf "%.1f", int(n*10000/l)/10}')
+      shp=$(awk -v e="$excess" -v l="$loc" 'BEGIN{printf "%.1f", int(e*1000/l)/10}')
+      dwas=$(awk '/^density /{print $2}' .lint-debt)
       swas=$(awk '/^shape /{print $2}' .lint-debt)
-      [ "$shape" -le "$swas" ] || { echo "hk: SHAPE debt ROSE, $swas -> $shape excess lines. Counting long functions PUNISHES splitting one: 269 lines is one warning, five 50-line pieces are five (.:B21). This counts lines OVER the limit, so a split reads as the progress it is." >&2; exit 1; }
-      [ "$shape" -eq "$swas" ] || echo "hk: shape debt fell $swas -> $shape excess lines. Run: hk run fix"
+      awk -v n="$den" -v w="$dwas" 'BEGIN{exit !(n+0 > w+0)}' && { echo "hk: lint DENSITY rose, $dwas -> $den per KLoC. The limits in clippy.toml are the shape the target model handles (.:R44). Fix the new sites, or record WHY in .lint-debt with the raise." >&2; exit 1; }
+      awk -v n="$shp" -v w="$swas" 'BEGIN{exit !(n+0 > w+0)}' && { echo "hk: SHAPE rose, $swas% -> $shp% of lines inside an over-long function. Counting functions punishes splitting one -- 269 lines is one warning, five 50-line pieces are five (.:B21) -- so this measures lines OVER the limit as a share of the tree." >&2; exit 1; }
+      awk -v n="$den" -v w="$dwas" 'BEGIN{exit !(n+0 < w+0)}' && echo "hk: lint density fell $dwas -> $den. Run: hk run fix"
+      awk -v n="$shp" -v w="$swas" 'BEGIN{exit !(n+0 < w+0)}' && echo "hk: shape fell $swas% -> $shp%. Run: hk run fix"
+      printf 'lint %s per KLoC (ceiling %s) · shape %s%% (ceiling %s%%) · %s warnings over %s lines' "$den" "$dwas" "$shp" "$swas" "$now" "$loc"
       """
     // `fix` may only LOWER. `pre-commit` runs the fast set in fix mode, so a
     // fix that recorded whatever it measured would file down the ratchet's
@@ -81,13 +86,17 @@ local fast = new Mapping<String, Step> {
       out=$(cargo clippy --workspace --all-targets --all-features --message-format=short 2>&1)
       printf '%s' "$out" | grep -qE '^error(\[|:)' && { echo "hk: clippy did not COMPILE -- refusing to RECORD a count taken from a broken build (.:B18). A target that fails to build emits no warnings, so this would write down an improvement nobody made." >&2; exit 1; }
       hits=$(printf '%s' "$out" | grep -E '^(src|dev)/.*: warning')
+      loc=$(find src dev -name "*.rs" -exec cat {} + | wc -l | tr -d " ")
       now=$(printf '%s' "$hits" | grep -c .)
-      was=$(awk '/^total /{print $2}' .lint-debt)
-      [ "$now" -le "$was" ] || { echo "hk: refusing to RECORD a raise, $was -> $now. A ratchet that writes down whatever it measures is not a ratchet. Fix the new sites, or edit .lint-debt by hand with the reason." >&2; exit 1; }
-      shape=$(printf '%s' "$hits" | grep -oE 'too many lines \([0-9]+/15\)' | grep -oE '[0-9]+/' | tr -d '/' | awk '{s+=$1-15} END{print s+0}')
+      excess=$(printf '%s' "$hits" | grep -oE 'too many lines \([0-9]+/15\)' | grep -oE '[0-9]+/' | tr -d '/' | awk '{s+=$1-15} END{print s+0}')
+      [ "$loc" -gt 0 ] || exit 1
+      den=$(awk -v n="$now" -v l="$loc" 'BEGIN{printf "%.1f", int(n*10000/l)/10}')
+      shp=$(awk -v e="$excess" -v l="$loc" 'BEGIN{printf "%.1f", int(e*1000/l)/10}')
+      dwas=$(awk '/^density /{print $2}' .lint-debt)
       swas=$(awk '/^shape /{print $2}' .lint-debt)
-      [ "$shape" -le "$swas" ] || { echo "hk: refusing to RECORD a shape raise, $swas -> $shape excess lines (.:B21)." >&2; exit 1; }
-      awk -v n="$now" -v s="$shape" '/^total /{print "total " n; next} /^shape /{print "shape " s; next} {print}' .lint-debt > .lint-debt.new
+      awk -v n="$den" -v w="$dwas" 'BEGIN{exit !(n+0 > w+0)}' && { echo "hk: refusing to RECORD a density raise, $dwas -> $den. A ratchet that writes down whatever it measures is not a ratchet." >&2; exit 1; }
+      awk -v n="$shp" -v w="$swas" 'BEGIN{exit !(n+0 > w+0)}' && { echo "hk: refusing to RECORD a shape raise, $swas% -> $shp% (.:B21)." >&2; exit 1; }
+      awk -v d="$den" -v s="$shp" -v n="$now" -v e="$excess" -v l="$loc" '/^density /{print "density " d; next} /^shape /{print "shape " s; next} /^count /{print "count " n; next} /^excess /{print "excess " e; next} /^loc /{print "loc " l; next} {print}' .lint-debt > .lint-debt.new
       mv .lint-debt.new .lint-debt
       """
   }

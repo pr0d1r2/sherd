@@ -291,7 +291,7 @@ pub fn render(f: &Facts) -> String {
         "[![gate hk]({SHIELD}/gate-hk-6E4AFF)](hk.pkl)\n\
          [![gate steps {steps}]({SHIELD}/gate_steps-{steps}-6E4AFF)](hk.pkl)\n\
          [![coverage floor {cov}%]({SHIELD}/coverage_floor-%E2%89%A5{cov}%25-brightgreen)](.coverage)\n\
-         [![lint debt {debt}]({SHIELD}/lint_debt-%E2%89%A4{debt}-orange)](.lint-debt)\n\
+         [![lint debt {debt}/KLoC]({SHIELD}/lint_debt-%E2%89%A4{debt}%2FKLoC-orange)](.lint-debt)\n\
          [![federated nodes {nodes}]({SHIELD}/federated_nodes-{nodes}-6E4AFF)](SPEC.md)\n\n"
     ));
     // `26.05 (2026-08-12 - 9f78f44)`: the release a reader knows it by, the
@@ -565,7 +565,7 @@ hooks {
             deps: 4,
             gate_steps: 23,
             coverage_floor: "90.5".to_string(),
-            lint_debt: "270".to_string(),
+            lint_debt: "17.0".to_string(),
             nodes: 16,
             nixpkgs: Locked {
                 rev: "9f78f44".to_string(),
@@ -585,7 +585,7 @@ hooks {
             "direct_dependencies-4",
             "gate_steps-23",
             "90.5",
-            "270",
+            "17.0%2FKLoC",
             "federated_nodes-16",
             "9f78f44",
             "logo=arm",
@@ -692,8 +692,8 @@ pub fn facts(s: &Sources, nodes: usize) -> Result<Facts, String> {
         gate_steps: gate_steps(&s.pkl),
         coverage_floor: truncate_tenth(&lines)
             .ok_or_else(|| missing("a number in .coverage's `lines` row"))?,
-        lint_debt: ratchet(&s.debt, "total")
-            .ok_or_else(|| missing("`total` row in .lint-debt"))?,
+        lint_debt: ratchet(&s.debt, "density")
+            .ok_or_else(|| missing("`density` row in .lint-debt"))?,
         nodes,
         nixpkgs: locked(&s.lock, "nixpkgs")
             .ok_or_else(|| missing("a `nixpkgs` node in flake.lock"))?,

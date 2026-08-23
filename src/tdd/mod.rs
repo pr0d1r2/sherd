@@ -1742,22 +1742,36 @@ mod loop_tests {
     }
 
     #[test]
-    fn the_ratchet_passes_when_the_count_holds_and_refuses_when_it_rises() {
+    fn the_ratchet_holds_on_density_and_lets_the_tree_grow_clean() {
         assert_eq!(ratchet_both_ways(), Ok(()));
     }
 
     fn ratchet_both_ways() -> Result<(), String> {
         let (dir, _n) = scratch("ratchet")?;
-        std::fs::write(dir.join(".lint-debt"), "total 2\n")
+        // A hundred lines of Rust, so the arithmetic is legible: two warnings
+        // over 100 lines is 20.0 per KLoC, three is 30.0.
+        std::fs::create_dir_all(dir.join("src"))
+            .map_err(|e| format!("mkdir: {e}"))?;
+        std::fs::write(dir.join("src/x.rs"), "// line\n".repeat(100))
+            .map_err(|e| format!("write: {e}"))?;
+        std::fs::write(dir.join(".lint-debt"), "density 20.0\n")
             .map_err(|e| format!("write: {e}"))?;
         let (ok, r) =
             crate::land::lint_debt_ok(&dir, &cargo_with_warnings(&dir, 2)?);
-        assert!(ok, "holding at the recorded count PASSES: {r}");
-        assert!(r.contains("=== lint debt: PASS === 2 (recorded 2)"), "{r}");
+        assert!(ok, "holding at the recorded density PASSES: {r}");
+        assert!(r.contains("PASS === 20.0 per KLoC (ceiling 20.0)"), "{r}");
         let (rose, rr) =
             crate::land::lint_debt_ok(&dir, &cargo_with_warnings(&dir, 3)?);
-        assert!(!rose, "one more warning REFUSES: {rr}");
-        assert!(rr.contains("ROSE === 3 (recorded 2)"), "{rr}");
+        assert!(!rose, "one more warning on the same lines REFUSES: {rr}");
+        assert!(rr.contains("ROSE === 30.0 per KLoC (ceiling 20.0)"), "{rr}");
+        // And the point of a RATIO: three warnings over 150 lines is 20.0,
+        // the same density, so growing the tree with clean code passes where
+        // the old absolute count refused it (`.:B22`).
+        std::fs::write(dir.join("src/x.rs"), "// line\n".repeat(150))
+            .map_err(|e| format!("write: {e}"))?;
+        let (grew, gr) =
+            crate::land::lint_debt_ok(&dir, &cargo_with_warnings(&dir, 3)?);
+        assert!(grew, "same density over more lines PASSES: {gr}");
         let _ = std::fs::remove_dir_all(&dir);
         Ok(())
     }

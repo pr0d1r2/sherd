@@ -50,7 +50,7 @@ fn fixture(name: &str) -> PathBuf {
         "[package]\nname = \"f\"\nedition = \"2024\"\nrust-version = \"1.95\"\n\n[dependencies]\nx = \"1\"\n",
     );
     write(".coverage", "lines 90.58\n");
-    write(".lint-debt", "total 270\n");
+    write(".lint-debt", "density 17.0\nshape 10.5\ncount 271\n");
     write(
         "hk.pkl",
         "local fast = new Mapping<String, Step> {\n  [\"fmt\"] {\n  }\n}\n",
