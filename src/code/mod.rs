@@ -219,7 +219,7 @@ pub fn signatures(impl_src: &str) -> String {
 /// It also does not require `pub`: a test module's doubles are private to it
 /// -- `struct Flaky` is never `pub` -- so `signatures` extracts NOTHING from
 /// a test half, and the judge was told to check names against a data model
-/// that could not contain them (`.:tdd:B27`).
+/// that could not contain them (`.:src/tdd:B27`).
 #[must_use]
 pub fn test_decls(tests_src: &str) -> String {
     let mut out = String::new();
@@ -247,7 +247,7 @@ mod tests {
     /// requires `pub` -- extracts nothing from a test half. The judge was
     /// shown only the impl half and told to check names against it, so an
     /// authored test reusing an existing double was rejected for referring
-    /// to something that "does not appear" (`.:tdd:B27`).
+    /// to something that "does not appear" (`.:src/tdd:B27`).
     const TEST_HALF: &str = "#[cfg(test)]\nmod tests {\n    use super::*;\n\n    \
          struct Flaky {\n        fail_times: Cell<u32>,\n    }\n\n    \
          impl Transport for Flaky {\n        fn post(&self) -> u8 { 1 }\n    }\n\n    \
@@ -373,7 +373,7 @@ mod tests {
 pub struct ModDecl {
     pub name: String,
     /// `pub mod` -- the author's own statement that this is API, and the
-    /// second-strongest evidence of a federation boundary (`.:plan:V17`).
+    /// second-strongest evidence of a federation boundary (`.:src/plan:V17`).
     pub is_pub: bool,
 }
 
@@ -414,7 +414,7 @@ pub fn mod_decls(src: &str) -> Vec<ModDecl> {
 /// `microlith` declares all eleven of its modules `pub(crate)`, so reading
 /// that as `pub` would call an internal boundary an API one -- and failing
 /// to parse it at all made a crate with eleven modules propose nothing
-/// (`.:plan:B13`).
+/// (`.:src/plan:B13`).
 fn one_decl(line: &str) -> Option<ModDecl> {
     let (is_pub, rest) = match line.strip_prefix("pub(") {
         Some(r) => (false, r.split_once(") ").map(|(_, r)| r)?),
@@ -433,7 +433,7 @@ fn one_decl(line: &str) -> Option<ModDecl> {
 ///
 /// COHESION evidence. A module every member of a family reaches for is a hub
 /// the family shares, which is what tells eleven `*cmd` files apart from
-/// eleven independent concerns (`.:plan:V17`).
+/// eleven independent concerns (`.:src/plan:V17`).
 #[must_use]
 pub fn crate_uses(src: &str) -> Vec<String> {
     let mut out: Vec<String> = src

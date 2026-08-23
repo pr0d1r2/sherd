@@ -1389,7 +1389,7 @@ mod loop_tests {
     fn the_loop_runs_end_to_end_with_no_endpoint() {
         // Errors are RETURNED, never `.expect`ed. A harness that panics in
         // setup is indistinguishable from the thing it tests failing, which
-        // is `.:assay:B1` costing forty minutes.
+        // is `.:src/assay:B1` costing forty minutes.
         assert_eq!(drive_a_scripted_run(), Ok(()));
     }
 

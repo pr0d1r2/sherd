@@ -15,7 +15,7 @@
 //!   stubs, which is the vacuous pass the other arm exists to catch;
 //! - the TITRATION (`.:T74`) — rung 0 is the regression guard and asserts;
 //!   rungs 1-3 exist to FAIL, so they report and assert nothing about the
-//!   score (`assay:V2`).
+//!   score (`src/assay:V2`).
 //!
 //! INTEGRATION targets rather than inline `#[ignore]`s (`.:T96`).
 

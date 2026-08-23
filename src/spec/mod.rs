@@ -121,6 +121,86 @@ pub fn unreflected_bugs(spec: &str) -> Vec<(String, String)> {
     out
 }
 
+/// One `owner:ID` citation and where it was written.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Citation {
+    /// The node path as written -- canonically `.` or a path like `src/tdd`.
+    pub owner: String,
+    /// The row id, e.g. `V18`.
+    pub id: String,
+    /// 1-indexed line the citation appears on.
+    pub line: usize,
+}
+
+/// Every namespaced citation in a spec.
+///
+/// `.:V10` fixes the form: ids are namespaced by DIR PATH, so `src/plan:V3`
+/// and `src/spec:V3` are different rows. Nothing resolved them until `B2`, and
+/// four files cited a `.:V41` that was never written.
+///
+/// The foreign form `microlith/V14` uses a slash and is deliberately not a
+/// citation here -- it names a rule in another repository, which this tree
+/// cannot resolve and must not rewrite.
+#[must_use]
+pub fn citations(text: &str) -> Vec<Citation> {
+    let mut out = Vec::new();
+    for (n, line) in text.lines().enumerate() {
+        for (at, _) in line.match_indices(':') {
+            if let Some((owner, id)) = citation_at(line, at) {
+                out.push(Citation {
+                    owner,
+                    id,
+                    line: n.saturating_add(1),
+                });
+            }
+        }
+    }
+    out
+}
+
+/// Expand around one colon: a row id to the right, a node path to the left.
+fn citation_at(line: &str, colon: usize) -> Option<(String, String)> {
+    let (left, right) = line.split_at(colon);
+    let id: String = right
+        .get(1..)?
+        .chars()
+        .take_while(char::is_ascii_alphanumeric)
+        .collect();
+    let mut rest = id.chars();
+    if !matches!(rest.next(), Some(k) if "VBTRIC".contains(k))
+        || id.len() < 2
+        || !rest.all(|d| d.is_ascii_digit())
+    {
+        return None;
+    }
+    let owner: String = left
+        .chars()
+        .rev()
+        .take_while(|c| {
+            c.is_ascii_lowercase()
+                || c.is_ascii_digit()
+                || *c == '_'
+                || *c == '/'
+                || *c == '.'
+        })
+        .collect::<Vec<char>>()
+        .into_iter()
+        .rev()
+        .collect();
+    (!owner.is_empty()).then_some((owner, id))
+}
+
+/// Does this spec declare that row id?
+///
+/// A row opens its line, followed by `|` in a table (`§T`, `§B`) or `:` in a
+/// statement (`§V`, `§R`).
+#[must_use]
+pub fn declares(spec: &str, id: &str) -> bool {
+    spec.lines().any(|l| {
+        l.strip_prefix(id)
+            .is_some_and(|r| r.starts_with('|') || r.starts_with(':'))
+    })
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -142,6 +222,78 @@ mod tests {
         let u = unreflected_bugs(s);
         assert_eq!(u.len(), 1);
         assert_eq!(u[0].0, "B1");
+    }
+
+    /// `B2`: three spellings for one citation and nothing rejected any.
+    /// Canonical is the node PATH -- `.` for root, `src/tdd` for a node --
+    /// and the bare `tdd:B12` form resolved to nothing because there is no
+    /// `tdd/` beside the root.
+    #[test]
+    fn a_citation_carries_the_node_path_it_names() {
+        assert_eq!(
+            citations("V1: see `src/tdd:B12` and `.:V50`"),
+            vec![
+                Citation {
+                    owner: "src/tdd".into(),
+                    id: "B12".into(),
+                    line: 1
+                },
+                Citation {
+                    owner: ".".into(),
+                    id: "V50".into(),
+                    line: 1
+                },
+            ]
+        );
+    }
+
+    /// The foreign form uses a SLASH and is not a citation into this tree:
+    /// `microlith/V14` names a rule in another repository, which this tree
+    /// cannot resolve and must never rewrite.
+    #[test]
+    fn a_foreign_rule_is_not_a_citation_here() {
+        assert!(citations("V1: microlith/V14 says so").is_empty());
+        assert!(citations("MEASURED: V17 held").is_empty());
+        assert!(citations("no colon here at all").is_empty());
+    }
+
+    /// A row opens its line: `|` in a table, `:` in a statement.
+    #[test]
+    fn a_row_is_declared_by_the_line_it_opens() {
+        let s = "V1: a ! b\nT3|.|do the thing|V1\nB7|2026-01-01|cause|fix\n";
+        assert!(declares(s, "V1"));
+        assert!(declares(s, "T3"));
+        assert!(declares(s, "B7"));
+        assert!(!declares(s, "V2"), "V1 must not answer for V2");
+        assert!(!declares(s, "V"), "a prefix is not an id");
+    }
+
+    use std::path::Path;
+
+    /// The defect `B2` names, on the tree that measured it: every citation in
+    /// every spec of this repository resolves to a node and a row. Four files
+    /// cited `.:V41`, which was never written at root.
+    #[test]
+    fn every_citation_in_this_repository_resolves() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let mut dead = Vec::new();
+        for node in crate::fed::discover(root) {
+            let Ok(text) = std::fs::read_to_string(node.join("SPEC.md")) else {
+                continue;
+            };
+            for c in citations(&text) {
+                let target = if c.owner == "." {
+                    root.join("SPEC.md")
+                } else {
+                    root.join(&c.owner).join("SPEC.md")
+                };
+                match std::fs::read_to_string(&target) {
+                    Ok(t) if declares(&t, &c.id) => {}
+                    _ => dead.push(format!("{}:{}", c.owner, c.id)),
+                }
+            }
+        }
+        assert!(dead.is_empty(), "citations resolving to nothing: {dead:?}");
     }
 
     #[test]
@@ -347,7 +499,7 @@ mod scaffold_tests {
 /// `§B` is in the wrong place the moment it is written.
 ///
 /// Rebuilt from the SECTION LIST rather than by splicing strings, and the
-/// reason is `.:cli:B4`: the splice version appended one newline per run, so
+/// reason is `.:src/cli:B4`: the splice version appended one newline per run, so
 /// `sync` was never idempotent and every commit grew the file. Rendering
 /// every section with exactly one blank line between them makes a second run
 /// a no-op BY CONSTRUCTION rather than by careful string handling.

@@ -48,7 +48,7 @@
 SPEC.md        12500
 src            12700
 src/assay      14200
-src/cli        13300
+src/cli        15500
 src/code       13600
 src/fed        14000
 src/land       13800
@@ -57,7 +57,7 @@ src/ollama     14600
 src/plan       17500
 src/review     13500
 src/slice      13300
-src/spec       13300
+src/spec       15500
 src/state      12900
 src/tdd        16000
 src/tokens     13200
@@ -84,3 +84,21 @@ dev            15500
 # ranks `src/plan/mod.rs` second in the tree by distinct foreign anchor
 # owners. The ceiling raise is evidence for `src/plan:T14`, not a
 # substitute for it.
+
+# RAISE 2026-08-23, `src/cli` 13300 -> 15500, third of the day and the last
+# node still holding the old margin: it measured 13,278 of 13,300 (0.2%)
+# before the edit that pushed it over.
+#
+# What pushed it: `src/spec:B2` made the canonical citation the node PATH, so
+# twenty-four bare `tdd:B12` citations across the tree became `src/tdd:B12`.
+# The fix costs tokens by design -- a citation that resolves is longer than
+# one that does not -- and `src/cli` carries more of them than any other node
+# because it is where every check prints its coordinates. `src/cli:V14` is the
+# other few tokens: the rule four files had cited as `.:V41` since the first
+# commit, which was never written down anywhere.
+#
+# And `src/spec` 13300 -> 15500 in the same commit, for the same reason: it
+# was at 13,197 of 13,300 (0.8%) and it is the node that gained V7 and the
+# closed B2. Every node this file has raised today was inside 1.2% of its
+# ceiling before it was touched, which says the morning's 20% was measured
+# against a tree that then had a working day happen to it.

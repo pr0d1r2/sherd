@@ -1221,9 +1221,9 @@ mod tests {
 
     #[test]
     fn a_transport_failure_is_an_error_and_never_an_empty_reply() {
-        // `assay:V1`: a call that did not RUN says nothing. An empty `Reply`
+        // `src/assay:V1`: a call that did not RUN says nothing. An empty `Reply`
         // here would be graded as a wrong answer and read as the model
-        // failing, which is `assay:B1` costing forty minutes.
+        // failing, which is `src/assay:B1` costing forty minutes.
         let t = Flaky {
             fail_times: std::cell::Cell::new(1),
             body: String::new(),
