@@ -229,8 +229,22 @@
 # Density held at 17.1 rather than falling: splitting adds signatures and doc
 # comments, so `loc` grew with `count`. That is the ratio behaving correctly
 # -- the tree got no worse per line, and the shape got much better.
-density 17.1
-shape 9.7
-count 283
-excess 1616
-loc 16523
+#
+# 17.1 -> 15.5 and 9.7 -> 9.1 on 2026-08-24, the largest fall since the
+# ratchets existed, and NOT from deleting anything: `src/code`'s two long
+# parsers were decomposed (`src/code:T3`) and the pieces stopped indexing.
+#
+# `expected_calls` was 75 lines of hand-rolled byte scanning with `b[i]` at
+# every step; `next_ident`, `opens_call`, `call_text` and `closing_paren`
+# each take a slice and use `get` and `saturating_*` because they have a
+# boundary to state rather than a loop invariant to remember. Twenty-four
+# `indexing may panic` sites went with them.
+#
+# That is the argument for the shape ratchet from the other end: the long
+# function was not merely hard to read, it was where the unsafe indexing
+# lived, and splitting it removed both.
+density 15.5
+shape 9.1
+count 259
+excess 1531
+loc 16645
