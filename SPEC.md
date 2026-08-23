@@ -42,14 +42,14 @@ dev|repo-maintaining tooling, `publish = false` — README generation|anything a
 - cmd: `sherd init [dir] [--stdout]` → scaffold `SPEC.md` @ dir, `§F` rows from child dirs. REFUSES an existing file, exit 1, ⊥ `--force`
 - cmd: `sherd lens <dir> [--depth rule|why|all]` → context pack. default `rule`
 - cmd: `sherd lens <dir> --json` → `{chain:[],body:{},children:[],tokens:{},examined:{}}` (0.3)
-- cmd: `sherd route "<query>"` → dir + reason. 0 hit / 2 miss / 3 ambiguous (0.3)
+- cmd: `sherd route "<query>"` → dir + the words that matched. RANKED: the node matching MORE of the query wins, a tie is ambiguous, & ROOT is never an answer. 0 hit / 2 miss / 3 ambiguous
 - cmd: `sherd check [dir]` → drift spec↔code + file ceilings. 0 clean / 1 violation / 2 usage
 - cmd: `sherd split <path>` → propose split of over-ceiling file|node. ⊥ write w/o `--apply` (0.4)
 - cmd: `sherd sync [dir]` → regen `§N` from parent `§F`. exit 1 if wrote (0.4)
 - cmd: `sherd graph [--dot|--json|--mermaid]` → federation DAG. `--mermaid` = the generated architecture diagram
 - cmd: `sherd lens <dir> [--facet set|setting|human|all]` → default `set`
 - cmd: `sherd budget [dir]` → node/chain/lens/file token table. exit 1 over
-- cmd: `sherd validate` → DAG + ids + budget + coverage + examined-count. exit 1 fail (0.3)
+- cmd: `sherd validate` → structural + edges + ceilings + slice drift, & REPORTS what it examined. exit 1 fail
 - cmd: `sherd fed [dir]` → the federation edges a node DECLARES, ⊥ the ones it has
 - cmd: `sherd review [rev]` → mechanical checks on what a commit ADDED (default `HEAD`). ADVISORY: a finding ⊥ fail the cmd, ∵ intent is the reader's call
 - cmd: `sherd slice [--check|--list]` → regen distilled slices from source. `--check` exit 1 on DRIFT, & a slice is never hand-edited
@@ -245,6 +245,7 @@ V112: test-vs-impl DISAGREEMENT measures the INVARIANT, ⊥ the code. both writt
 V113: GENERATED means a RUNNER regenerates it, ⊥ that it was generated once. an artefact spliced by hand & never re-spliced is indistinguishable from a hand-written one the day after, & the sentence claiming otherwise is the most misleading line on the page (B16). ∀ generated block ! carry markers, a generator, & a `--check` in the gate
 V114: an EVEN minor is STABLE; an ODD minor is FUNCTIONAL & ⊥ for PRODUCTION. parity classifies the RELEASE, ⊥ the work in it — it answers *may I run this tag in production?*. pre-1.0 SemVer lets ANY minor break ∴ `0.4` vs `0.5` otherwise carries NOTHING a consumer can act on, & parity is the 1 bit the number carries FREE, before a changelog is read. ⊥ novel: Linux 2.x & GNOME shipped it ∴ a reader may already know it. `microlith` V34 states the same rule ∴ one reading serves both. RETIRES @ `1.0`, where every minor after is stable by definition
 V115: §I is what SHIPS. ∀ verb the binary dispatches appears in §I, & ∀ §I cmd either dispatches or carries its rung — an interface section that advertises 5 absent verbs & hides 10 present ones is worse than none, ∵ a reader trusts it (B17)
+V116: a COUNT derived from a tool's output is ⊥ a measurement until the tool is known to have RUN. `cargo clippy` prints no warnings for a target that fails to compile, `cargo llvm-cov` reports no lines for a suite that did ⊥ build, & every such silence reads as GOOD NEWS to a ratchet. ∀ step deriving a number ! refuse on the tool's own error before comparing (B18)
 V73: dir promotion has 2 triggers — (a) V50 code ceiling, (b) module owns SPEC worth its own node even under ceiling. vendor facades are (b): few hundred lines carrying V17/V24/V25. ⊥ promote every `.rs` — 30 files → 60 is ceremony
 
 ## §T TASKS
@@ -280,7 +281,7 @@ T50|.|corpus run over 54-spec fleet, FP rate reported|V58
 T52|.|planted-violation test ∀ guard + accepts-real-shapes companion|V61
 T53|x|PREMISE GATE run — `sherd oneshot` vs `sherd tdd`, R29/R32/R33. bounds MAX CALL 2.1x→2.9x, ⊥ total, ⊥ quality|V60,V27
 T54|x|self-federate: root `§F` + per-node `SPEC.md`|V27,V30
-T55|.|CI: `sherd validate` self exit 0; globs by data dependency|V27,V57
+T55|x|CI: `sherd validate` self exit 0; globs by data dependency|V27,V57
 T56|x|`§F` gains `⊥owns` column — parse & emit|I,V66
 T57|x|superseded — `src/fed:T5`/`T7`: duplicate rows fail, missing rows advisory|V64,V65
 T58|.|`cap.row` gate — inline `§V`/`§R`/`§B` text over 200B|V69,V70
@@ -345,3 +346,4 @@ B14|2026-08-19|writing `src/assay/SPEC.md` in T94 I RESTATED 3 invariants that a
 B15|2026-08-23|`cargo build --no-default-features` FAILS — 4 errors, `src/assay` & `src/land` reach `crate::tdd` which is `ollama`-gated ∴ the featureless build has been broken since the feature split, while `Cargo.toml` DOCUMENTS it as "the deterministic, networkless core that §C demands". a claim in a manifest w/ no runner, unseen ∵ nothing ever built that configuration|T99 moved the gate cluster to `src/land` — its owner: `land` DECIDES whether work earned its merge — & gated `cargo build --no-default-features` in `hk.pkl`. `src/assay` is now feature-gated w/ the loop it measures. V74 again — & found by writing `default-features = false` in `dev/Cargo.toml`, ⊥ by any check
 B16|2026-08-23|`.:README` Architecture said "generated by `sherd graph` — never hand-drawn, so it cannot drift" & had drifted: 7 nodes drawn, 17 real, missing `plan`·`review`·`state`·`slice`·`land`·`cli`·`code`·`assay`·`dev`. GENERATED once, by hand, then never again — the claim named a PROPERTY of the output & no runner held it. same shape as the badges one commit earlier, in the same file, w/ the sentence asserting the opposite ∴ a reader was told to trust the stalest thing on the page|V113. `sherd-dev readme` splices all 4 blocks from `fed::tree`/`mermaid`/`table` + the badge facts, gated by `readme-generated`. GENERALLY: "generated" is a claim about the LAST run, ⊥ about the artefact — it needs a checker like every other rule (V74)
 B17|2026-08-23|§I specifies 9 cmds & the binary dispatches 14: `init`·`route`·`split`·`sync`·`validate` are SPECCED & unbuilt, while `apply`·`ask`·`fed`·`land`·`oneshot`·`outcome`·`plan`·`review`·`slice`·`tdd` SHIP & §I never names them. drift in BOTH directions, in the section a spec-driven repo can least afford wrong. `src/cli:V7` gained a runner for usage-vs-dispatch the same day & §I-vs-dispatch — one layer up — still had none ∴ 10 verbs shipped unannounced|V115. T102 builds the runner in `sherd-dev`, which already reads dispatch arms for V7. GENERALLY: a fix applied at one layer ! be followed by asking which layer above it has the same hole (`src/fed:B9` again)
+B18|2026-08-23|the LINT RATCHET counted a BROKEN BUILD as an improvement. `cargo clippy` emits no warnings for a target that fails to COMPILE ∴ when a test target broke, the count fell 270 → 180 & the step read that as debt paid. MEASURED live: a `write_spec` rename left one call site dangling, & 90 warnings from `#[cfg(test)]` code in `src/*` silently stopped being counted. the `fix` half is worse — it would have RECORDED 180 as the new floor, filing the ratchet's teeth down w/ a number nobody earned|V116. both halves now capture clippy's output, refuse on `^error`, & say the count is ⊥ a measurement. PROVEN by planting a broken test: exit 101 naming the cause, exit 0 when restored. GENERALLY: a metric derived from a TOOL'S OUTPUT ! first check the tool RAN — `.:V26` for a subprocess, & the 4th recording of that shape (B17/B20/B24 in the siblings)

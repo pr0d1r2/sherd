@@ -57,7 +57,9 @@ local fast = new Mapping<String, Step> {
     glob = List("**/*.rs", "clippy.toml", ".lint-debt")
     depends = List("clippy")
     check = """
-      now=$(cargo clippy --workspace --all-targets --message-format=short 2>&1 | grep -cE '^(src|dev)/.*: warning')
+      out=$(cargo clippy --workspace --all-targets --message-format=short 2>&1)
+      printf '%s' "$out" | grep -qE '^error(\[|:)' && { echo "hk: clippy did not COMPILE, so its warning count is not a measurement -- a target that fails to build emits no warnings at all, and the ratchet would read that as an improvement (.:B18)." >&2; printf '%s\n' "$out" | grep -E '^error' | head -3 >&2; exit 1; }
+      now=$(printf '%s' "$out" | grep -cE '^(src|dev)/.*: warning')
       was=$(awk '/^total /{print $2}' .lint-debt)
       [ "$now" -le "$was" ] || { echo "hk: lint debt ROSE, $was -> $now. The limits in clippy.toml are the shape the target model handles (.:R44); adding to the debt walks away from the §G TARGET. Fix the new sites, or record WHY in .lint-debt with the raise." >&2; exit 1; }
       [ "$now" -eq "$was" ] || echo "hk: lint debt fell $was -> $now. Run: hk run fix"
@@ -71,7 +73,9 @@ local fast = new Mapping<String, Step> {
     // `hk check --all` refused, and this step then rewrote 274 to 275 behind
     // the commit.
     fix = """
-      now=$(cargo clippy --workspace --all-targets --message-format=short 2>&1 | grep -cE '^(src|dev)/.*: warning')
+      out=$(cargo clippy --workspace --all-targets --message-format=short 2>&1)
+      printf '%s' "$out" | grep -qE '^error(\[|:)' && { echo "hk: clippy did not COMPILE -- refusing to RECORD a count taken from a broken build (.:B18). A target that fails to build emits no warnings, so this would write down an improvement nobody made." >&2; exit 1; }
+      now=$(printf '%s' "$out" | grep -cE '^(src|dev)/.*: warning')
       was=$(awk '/^total /{print $2}' .lint-debt)
       [ "$now" -le "$was" ] || { echo "hk: refusing to RECORD a raise, $was -> $now. A ratchet that writes down whatever it measures is not a ratchet. Fix the new sites, or edit .lint-debt by hand with the reason." >&2; exit 1; }
       awk -v n="$now" '/^total /{print "total " n; next} {print}' .lint-debt > .lint-debt.new

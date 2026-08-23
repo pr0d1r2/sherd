@@ -21,6 +21,8 @@ sherd -- federated SPEC.md for small-context local models
   sherd lens <dir> [--depth rule|why|all]  the context pack for one node
   sherd fed [dir]        the federation edges declared by a node
   sherd check [dir]      microlith structural check of every node
+  sherd validate         DAG + ids + ceilings + slice drift, one verdict
+  sherd route <query>    which node owns a question. 0 hit · 2 miss · 3 ambiguous
   sherd review [rev]     mechanical checks on what a commit added (default HEAD)
   sherd slice [--check|--list]  regenerate distilled slices from their sources
   sherd outcome <node> <kept|reverted>  record whether a node's work survived review
@@ -85,6 +87,11 @@ pub fn run_args(mut args: Vec<String>) -> ExitCode {
             ExitCode::SUCCESS
         }
         Some("check") => check(&root),
+        Some("validate") => validate(&root),
+        Some("route") => match args.get(1) {
+            Some(q) => route_cmd(&root, q),
+            None => usage("route needs a query"),
+        },
         Some("outcome") => match (args.get(1), args.get(2)) {
             (Some(node), Some(verdict)) => {
                 let kept = match verdict.as_str() {
@@ -514,9 +521,164 @@ fn fed_cmd(dir: &Path) -> ExitCode {
     ExitCode::SUCCESS
 }
 
+/// One verdict over the whole federation, for CI and for a stranger who
+/// wants to know whether a repository is coherent before reading it.
+///
+/// COMPOSES what already has owners rather than re-deciding anything: the
+/// structural check (`spec`), the DAG's shape (`fed`), every chain against
+/// its ceiling (`lens`), and slice drift (`slice`). §C forbids a second
+/// reading of a rule that has an owner, and a validator that re-implemented
+/// any of these would be exactly that.
+///
+/// It REPORTS WHAT IT EXAMINED, not only what failed. "0 violations" and "I
+/// checked nothing" are the same output otherwise, which is `.:V48` and the
+/// vacuous pass every gate here is written against.
+/// `sherd route "<query>"` -- which node owns this question.
+///
+/// Exit codes carry the answer, because a script asking "where does this
+/// belong" needs to tell a hit from a guess: `0` one node, `2` no node, `3`
+/// several. Rounding an ambiguous query to its first match would make the
+/// interesting case indistinguishable from the certain one.
+fn route_cmd(root: &Path, query: &str) -> ExitCode {
+    match plan::route(root, query) {
+        plan::Route::Hit(node, why) => {
+            println!(
+                "{}\n  matched: {}",
+                node.strip_prefix(root).unwrap_or(&node).display(),
+                why.join(", ")
+            );
+            ExitCode::SUCCESS
+        }
+        plan::Route::Miss => route_miss(),
+        plan::Route::Ambiguous(nodes) => route_ambiguous(root, &nodes),
+    }
+}
+
+/// A miss is REPORTED, and points at the table that lists what exists.
+fn route_miss() -> ExitCode {
+    println!(
+        "no node matched. `sherd graph --table` lists what each one owns."
+    );
+    ExitCode::from(2)
+}
+
+/// Several nodes tied. Listing them beats picking one: the asker can see
+/// that their question spans a boundary, which is itself the answer.
+fn route_ambiguous(root: &Path, nodes: &[PathBuf]) -> ExitCode {
+    println!("ambiguous -- the query spans {} nodes:", nodes.len());
+    for n in nodes {
+        println!("  {}", n.strip_prefix(root).unwrap_or(n).display());
+    }
+    ExitCode::from(3)
+}
+
+fn validate(root: &Path) -> ExitCode {
+    let nodes = fed::discover(root);
+    let structural = validate_specs(&nodes);
+    let edges = validate_edges(root);
+    let over = validate_ceilings(root, &nodes);
+    let drift = validate_drift(root);
+    println!(
+        "\n  {} nodes · {structural} structural · {edges} edge · \
+         {over} over ceiling · {drift} drifted",
+        nodes.len()
+    );
+    if structural + edges + over + drift == 0 {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::from(1)
+    }
+}
+
+/// The structural check, on every node's spec.
+fn validate_specs(nodes: &[PathBuf]) -> usize {
+    let mut bad: usize = 0;
+    for node in nodes {
+        let path = node.join("SPEC.md");
+        let Ok(text) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        for v in spec::check(&text) {
+            println!("{}:{}: {v}", path.display(), v.line);
+            bad = bad.saturating_add(1);
+        }
+    }
+    bad
+}
+
+/// Distilled slices against their sources. An unreadable tree counts as one
+/// failure rather than zero: "could not look" and "nothing wrong" are the
+/// same output otherwise, which is the vacuous pass `.:V48` forbids.
+fn validate_drift(root: &Path) -> usize {
+    // A repository with NO slice registry has nothing to drift from, and
+    // absence is legal: `sherd init` then `sherd validate` has to be able to
+    // pass, or the two verbs contradict each other. Distinguished from a
+    // registry that cannot be READ, which stays a failure.
+    if !root.join(".sherd-slices").exists() {
+        println!("slice: no registry (none required)");
+        return 0;
+    }
+    match slice::drifted(root) {
+        Ok(drifted) => report_drift(&drifted),
+        Err(e) => {
+            println!("slice: {e}");
+            1
+        }
+    }
+}
+
+fn report_drift(drifted: &[PathBuf]) -> usize {
+    for p in drifted {
+        println!("{}: slice drifted from its source", p.display());
+    }
+    drifted.len()
+}
+
+/// Depth and ownership rules over the `§F` edges of every node.
+fn validate_edges(root: &Path) -> usize {
+    let mut bad: usize = 0;
+    for node in fed::discover(root) {
+        let Ok(text) = std::fs::read_to_string(node.join("SPEC.md")) else {
+            continue;
+        };
+        let edges = fed::edges(&text);
+        for e in fed::depth_violations(&edges) {
+            println!("{}: edge to `{}` skips a level", node.display(), e.dir);
+            bad = bad.saturating_add(1);
+        }
+    }
+    bad
+}
+
+/// Every chain against the ceiling it inherits.
+fn validate_ceilings(root: &Path, nodes: &[PathBuf]) -> usize {
+    nodes.iter().filter(|node| over_ceiling(root, node)).count()
+}
+
+/// One chain against the ceiling it inherits. A node whose pack or ceiling
+/// cannot be read is not over -- it is unmeasured, and `budget` is the verb
+/// that reports that.
+fn over_ceiling(root: &Path, node: &Path) -> bool {
+    let (Ok(pack), Ok(ceiling)) = (
+        lens::pack(root, node, lens::Depth::Rule),
+        lens::ceiling_for(root, node),
+    ) else {
+        return false;
+    };
+    if pack.cost.tokens > ceiling {
+        println!(
+            "{}: chain {} tok over its ceiling of {ceiling}",
+            node.display(),
+            pack.cost.tokens
+        );
+        return true;
+    }
+    false
+}
+
 fn check(root: &Path) -> ExitCode {
     let nodes = fed::discover(root);
-    let mut bad = 0;
+    let mut bad: usize = 0;
     for node in &nodes {
         let path = node.join("SPEC.md");
         let Ok(text) = std::fs::read_to_string(&path) else {
@@ -526,7 +688,7 @@ fn check(root: &Path) -> ExitCode {
             // `v` prints itself already namespaced -- these are the caller's
             // coordinates prefixed to it, which is all sherd owns here.
             println!("{}:{}: {v}", path.display(), v.line);
-            bad += 1;
+            bad = bad.saturating_add(1);
         }
         // progress: a bug with no invariant will recur (spec V4). Advisory --
         // some bugs genuinely warrant no new rule, and forcing one would
@@ -549,7 +711,7 @@ fn check(root: &Path) -> ExitCode {
                 path.display(),
                 e.dir
             );
-            bad += 1;
+            bad = bad.saturating_add(1);
         }
         for m in missing {
             let name = m.file_name().unwrap_or_default().to_string_lossy();
@@ -1267,6 +1429,102 @@ mod tests {
             init_cmd(repo.path(), &argv(&["init", "no-such-dir"])),
             ExitCode::from(2)
         );
+    }
+
+    /// One child node whose `§G` body is `goal` -- a query matches its words,
+    /// and anything after them is whatever the test needs next.
+    fn write_spec(root: &Path, dir: &str, goal: &str) {
+        let node = root.join(dir);
+        let spec = format!("# SPEC\n\n## \u{a7}G GOAL\n\n{goal}\n");
+        let Ok(()) = std::fs::create_dir_all(&node) else {
+            unreachable!("a node dir is creatable")
+        };
+        let Ok(()) = std::fs::write(node.join("SPEC.md"), spec) else {
+            unreachable!("a node spec is writable")
+        };
+    }
+
+    /// A fixture with two child nodes, each carrying a `§G` a query can hit.
+    fn routing_fixture(tag: &str) -> crate::testrepo::TestRepo {
+        let Ok(repo) = crate::testrepo::TestRepo::new(tag) else {
+            unreachable!("a fixture repository is buildable")
+        };
+        write_spec(repo.path(), "alpha", "widgets and sprockets");
+        write_spec(repo.path(), "beta", "gizmos");
+        repo
+    }
+
+    #[test]
+    fn route_reports_a_hit_a_miss_and_an_ambiguity_by_exit_code() {
+        let repo = routing_fixture("cli-route");
+        let root = repo.path();
+        assert_eq!(route_cmd(root, "sprockets"), ExitCode::SUCCESS);
+        assert_eq!(route_cmd(root, "wombat"), ExitCode::from(2));
+        assert_eq!(route_cmd(root, "widgets gizmos"), ExitCode::from(3));
+    }
+
+    /// The edge half. A `§F` row naming a grandchild skips a level, which is
+    /// the one structural rule `validate` checks that `check` does not.
+    #[test]
+    fn an_edge_that_skips_a_level_is_a_finding() {
+        let repo = routing_fixture("cli-edges");
+        assert_eq!(validate_edges(repo.path()), 0);
+
+        write_spec(
+            repo.path(),
+            "alpha",
+            "widgets\n\n## \u{a7}F FEDERATION\n\ndir|owns|\u{22a5}owns|tokens\ndeep/deeper|a|b|-",
+        );
+        assert_eq!(validate_edges(repo.path()), 1);
+    }
+
+    /// A node whose `SPEC.md` cannot be READ is skipped rather than counted
+    /// as a violation: `validate` reports what it examined, and an
+    /// unreadable file was not examined (`.:V48`).
+    #[test]
+    fn a_node_whose_spec_cannot_be_read_is_skipped() {
+        let repo = routing_fixture("cli-unreadable");
+        let spec = repo.path().join("alpha").join("SPEC.md");
+        let Ok(()) = std::fs::remove_file(&spec) else {
+            unreachable!("the fixture spec exists")
+        };
+        let Ok(()) = std::fs::create_dir_all(&spec) else {
+            unreachable!("a directory can take its place")
+        };
+        assert_eq!(validate_specs(&[repo.path().join("alpha")]), 0);
+    }
+
+    /// The drift half, which the other two `validate` tests never reach: a
+    /// tree with no slice registry counts ZERO, and a registry that cannot
+    /// be read still counts one (`.:cli:B3`, `V12`).
+    #[test]
+    fn a_missing_slice_registry_is_not_drift() {
+        let repo = routing_fixture("cli-drift");
+        assert_eq!(validate_drift(repo.path()), 0);
+
+        let Ok(()) = std::fs::create_dir_all(repo.path().join(".sherd-slices"))
+        else {
+            unreachable!("a registry dir is creatable")
+        };
+        // A directory where a registry file belongs: present, unreadable.
+        assert_eq!(validate_drift(repo.path()), 1);
+    }
+
+    /// `validate` REPORTS what it examined, and a planted structural
+    /// violation has to move its verdict -- a validator that cannot fail is
+    /// the vacuous pass every gate here is written against.
+    #[test]
+    fn validate_passes_a_clean_tree_and_fails_a_broken_one() {
+        let repo = routing_fixture("cli-validate");
+        assert_eq!(validate(repo.path()), ExitCode::SUCCESS);
+
+        // A task citing a rule that does not exist: dangling, and structural.
+        write_spec(
+            repo.path(),
+            "alpha",
+            "widgets\n\n## \u{a7}T TASKS\n\nid|status|task|cites\nT1|.|do it|V99",
+        );
+        assert_eq!(validate(repo.path()), ExitCode::from(1));
     }
 
     #[test]
