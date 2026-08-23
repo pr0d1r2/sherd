@@ -113,4 +113,10 @@
 # on the cell slice instead of indexing it three times. The pattern is
 # shorter and states the shape it wants, and the `"x"` in the pattern IS
 # the status test.
-total 290
+#
+# RAISED 290 -> 291 for the test covering both citation failures. One site,
+# `too_many_lines`: the test builds a repo, writes a spec with three
+# citations, and asserts on each outcome. The three citations ARE the test
+# -- one dead node, one dead row, one that resolves -- and splitting them
+# into separate tests would build three repos to assert one function once.
+total 291

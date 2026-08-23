@@ -1515,6 +1515,35 @@ mod tests {
         Ok(())
     }
 
+    /// `src/spec:B2` and `B3`: a citation is a LINK, and both ways it can
+    /// fail are distinct mistakes. This tree reports neither, which is why
+    /// the branches need a repo that does.
+    #[test]
+    fn a_citation_fails_on_a_missing_node_and_on_a_missing_row()
+    -> Result<(), String> {
+        let r = crate::testrepo::TestRepo::new("cli-citations")?;
+        r.write(
+            "SPEC.md",
+            "# SPEC\n\n## \u{a7}G GOAL\n\nlinks\n\n## \u{a7}V INVARIANTS\n\n\
+             V1: see `nowhere:V3`\nV2: see `.:V99`\nV3: see `.:V1`\n",
+        )?;
+        r.commit("two dead links and one live one")?;
+        let Ok(text) = std::fs::read_to_string(r.path().join("SPEC.md")) else {
+            unreachable!("just written")
+        };
+        let found = dangling_citations(r.path(), &text);
+        assert_eq!(found.len(), 2, "V3 cites a row that exists: {found:?}");
+        assert!(
+            found.iter().any(|f| f.contains("names no node")),
+            "`nowhere` is not a node: {found:?}"
+        );
+        assert!(
+            found.iter().any(|f| f.contains("resolves to no row")),
+            "root has no V99: {found:?}"
+        );
+        Ok(())
+    }
+
     /// `review` on a commit that adds a STUB, so the findings loop runs.
     ///
     /// The printing branch only executes when there is something to print,
