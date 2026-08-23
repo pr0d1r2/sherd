@@ -345,7 +345,8 @@ fn split_cmd(root: &Path, dir: &Path, apply: bool) -> ExitCode {
         println!("  no module declarations found -- nothing to propose");
         return ExitCode::SUCCESS;
     }
-    print_structure(&proposed, &plan::candidates(root, dir));
+    let spec = std::fs::read_to_string(dir.join("SPEC.md")).unwrap_or_default();
+    print_structure(&proposed, &spec);
     ExitCode::SUCCESS
 }
 
@@ -362,21 +363,26 @@ fn node_label(root: &Path, dir: &Path) -> String {
 /// `rows` is EVIDENCE ABOUT a node rather than the reason for it -- a `0`
 /// there means the spec never mentions a module the author already split
 /// out, which is a gap in the spec and not a reason to skip the node.
-fn print_structure(proposed: &[plan::Proposed], weight: &[plan::Candidate]) {
+fn print_structure(proposed: &[plan::Proposed], spec: &str) {
     println!("\n  node           evidence    rows   tok  members");
     for p in proposed {
-        let w = weight.iter().find(|c| c.name == p.name);
+        let (rows, tokens) = plan::row_weight(spec, &p.name);
         let members = if p.members.len() > 1 {
             format!("{} ({})", p.members.len(), p.members.join(" "))
         } else {
             String::new()
         };
+        let note = if p.split_layout {
+            " MERGE the .rs into mod.rs first"
+        } else {
+            ""
+        };
         println!(
-            "  {:<14} {:<10} {:>4}  {:>4}  {members}",
+            "  {:<14} {:<10} {:>4}  {:>4}  {members}{note}",
             p.name,
             p.evidence.label(),
-            w.map_or(0, |c| c.rows),
-            w.map_or(0, |c| c.tokens),
+            rows,
+            tokens,
         );
         if !p.shared.is_empty() {
             println!("  {:<14} shares: {}", "", p.shared.join(", "));
