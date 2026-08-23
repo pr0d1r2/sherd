@@ -62,86 +62,204 @@ pub fn is_called(src: &str, name: &str) -> bool {
         .any(|l| l.contains(&format!("{name}(")) && !declares(l))
 }
 
+/// Names that open a paren but are never the function a test is driving:
+/// control flow, the assertion family, and the macros every test uses.
+const NOT_A_CALL: [&str; 18] = [
+    "fn",
+    "if",
+    "for",
+    "while",
+    "match",
+    "let",
+    "return",
+    "assert",
+    "assert_eq",
+    "assert_ne",
+    "panic",
+    "println",
+    "format",
+    "vec",
+    "write",
+    "read",
+    "Some",
+    "Ok",
+];
+
+/// The next identifier at or after `from`, as `(start, end)`.
+fn next_ident(b: &[u8], from: usize) -> Option<(usize, usize)> {
+    let mut i = from;
+    while i < b.len() && !(b[i].is_ascii_alphabetic() || b[i] == b'_') {
+        i = i.saturating_add(1);
+    }
+    if i >= b.len() {
+        return None;
+    }
+    let start = i;
+    while i < b.len() && (b[i].is_ascii_alphanumeric() || b[i] == b'_') {
+        i = i.saturating_add(1);
+    }
+    Some((start, i))
+}
+
+/// Is the identifier ending at `end` a CALL of a free function?
+///
+/// A call is `name(`; a method is `.name(` and a macro is `name!(`, neither of
+/// which is a function this test expects to be written. `fn name(` is a
+/// DEFINITION -- including the test's own.
+fn opens_call(src: &str, b: &[u8], start: usize, end: usize) -> bool {
+    if b.get(end) != Some(&b'(') {
+        return false;
+    }
+    if start > 0 && matches!(b.get(start.wrapping_sub(1)), Some(&b'.' | &b'!'))
+    {
+        return false;
+    }
+    let mut k = start;
+    while k > 0 && matches!(b.get(k.wrapping_sub(1)), Some(&b' ' | &b'\t')) {
+        k = k.saturating_sub(1);
+    }
+    k < 2 || src.get(k.saturating_sub(2)..k) != Some("fn")
+}
+
+/// The `)` matching the `(` at `open`, or the end of input.
+fn closing_paren(b: &[u8], open: usize) -> usize {
+    let mut depth = 0usize;
+    for (j, c) in b.iter().enumerate().skip(open) {
+        if *c == b'(' {
+            depth = depth.saturating_add(1);
+        } else if *c == b')' {
+            depth = depth.saturating_sub(1);
+            if depth == 0 {
+                return j;
+            }
+        }
+    }
+    b.len()
+}
+
+/// The call verbatim, arguments included, whitespace collapsed.
+///
+/// The arguments are the point: step 2 is told to define EXACTLY this name and
+/// signature, so a call with its arguments is the contract.
+fn call_text(src: &str, b: &[u8], start: usize, open: usize) -> String {
+    let end = closing_paren(b, open).saturating_add(1).min(src.len());
+    src.get(start..end)
+        .unwrap_or_default()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 /// Calls a test makes that do not exist yet -- the contract step 2 must fill.
 ///
 /// Deterministic parse, no model (`.:V18`). A run failed when the test called
-/// `check_edge_depths(root, &edges)` and step 2 invented a different name, which
-/// three repairs could not recover (B12): step 2 was never told what to define.
+/// `check_edge_depths(root, &edges)` and step 2 invented a different name,
+/// which three repairs could not recover (B12): step 2 was never told what to
+/// define.
 #[must_use]
 pub fn expected_calls(test_src: &str, existing: &str) -> Vec<String> {
-    const SKIP: [&str; 18] = [
-        "fn",
-        "if",
-        "for",
-        "while",
-        "match",
-        "let",
-        "return",
-        "assert",
-        "assert_eq",
-        "assert_ne",
-        "panic",
-        "println",
-        "format",
-        "vec",
-        "write",
-        "read",
-        "Some",
-        "Ok",
-    ];
     let b = test_src.as_bytes();
     let mut out: Vec<String> = Vec::new();
     let mut i = 0;
-    while i < b.len() {
-        if !(b[i].is_ascii_alphabetic() || b[i] == b'_') {
-            i += 1;
+    while let Some((start, end)) = next_ident(b, i) {
+        i = end;
+        let Some(name) = test_src.get(start..end) else {
+            continue;
+        };
+        if !opens_call(test_src, b, start, end)
+            || NOT_A_CALL.contains(&name)
+            || existing.contains(&format!("fn {name}"))
+        {
             continue;
         }
-        let start = i;
-        while i < b.len() && (b[i].is_ascii_alphanumeric() || b[i] == b'_') {
-            i += 1
-        }
-        let name = &test_src[start..i];
-        // a call is `name(`; a macro is `name!(`; a method is `.name(`
-        if i >= b.len() || b[i] != b'(' {
-            continue;
-        }
-        if start > 0 && (b[start - 1] == b'.' || b[start - 1] == b'!') {
-            continue;
-        }
-        // `fn name(` is a DEFINITION, not a call -- including the test's own
-        let mut k = start;
-        while k > 0 && (b[k - 1] == b' ' || b[k - 1] == b'\t') {
-            k -= 1
-        }
-        if k >= 2 && &test_src[k - 2..k] == "fn" {
-            continue;
-        }
-        if SKIP.contains(&name) || existing.contains(&format!("fn {name}")) {
-            continue;
-        }
-        // keep the call verbatim, arguments included -- the signature is the point
-        let mut depth = 0usize;
-        let mut j = i;
-        while j < b.len() {
-            if b[j] == b'(' {
-                depth += 1
-            } else if b[j] == b')' {
-                depth -= 1;
-                if depth == 0 {
-                    break;
-                }
-            }
-            j += 1;
-        }
-        let call =
-            test_src[start..(j + 1).min(test_src.len())].replace('\n', " ");
-        let call = call.split_whitespace().collect::<Vec<_>>().join(" ");
+        let call = call_text(test_src, b, start, end);
         if !out.contains(&call) {
-            out.push(call)
+            out.push(call);
         }
     }
     out
+}
+
+/// Does this line open a public item worth showing?
+fn is_signature(s: &str) -> bool {
+    ["pub fn", "pub struct", "pub enum", "pub const"]
+        .iter()
+        .any(|k| s.starts_with(k))
+}
+
+/// The public surface, accumulated one line at a time.
+///
+/// `in_body` is a BOOL rather than a depth counter: the old code carried a
+/// `usize` that only ever held 0 or 1, because a type body is entered from top
+/// level and left at the first unindented `}`. A counter that cannot count
+/// invites a reader to look for the nesting it implies.
+#[derive(Default)]
+struct Surface<'a> {
+    out: String,
+    /// Inside a type body, where every field line is part of the shape.
+    in_body: bool,
+    /// Doc lines seen at top level, belonging to the item still to come.
+    pending: Vec<&'a str>,
+}
+
+impl<'a> Surface<'a> {
+    fn line(&mut self, line: &'a str) {
+        let s = line.trim();
+        if s.starts_with("///") {
+            self.doc(line);
+        } else if self.in_body {
+            self.body(line, s);
+        } else if is_signature(s) {
+            self.signature(line, s);
+        } else {
+            self.pending.clear();
+        }
+    }
+
+    /// Doc comments ARE the semantics. Bare field names cannot tell a judge
+    /// whether `not_owns` holds a path or prose, and that is precisely the
+    /// question it has to answer (B4).
+    ///
+    /// Inside a type body a doc belongs to the FIELD below it, so it is
+    /// emitted in place; at top level it belongs to the item still to come.
+    fn doc(&mut self, line: &'a str) {
+        if self.in_body {
+            self.emit(line);
+        } else {
+            self.pending.push(line);
+        }
+    }
+
+    fn body(&mut self, line: &str, s: &str) {
+        if s == "}" {
+            self.in_body = false;
+            self.out.push_str("}\n");
+        } else if !s.is_empty() {
+            self.emit(line);
+        }
+    }
+
+    /// A `pub fn` keeps its signature and drops its body; a type keeps the
+    /// whole declaration, because its fields are the shape.
+    fn signature(&mut self, line: &str, s: &str) {
+        for d in std::mem::take(&mut self.pending) {
+            self.out.push_str(d);
+            self.out.push('\n');
+        }
+        if s.starts_with("pub fn") {
+            self.out
+                .push_str(s.split('{').next().unwrap_or(s).trim_end());
+            self.out.push_str(" { /* ... */ }\n");
+            return;
+        }
+        self.emit(line);
+        self.in_body = s.ends_with('{');
+    }
+
+    fn emit(&mut self, line: &str) {
+        self.out.push_str(line);
+        self.out.push('\n');
+    }
 }
 
 /// The public SURFACE of an implementation: signatures and type shapes, no
@@ -150,62 +268,11 @@ pub fn expected_calls(test_src: &str, existing: &str) -> Vec<String> {
 /// not see `Edge`'s fields and reached for the wrong one (B1 here).
 #[must_use]
 pub fn signatures(impl_src: &str) -> String {
-    let mut out = String::new();
-    let mut depth = 0usize;
-    let mut pending: Vec<&str> = Vec::new();
+    let mut s = Surface::default();
     for line in impl_src.lines() {
-        let s = line.trim();
-        // Doc comments ARE the semantics. Bare field names cannot tell a judge
-        // whether `not_owns` holds a path or prose, and that is precisely the
-        // question it has to answer (B4).
-        if s.starts_with("///") {
-            // Inside a type body a doc belongs to the FIELD below it, so emit
-            // it in place; at top level it belongs to the item still to come.
-            if depth > 0 {
-                out.push_str(line);
-                out.push('\n');
-            } else {
-                pending.push(line);
-            }
-            continue;
-        }
-        let is_sig = s.starts_with("pub fn")
-            || s.starts_with("pub struct")
-            || s.starts_with("pub enum")
-            || s.starts_with("pub const");
-        if depth > 0 {
-            // inside a type body: keep field lines, they are part of the shape
-            if s == "}" {
-                depth = 0;
-                out.push_str("}\n");
-            } else if !s.is_empty() {
-                out.push_str(line);
-                out.push('\n');
-            }
-            continue;
-        }
-        if !is_sig {
-            pending.clear();
-        }
-        if is_sig {
-            for d in pending.drain(..) {
-                out.push_str(d);
-                out.push('\n');
-            }
-            if s.starts_with("pub fn") {
-                let sig = s.split('{').next().unwrap_or(s).trim_end();
-                out.push_str(sig);
-                out.push_str(" { /* ... */ }\n");
-            } else {
-                out.push_str(line);
-                out.push('\n');
-                if s.ends_with('{') {
-                    depth = 1;
-                }
-            }
-        }
+        s.line(line);
     }
-    out
+    s.out
 }
 
 /// The names a TEST module declares, one per line.
@@ -279,6 +346,61 @@ mod tests {
         assert!(!d.contains("fail_times"), "field lines are not names: {d}");
         assert!(!d.contains("assert!"), "bodies are not names: {d}");
         assert!(!d.contains('{'), "declarations are truncated at the brace");
+    }
+
+    /// `V50`'s limit reached these two, and `T3` asked for the seams. The
+    /// pieces are named here so a reader sees the parse as four questions
+    /// rather than one 75-line scan.
+    #[test]
+    fn a_call_is_a_free_function_not_a_method_or_a_macro() {
+        let src = "fn t() { helper(1); x.method(2); vec![3]; assert!(y); }";
+        let b = src.as_bytes();
+        let at = |n: &str| src.find(n).unwrap_or_default();
+        assert!(
+            opens_call(src, b, at("helper"), at("helper") + 6),
+            "a bare name followed by `(` is a call"
+        );
+        assert!(
+            !opens_call(src, b, at("method"), at("method") + 6),
+            "`.method(` is a method, not a function to define"
+        );
+        // `fn t(` is the test's own definition, never a call it makes.
+        assert!(!opens_call(src, b, at("t()"), at("t()") + 1));
+    }
+
+    /// Nested parens are why this cannot be a `find(')')`: the contract is the
+    /// call WITH its arguments, and an argument may itself be a call.
+    #[test]
+    fn a_call_keeps_its_arguments_including_nested_ones() {
+        let src = "fn t() { check(edges(root), 3); }";
+        let calls = expected_calls(src, "");
+        assert!(
+            calls.contains(&"check(edges(root), 3)".to_string()),
+            "the outer call keeps the inner one: {calls:?}"
+        );
+    }
+
+    /// An unbalanced call runs to the end rather than panicking or looping:
+    /// the input is a model's output and may be truncated mid-call.
+    #[test]
+    fn an_unclosed_call_ends_at_the_input_rather_than_panicking() {
+        let src = "fn t() { truncated(1, 2";
+        assert_eq!(closing_paren(src.as_bytes(), src.len()), src.len());
+        let calls = expected_calls(src, "");
+        assert_eq!(calls, vec!["truncated(1, 2".to_string()]);
+    }
+
+    /// A type body keeps its fields AND their docs -- the doc is what tells a
+    /// judge whether a field holds a path or prose (B4).
+    #[test]
+    fn a_type_keeps_its_fields_and_a_fn_keeps_only_its_line() {
+        let src = "/// what it is\npub struct E {\n    /// a path\n    pub dir: String,\n}\n\
+                   /// what it does\npub fn go(n: u64) -> bool {\n    n > 0\n}\n";
+        let s = signatures(src);
+        assert!(s.contains("/// a path"), "field docs survive: {s}");
+        assert!(s.contains("pub dir: String,"), "fields survive: {s}");
+        assert!(s.contains("pub fn go(n: u64) -> bool { /* ... */ }"), "{s}");
+        assert!(!s.contains("n > 0"), "a fn body does not: {s}");
     }
 
     const SRC: &str = "pub fn a() {}\n\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn t() {}\n}\n";
