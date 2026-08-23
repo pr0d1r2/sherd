@@ -214,23 +214,14 @@ pub fn node(path: &Path, added: &[String]) -> std::io::Result<Vec<Finding>> {
         .parent()
         .and_then(Path::parent)
         .unwrap_or(Path::new("src"));
-    let mut crate_src = String::new();
-    let mut stack = vec![root.to_path_buf()];
-    while let Some(d) = stack.pop() {
-        let Ok(rd) = std::fs::read_dir(&d) else {
-            continue;
-        };
-        for e in rd.flatten() {
-            let p = e.path();
-            if p.is_dir() {
-                stack.push(p);
-            } else if p.extension().is_some_and(|x| x == "rs")
-                && let Ok(s) = std::fs::read_to_string(&p)
-            {
-                crate_src.push_str(split_module(&s).0);
-            }
-        }
-    }
+    // ONE walker. This had its own, which never skipped `target/` and
+    // concatenated in `read_dir` order, so the same tree could produce a
+    // different `crate_src` between runs (`src/debt:§C`).
+    let crate_src: String = crate::fed::rust_files(root)
+        .iter()
+        .filter_map(|p| std::fs::read_to_string(p).ok())
+        .map(|s| split_module(&s).0.to_string())
+        .collect();
     let (impl_r, _) = split_module(&src);
     let mut out = unwired(&crate_src, tests_r, added);
     out.extend(negative_only(impl_r, tests_r, added));
@@ -500,6 +491,32 @@ mod tests {
         );
         assert_eq!(f.len(), 1, "is_ignored_dir landed exactly like this");
         assert_eq!(f.first().map(|x| x.rule), Some("unwired"));
+    }
+
+    /// `src/debt:§C`: ONE walker. `node` had its own, which never skipped
+    /// `target/` and concatenated in `read_dir` order -- so the same tree
+    /// could yield a different `crate_src` between runs, and `unwired` and
+    /// `duplication` both read that string.
+    ///
+    /// Determinism is the assertion, because "it happened to agree" is what a
+    /// filesystem-ordered walk gives you until it does not.
+    #[test]
+    fn the_crate_source_is_assembled_in_a_stable_order() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let read = || -> String {
+            crate::fed::rust_files(&root)
+                .iter()
+                .filter_map(|p| std::fs::read_to_string(p).ok())
+                .map(|s| split_module(&s).0.to_string())
+                .collect()
+        };
+        assert_eq!(read(), read(), "two reads of one tree are one string");
+        assert!(
+            !crate::fed::rust_files(&root)
+                .iter()
+                .any(|p| p.components().any(|c| c.as_os_str() == "target")),
+            "a build product is not crate source"
+        );
     }
 
     /// `T3`/`.:B13`: two functions recognising the same markers are two

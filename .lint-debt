@@ -288,7 +288,7 @@
 # and the broken-build case each earned their own name -- and the rest is
 # recorded. Coverage went 92.07 -> 92.14 buying it.
 density 14.5
-shape 9.5
+shape 9.4
 count 262
-excess 1710
-loc 17976
+excess 1698
+loc 18035

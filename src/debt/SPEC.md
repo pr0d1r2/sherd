@@ -45,7 +45,6 @@ V8: a CEILING is per `.rs` FILE & the halves are counted SEPARATELY — 4,000 co
 
 id|status|task|cites
 T2|.|`.coverage` joins this node. it is the same shape — a percentage that may ⊥ fall — & lives in `hk.pkl` alone|V2
-T3|.|`review::node` walks for `.rs` files w/ its own loop. 3rd reading of one traversal|§C
 
 ## §B BUGS
 
