@@ -23,5 +23,5 @@ Still not vendored, because they need reasoning a one-line slice cannot carry
 and belong with the supervisor (slice V6): believability, meritocracy,
 openness, ownership, transparency, sync, process, progress, evolve, machine.
 
-Sliced into `src/tdd/principles.txt` by `bbx slice`; `bbx slice --check` gates
+Sliced into `src/tdd/principles.txt` by `sherd slice`; `sherd slice --check` gates
 the drift.
