@@ -265,8 +265,8 @@ local fast = new Mapping<String, Step> {
   ["readme-generated"] {
     glob = List("README.md", "dev/src/**", "Cargo.toml", "hk.pkl", ".coverage", ".lint-debt", "flake.lock", ".github/workflows/ci.yml", "**/SPEC.md")
     depends = List("test")
-    check = "cargo run -q -p bbx-dev -- readme --check"
-    fix = "cargo run -q -p bbx-dev -- readme"
+    check = "cargo run -q -p bbx-dev -- --check {{files}}"
+    fix = "cargo run -q -p bbx-dev -- readme {{files}}"
   }
   ["links"] {
     glob = List("**/*")
@@ -278,6 +278,23 @@ local fast = new Mapping<String, Step> {
 /// expensive axis later (coverage, a matrix) changes this file and nothing that
 /// calls it.
 local all = (fast) {
+  // LAYER TWO. The step above is scoped: `hk` hands it the changed files and
+  // `bbx-dev` narrows to the blocks those files are inputs to, so a commit
+  // touching `.coverage` compares the badges and not the diagram. That map
+  // is a HEURISTIC, and a heuristic that is too narrow lets a stale block
+  // through -- so the same checker runs again on push with NO scope, where
+  // every block is compared against its owners. Cheap and approximate at the
+  // near end, complete at the far one.
+  //
+  // `**/*` deliberately: this layer must run whatever changed, including a
+  // commit that changed nothing the narrow glob names.
+  ["readme-generated-full"] {
+    glob = List("**/*")
+    depends = List("test")
+    check = "cargo run -q -p bbx-dev -- --check"
+    fix = "cargo run -q -p bbx-dev -- readme"
+  }
+
   // Coverage is ~60s, so it runs on PUSH and in `hk check`, never on commit:
   // a hook you are tempted to bypass is worse than no hook.
   //
