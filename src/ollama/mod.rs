@@ -246,7 +246,7 @@ pub fn derived_prefill(prompt_tokens: u64) -> Option<f64> {
         return None;
     }
     rates.sort_by(f64::total_cmp);
-    Some(rates[rates.len() / 2])
+    rates.get(rates.len() / 2).copied()
 }
 
 /// What this call should cost, given what the endpoint has done so far.

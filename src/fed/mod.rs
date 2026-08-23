@@ -409,11 +409,13 @@ mod tests {
     #[test]
     fn parses_rows_and_stops_at_next_section() {
         let e = edges(F);
-        assert_eq!(e.len(), 2);
-        assert_eq!(e[0].dir, "src");
-        assert_eq!(e[0].not_owns, "scripts, docs");
-        assert_eq!(e[0].tokens, Some(1200));
-        assert_eq!(e[1].tokens, None, "`-` means unrecorded, not zero");
+        let [first, second] = e.as_slice() else {
+            unreachable!("two rows, and the pattern says so")
+        };
+        assert_eq!(first.dir, "src");
+        assert_eq!(first.not_owns, "scripts, docs");
+        assert_eq!(first.tokens, Some(1200));
+        assert_eq!(second.tokens, None, "`-` means unrecorded, not zero");
     }
 
     /// V13: through `edges()`, not through the splitter alone -- the row that
@@ -479,7 +481,10 @@ mod tests {
     #[test]
     fn escaped_pipe_stays_in_the_cell() {
         let t = "## \u{a7}F FEDERATION\ndir|owns|\u{22a5}owns|tokens\na|rule\\|why|-|10\n";
-        assert_eq!(edges(t)[0].owns, "rule|why");
+        assert_eq!(
+            edges(t).first().map(|e| e.owns.clone()),
+            Some("rule|why".to_string())
+        );
     }
 
     #[test]
@@ -603,7 +608,10 @@ mod tests {
             !violations.is_empty(),
             "Expected a violation for edge with dir 'src/subdir', but none were reported"
         );
-        assert_eq!(violations[0].dir, "src/subdir");
+        assert_eq!(
+            violations.first().map(|v| v.dir.clone()),
+            Some("src/subdir".to_string())
+        );
     }
 
     #[test]
@@ -622,7 +630,10 @@ mod tests {
             !violations.is_empty(),
             "Expected a violation for edge with empty ⊥owns, but none were reported"
         );
-        assert_eq!(violations[0].dir, "src");
+        assert_eq!(
+            violations.first().map(|v| v.dir.clone()),
+            Some("src".to_string())
+        );
     }
 
     #[test]

@@ -324,7 +324,7 @@ mod tests {
     fn comments_and_blanks_are_skipped() {
         let d = parse_decls("# c\n\na.txt b.md lead:2\n").unwrap();
         assert_eq!(d.len(), 1);
-        assert_eq!(d[0].rule, Rule::Lead(2));
+        assert_eq!(d.first().map(|x| &x.rule), Some(&Rule::Lead(2)));
     }
 
     #[test]
