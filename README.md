@@ -14,7 +14,7 @@
 [![federated nodes 17](https://img.shields.io/badge/federated_nodes-17-6E4AFF)](SPEC.md)
 
 [![nix flake](https://img.shields.io/badge/nix-flake-5277C3?logo=nixos&logoColor=white)](flake.nix)
-[![nixpkgs a687c14](https://img.shields.io/badge/nixpkgs-a687c14-5277C3?logo=nixos&logoColor=white)](flake.lock)
+[![nixpkgs 26.05 (2026-08-12 - 9f78f44)](https://img.shields.io/badge/nixpkgs-26.05_(2026--08--12_--_9f78f44)-5277C3?logo=nixos&logoColor=white)](flake.lock)
 [![amd linux](https://img.shields.io/badge/linux-5277C3?logo=amd&logoColor=white)](.github/workflows/ci.yml)
 [![arm linux](https://img.shields.io/badge/linux-5277C3?logo=arm&logoColor=white)](.github/workflows/ci.yml)
 [![arm macos](https://img.shields.io/badge/macos-5277C3?logo=arm&logoColor=white)](.github/workflows/ci.yml)
@@ -42,11 +42,11 @@
 Federated `SPEC.md` for spec-driven development on **local** models — a 20B
 running on your own hardware, not a frontier API.
 
-The problem in one number: **itok**, a sibling project, is an 11,332-line
-single-crate CLI. Its spec plus its code is **136,811 tokens**. The best
-consumer setup measured here — gpt-oss:20b on a 24GB M-series box, full
-131,072-token window — leaves **102,529 working tokens** after harness
-overhead. A small, disciplined tool already does not fit its own best-case
+The problem in one number: **[itok](https://github.com/pr0d1r2/itok)**, a
+sibling project, is an 11,332-line single-crate CLI. Its spec plus its code
+is **136,811 tokens**. The best consumer setup measured here — gpt-oss:20b
+on a 24GB M-series box, full 131,072-token window — leaves **102,529 working
+tokens** after harness overhead. A small, disciplined tool already does not fit its own best-case
 hardware, before any reasoning happens.
 
 sherd splits a repo so no single call has to.
@@ -306,7 +306,8 @@ violation would disappear.
 
 Early. `budget`, `lens`, `fed`, `graph`, `check`, `ask`, `tdd` and `oneshot`
 work. `route`, `split`, `sync`, `validate`, `SPEC.why.md` and the file ceilings
-are specced and unbuilt. `§F`/`§N` are extensions microlith cannot yet parse —
+are specced and unbuilt. `§F`/`§N` are extensions
+[microlith](https://github.com/pr0d1r2/microlith) cannot yet parse —
 they need to go upstream rather than fork the format.
 
 Two LLM-authored functions live in `src/fed/`, written by gpt-oss:20b through
