@@ -64,7 +64,7 @@ pub struct Ceilings {
 pub const DEFAULT_NODE: u64 = 2_000;
 
 impl Ceilings {
-    /// Parse the format. An unparseable limit is an ERROR, never a skipped
+    /// Parse the format. An unparsable limit is an ERROR, never a skipped
     /// row: itok's B7 skipped `SPEC.md 20.5k`, reported "checked: 1 of 2",
     /// and exited 0 while gating nothing.
     ///
@@ -207,7 +207,7 @@ mod tests {
     }
 
     #[test]
-    fn an_unparseable_limit_is_an_error_not_a_skip() {
+    fn an_unparsable_limit_is_an_error_not_a_skip() {
         // itok B7: a skipped row made a gate check nothing while exiting 0.
         let e = Ceilings::parse("SPEC.md 20.5k\n").unwrap_err();
         assert!(e.contains("not a token count"), "{e}");

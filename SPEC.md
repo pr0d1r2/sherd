@@ -32,7 +32,7 @@ src|code nodes — tokens, spec, fed, lens facades & logic|inference harness, en
 - repo partitions **set** \| **setting** \| **human** (`set-and-setting` vocabulary). default pack = set.
 - caveman encoding ∀ generated spec text. MEASURED 22% saving ⊥ 75% (R23) — it disciplines saying LESS, ⊥ encodes denser.
 - gate runner = `hk` (from `nix-hk`; nixos-26.05 ships none — landed on master after branch-off). ops DECLARED in `hk.pkl`, ⊥ a shell body in `.githooks`. schema VENDORED `pkl/Config.pkl` ∴ the gate runs w/ ⊥ network.
-- SETTING as contract (V82), one line each: `rustfmt` 80 col + edition 2024 · `clippy -D warnings` AFTER `--` ∴ this crate ⊥ its path deps · `cargo test` · `bbx slice --check` · `bbx check`.
+- SETTING as contract (V82), one line each: `rustfmt` 80 col + edition 2024 · `clippy -D warnings` · `cargo test` · `bbx slice/check/budget` · coverage · lint ratchet · hygiene & linters, named in `hk.pkl`.
 - CODE limits as contract (V82), `clippy.toml` @ root + `[lints.clippy]` denies: fn ≤15 lines · cognitive ≤7 · nesting ≤4 · args ≤4 · fn bools ≤1 · struct bools ≤3 · trait bounds ≤3 · type complexity ≤150 · `unwrap`/`expect`/`panic`/`indexing_slicing`/`todo`/`unimplemented`/`dbg_macro`/`arithmetic_side_effects` DENY · `unsafe_code` FORBID. thresholds are Sandi Metz adapted; reasoning RESTATED here, ⊥ cited to a sibling — an id that resolves in no namespace this repo can reach reads authoritative & is ⊥ checkable.
 - ⊥ global index file. discovery by walk.
 

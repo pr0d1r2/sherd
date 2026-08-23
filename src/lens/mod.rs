@@ -76,7 +76,7 @@ pub fn pack(root: &Path, dir: &Path, depth: Depth) -> std::io::Result<Pack> {
 /// read it (B1). Now there is a real source, in itok's format.
 ///
 /// # Errors
-/// Propagates a malformed `.context-limits` -- an unparseable ceiling is an
+/// Propagates a malformed `.context-limits` -- an unparsable ceiling is an
 /// error, not a silent default.
 pub fn ceiling_for(root: &Path, node: &Path) -> Result<u64, String> {
     let rel = node.strip_prefix(root).unwrap_or(node);
