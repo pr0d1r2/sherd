@@ -220,11 +220,13 @@ pub fn derived_prefill(prompt_tokens: u64) -> Option<f64> {
         .iter()
         .filter_map(|row| {
             let f: Vec<&str> = row.split(' ').collect();
-            if f.len() < 6 || f[5] == "1" {
+            let [_, tok, ms, _, _, cached, ..] = f.as_slice() else {
+                return None;
+            };
+            if *cached == "1" {
                 return None;
             }
-            let (tok, ms) =
-                (f[1].parse::<u64>().ok()?, f[2].parse::<f64>().ok()?);
+            let (tok, ms) = (tok.parse::<u64>().ok()?, ms.parse::<f64>().ok()?);
             if bucket(tok) != want || ms <= 0.0 {
                 return None;
             }

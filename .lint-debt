@@ -119,4 +119,40 @@
 # citations, and asserts on each outcome. The three citations ARE the test
 # -- one dead node, one dead row, one that resolves -- and splitting them
 # into separate tests would build three repos to assert one function once.
-total 291
+#
+# FELL 291 -> 271 on 2026-08-23, the first real paydown rather than a
+# recorded raise. Twenty `indexing_slicing` sites, all one family: a row
+# split on a delimiter and then indexed by position. Every one became a
+# slice pattern that states the shape it wants --
+#
+#   let [dir, owns, not_owns, tokens] = cells.as_slice() else { continue };
+#
+# -- which is shorter than the length check plus four indexes it replaces,
+# and moves the arity into the pattern where a reader sees it. `fed::edges`,
+# `plan::open_tasks`, `spec::unreflected_bugs`, `slice::decls` and
+# `ollama`'s obs parser. Done twice earlier today on smaller sites and both
+# times the code got shorter, which is why this was the family chosen.
+#
+# WHAT WAS DELIBERATELY NOT FIXED, measured before deciding:
+#
+#   arithmetic_side_effects  59, of which 55 are `n += 1` on a counter.
+#     `saturating_add` on a line counter is the contortion trap wearing a
+#     different suit -- noisier, no safer.
+#   too_many_lines  76, of which 17 are 16-19 lines. One line over an
+#     aggressive threshold is not debt, it is a description of the
+#     threshold. Three rounds of splitting for this lint earlier in the
+#     week produced a five-parameter helper and a test asserting nothing.
+#   indexing  the 57 left are byte scanners (`b[i]` inside a hand-rolled
+#     lexer), serde_json `v["key"]`, and const arrays indexed by a literal
+#     in tests. None can be improved by a pattern.
+#   unwrap in tests  42. Idiomatic, and the gate already allows them.
+#
+# The number mixes two unrelated things and neither moves because of it:
+# SHAPE (too_many_lines, cognitive_complexity, nesting, arg count, type
+# complexity) is 104 and is what `.:R44` and the §G target are about; SAFETY
+# (indexing, arithmetic, unwrap) is 167 and is ordinary Rust hygiene. One
+# number lets a safety fix pay for a shape regression. Two ratchets, neither
+# allowed to rise, would be strictly stronger than one -- not done here
+# because changing what a ratchet measures is not a thing to do in the same
+# commit that moves it.
+total 271
