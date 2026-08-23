@@ -1661,6 +1661,12 @@ mod split_tests {
 /// boundary the author drew more explicitly (`V17`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Evidence {
+    /// Declared in the entry file and nothing more. The weakest grade, and
+    /// the one `microlith` is made of: eleven `pub(crate) mod` lines, no
+    /// directories, no families, no published surface. A crate can draw
+    /// every boundary this way, and dropping the grade made such a crate
+    /// propose NOTHING (`B13`).
+    Declared,
     /// A naming family plus shared `use crate::` edges.
     Cohesion,
     /// `pub mod` -- the author published it.
@@ -1676,6 +1682,7 @@ impl Evidence {
             Self::Drawn => "directory",
             Self::Published => "pub mod",
             Self::Cohesion => "family",
+            Self::Declared => "declared",
         }
     }
 }
@@ -1730,7 +1737,7 @@ pub fn structure(dir: &Path) -> Vec<Proposed> {
         } else if d.is_pub {
             Evidence::Published
         } else {
-            continue;
+            Evidence::Declared
         };
         out.push(Proposed {
             name: d.name.clone(),

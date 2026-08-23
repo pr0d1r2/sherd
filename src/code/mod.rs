@@ -409,10 +409,19 @@ pub fn mod_decls(src: &str) -> Vec<ModDecl> {
 }
 
 /// One `mod foo;` or `pub mod foo;`, or nothing.
+/// `pub(crate)` and `pub(super)` are NOT published: they are visibility
+/// inside the crate, which is the same information a bare `mod` carries.
+/// `microlith` declares all eleven of its modules `pub(crate)`, so reading
+/// that as `pub` would call an internal boundary an API one -- and failing
+/// to parse it at all made a crate with eleven modules propose nothing
+/// (`.:plan:B13`).
 fn one_decl(line: &str) -> Option<ModDecl> {
-    let (is_pub, rest) = line
-        .strip_prefix("pub ")
-        .map_or((false, line), |r| (true, r));
+    let (is_pub, rest) = match line.strip_prefix("pub(") {
+        Some(r) => (false, r.split_once(") ").map(|(_, r)| r)?),
+        None => line
+            .strip_prefix("pub ")
+            .map_or((false, line), |r| (true, r)),
+    };
     let name = rest.strip_prefix("mod ")?.strip_suffix(';')?;
     (!name.contains(char::is_whitespace)).then(|| ModDecl {
         name: name.to_string(),
@@ -451,6 +460,7 @@ mod structure_tests {
     const SRC: &str = "\
 #[cfg(test)]
 mod testonly;
+pub(crate) mod internal;
 mod args;
 pub mod bpe;
 mod capcmd;
@@ -461,12 +471,18 @@ use crate::units;
 use std::path::Path;
 ";
 
+    /// `pub(crate)` is visibility INSIDE the crate, which is what a bare
+    /// `mod` already says -- not the published API `pub` declares.
     #[test]
-    fn a_pub_mod_is_distinguished_from_a_private_one() {
+    fn pub_and_pub_crate_and_private_are_three_different_things() {
         let mods = mod_decls(SRC);
-        assert_eq!(mods.len(), 4, "{mods:?}");
+        assert_eq!(mods.len(), 5, "{mods:?}");
         assert!(mods.iter().any(|m| m.name == "bpe" && m.is_pub));
         assert!(mods.iter().any(|m| m.name == "args" && !m.is_pub));
+        assert!(
+            mods.iter().any(|m| m.name == "internal" && !m.is_pub),
+            "pub(crate) is not published: {mods:?}"
+        );
     }
 
     /// An inline `mod foo { .. }` declares no FILE, so it can never become a
