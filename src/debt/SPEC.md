@@ -44,7 +44,6 @@ V8: a CEILING is per `.rs` FILE & the halves are counted SEPARATELY — 4,000 co
 ## §T TASKS
 
 id|status|task|cites
-T1|.|`hk.pkl` calls `sherd debt --check` instead of re-deriving the formula in awk. the rule is stated 3x today, & 2 of them are a copy-paste of each other|`B6`,V5
 T2|.|`.coverage` joins this node. it is the same shape — a percentage that may ⊥ fall — & lives in `hk.pkl` alone|V2
 T3|.|`review::node` walks for `.rs` files w/ its own loop. 3rd reading of one traversal|§C
 

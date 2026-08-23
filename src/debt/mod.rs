@@ -65,16 +65,66 @@ pub fn measured_lines(root: &Path) -> usize {
         .sum()
 }
 
-/// Warnings per thousand lines, in TENTHS, measured exactly as the gate does.
+/// Everything one clippy run tells the ratchet.
 ///
-/// Integer tenths because every comparison in the loop is `usize` and a float
-/// has no business next to a gate.
+/// One struct because the two gated ratios share a run and a denominator:
+/// computing them separately invites exactly the drift `B6` records.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Measured {
+    /// Warnings the gate counts.
+    pub count: usize,
+    /// Lines over the limit, summed across every function that exceeds it.
+    pub excess: usize,
+    /// Lines of Rust in the measured directories.
+    pub loc: usize,
+}
+
+impl Measured {
+    /// Warnings per thousand lines, in TENTHS.
+    #[must_use]
+    pub const fn density(self) -> usize {
+        // `checked_div` rather than a guard plus `/`: a zero denominator is
+        // "nothing measured", which is what `0` means here, and stating it
+        // once beats stating it twice.
+        match self.count.saturating_mul(10_000).checked_div(self.loc) {
+            Some(d) => d,
+            None => 0,
+        }
+    }
+
+    /// Share of the tree inside an over-long function, in TENTHS of a
+    /// percent -- `92` is 9.2%.
+    #[must_use]
+    pub const fn shape(self) -> usize {
+        match self.excess.saturating_mul(1_000).checked_div(self.loc) {
+            Some(s) => s,
+            None => 0,
+        }
+    }
+}
+
+/// Lines over `too_many_lines`' limit on one warning line, if it is one.
 ///
-/// `None` when clippy could not run, the build failed, or there is no Rust to
-/// divide by: there is simply nothing to compare, and refusing would block
-/// every candidate on a bench problem (`src/tdd:V26`).
+/// `(269/15)` is 254. The LIMIT is read from the message rather than assumed,
+/// so raising it in `clippy.toml` cannot leave this measuring the old one.
 #[must_use]
-pub fn density(root: &Path, cargo: &str) -> Option<usize> {
+pub fn excess_lines(line: &str) -> Option<usize> {
+    let (_, tail) = line.split_once("too many lines (")?;
+    let (nums, _) = tail.split_once(')')?;
+    let (had, limit) = nums.split_once('/')?;
+    Some(
+        had.parse::<usize>()
+            .ok()?
+            .saturating_sub(limit.parse().ok()?),
+    )
+}
+
+/// Measure the tree exactly as the gate does.
+///
+/// `None` when clippy could not run or the build failed: a count from a build
+/// that did not compile is not a measurement (`V3`).
+#[must_use]
+pub fn measure(root: &Path, cargo: &str) -> Option<Measured> {
     let o = Command::new(cargo)
         .args(GATE_ARGS)
         .current_dir(root)
@@ -84,9 +134,126 @@ pub fn density(root: &Path, cargo: &str) -> Option<usize> {
     if out.lines().any(build_failed) {
         return None;
     }
-    let n = out.lines().filter(|l| gate_counts(l)).count();
+    // No denominator is NOTHING MEASURED, never "zero debt": a ratio over
+    // an empty tree would report PASS at 0.0 and claim a tree nobody built
+    // is clean (`V3`). Caught by the test asserting silence on a tree with
+    // no Rust, after `Measured` replaced a fn that returned `None` here.
     let loc = measured_lines(root);
-    (loc > 0).then(|| n.saturating_mul(10_000) / loc)
+    if loc == 0 {
+        return None;
+    }
+    let hits: Vec<&str> = out.lines().filter(|l| gate_counts(l)).collect();
+    Some(Measured {
+        count: hits.len(),
+        excess: hits.iter().filter_map(|l| excess_lines(l)).sum(),
+        loc,
+    })
+}
+
+/// The two gated ceilings from `.lint-debt`, in TENTHS.
+#[must_use]
+pub fn recorded_ceilings(root: &Path) -> Option<(usize, usize)> {
+    let text = std::fs::read_to_string(root.join(".lint-debt")).ok()?;
+    let read = |k: &str| text.lines().find_map(|l| tenths(l.strip_prefix(k)?));
+    Some((read("density ")?, read("shape ")?))
+}
+
+/// The density breach message, if it rose.
+fn breach_density(now: usize, was: usize) -> Option<String> {
+    (now > was).then(|| {
+        format!(
+            "sherd/debt:V2: lint DENSITY rose, {} -> {} per KLoC. Fix the \
+             new sites, or record WHY in .lint-debt with the raise.",
+            per_kloc(was),
+            per_kloc(now)
+        )
+    })
+}
+
+/// The shape breach message, if it rose.
+fn breach_shape(now: usize, was: usize) -> Option<String> {
+    (now > was).then(|| {
+        format!(
+            "sherd/debt:V1: SHAPE rose, {}% -> {}% of lines inside an \
+             over-long function. Counting functions punishes splitting one, \
+             so this counts lines OVER the limit.",
+            per_kloc(was),
+            per_kloc(now)
+        )
+    })
+}
+
+/// Did either ratio RISE? The report, and whether it refuses.
+///
+/// Both are checked and both are reported, because a run that stops at the
+/// first breach hides the second and the next commit meets it alone.
+#[must_use]
+pub fn verdict(now: Measured, was: (usize, usize)) -> (bool, String) {
+    let (dw, sw) = was;
+    let (d, s) = (now.density(), now.shape());
+    let mut lines: Vec<String> = [breach_density(d, dw), breach_shape(s, sw)]
+        .into_iter()
+        .flatten()
+        .collect();
+    let ok = lines.is_empty();
+    // `V48`: state what was EXAMINED, not only what failed.
+    lines.push(format!(
+        "  lint {} per KLoC (ceiling {}) · shape {}% (ceiling {}%) · {} \
+         warnings and {} excess lines over {} lines of Rust",
+        per_kloc(d),
+        per_kloc(dw),
+        per_kloc(s),
+        per_kloc(sw),
+        now.count,
+        now.excess,
+        now.loc
+    ));
+    (ok, lines.join("\n"))
+}
+
+/// One `.lint-debt` line, with its number brought current. Every other line
+/// -- every comment, every recorded reason -- passes through untouched: the
+/// file is the audit trail (`V7`).
+fn restate(line: &str, now: Measured) -> String {
+    match line.split_once(' ').map(|(k, _)| k) {
+        Some("density") => format!("density {}", per_kloc(now.density())),
+        Some("shape") => format!("shape {}", per_kloc(now.shape())),
+        Some("count") => format!("count {}", now.count),
+        Some("excess") => format!("excess {}", now.excess),
+        Some("loc") => format!("loc {}", now.loc),
+        _ => line.to_string(),
+    }
+}
+
+/// Rewrite `.lint-debt`'s numbers, refusing a RAISE (`V6`).
+///
+/// # Errors
+/// The file could not be read or written, or either ratio rose -- a ratchet
+/// that writes down whatever it measures is not a ratchet.
+pub fn record(root: &Path, now: Measured) -> Result<String, String> {
+    let path = root.join(".lint-debt");
+    let text = std::fs::read_to_string(&path).map_err(|e| format!("{e}"))?;
+    let was = recorded_ceilings(root).ok_or_else(|| {
+        "no `density`/`shape` rows to record into".to_string()
+    })?;
+    if !verdict(now, was).0 {
+        return Err(
+            "refusing to RECORD a raise. A ratchet that writes down whatever \
+             it measures is not a ratchet."
+                .into(),
+        );
+    }
+    let out: String = text.lines().fold(String::new(), |mut acc, l| {
+        acc.push_str(&restate(l, now));
+        acc.push('\n');
+        acc
+    });
+    std::fs::write(&path, &out).map_err(|e| format!("{e}"))?;
+    Ok(format!(
+        "recorded density {} · shape {}%",
+        per_kloc(now.density()),
+        per_kloc(now.shape())
+    ))
 }
 
 /// The `density` ceiling from `.lint-debt`, in TENTHS, if the file is there.
@@ -113,25 +280,34 @@ fn tenths(v: &str) -> Option<usize> {
 mod tests {
     use super::*;
 
-    /// `V5`: the loop's inputs are the gate's, asserted against `hk.pkl`'s
-    /// OWN TEXT. A test hardcoding today's ratio passes while the two drift.
+    /// `V5`, in its stronger form: there is no SECOND statement to drift
+    /// from. The gate CALLS `sherd debt`; it does not re-derive the formula.
+    ///
+    /// This test used to assert that `hk.pkl`'s flags matched `GATE_ARGS`,
+    /// which was the best available check while the rule was written twice.
+    /// Asserting the absence is better: a mirror can be kept faithfully and
+    /// still be two things.
     #[test]
-    fn every_input_is_the_gate_s_own() {
+    fn the_gate_calls_this_rather_than_restating_it() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
         let pkl =
             std::fs::read_to_string(root.join("hk.pkl")).unwrap_or_default();
         assert!(!pkl.is_empty(), "this repository has a gate");
-        for flag in GATE_ARGS.iter().skip(1) {
-            assert!(pkl.contains(flag), "the gate stopped passing {flag}");
+        let step = pkl
+            .split_once("[\"lint-debt\"]")
+            .map(|(_, r)| r.split_once("\n  }").map_or(r, |(s, _)| s))
+            .unwrap_or_default();
+        assert!(
+            step.contains("sherd -- debt --check")
+                && step.contains("sherd -- debt --record"),
+            "the ratchet step calls the verb: {step}"
+        );
+        for restated in ["10000/l", "too many lines", "grep -cE"] {
+            assert!(
+                !step.contains(restated),
+                "the gate restated `{restated}`, which is `B6` again"
+            );
         }
-        assert!(
-            pkl.contains("'^(src|dev)/.*: warning'"),
-            "the gate's warning filter changed; `gate_counts` mirrors it"
-        );
-        assert!(
-            pkl.contains(r#"find src dev -name "*.rs""#),
-            "the gate's denominator changed; `MEASURED` mirrors it"
-        );
     }
 
     /// The mirror is honest in both directions.
@@ -171,5 +347,214 @@ mod tests {
             .map(|t| t.lines().count())
             .sum::<usize>();
         assert!(all > src_only, "`dev` is measured too: {all} vs {src_only}");
+    }
+
+    /// `V1`: the two ratios are computed from ONE measurement, so they cannot
+    /// disagree about the denominator -- which is `B6` in one sentence.
+    #[test]
+    fn both_ratios_come_from_one_denominator() {
+        let m = Measured {
+            count: 257,
+            excess: 1648,
+            loc: 17701,
+        };
+        assert_eq!(m.density(), 145, "14.5 per KLoC");
+        assert_eq!(m.shape(), 93, "9.3% of lines");
+        // Nothing measured is not zero debt: a ratio needs a denominator.
+        let empty = Measured {
+            count: 0,
+            excess: 0,
+            loc: 0,
+        };
+        assert_eq!(empty.density(), 0);
+        assert_eq!(empty.shape(), 0);
+    }
+
+    /// The LIMIT is read from clippy's own message, so raising it in
+    /// `clippy.toml` cannot leave this measuring the old one.
+    #[test]
+    fn excess_is_lines_over_the_limit_clippy_reports() {
+        assert_eq!(
+            excess_lines("x: warning: too many lines (269/15)"),
+            Some(254)
+        );
+        assert_eq!(excess_lines("x: warning: too many lines (20/18)"), Some(2));
+        assert_eq!(excess_lines("x: warning: indexing may panic"), None);
+    }
+
+    /// `V1`+`V2`: BOTH breaches are reported, never just the first. A run
+    /// that stops at one hides the other and the next commit meets it alone.
+    #[test]
+    fn a_verdict_names_every_ratio_that_rose() {
+        let worse = Measured {
+            count: 300,
+            excess: 2000,
+            loc: 10_000,
+        };
+        let (ok, report) = verdict(worse, (100, 100));
+        assert!(!ok);
+        assert!(report.contains("DENSITY rose"), "{report}");
+        assert!(report.contains("SHAPE rose"), "{report}");
+        // `.:V48`: what was EXAMINED is stated either way.
+        let (held, r2) = verdict(worse, (999, 999));
+        assert!(held);
+        assert!(r2.contains("300 warnings"), "{r2}");
+        assert!(!r2.contains("rose"), "{r2}");
+    }
+
+    /// `V7`: every line that is not a number passes through untouched. The
+    /// file is the audit trail, and a recorded reason outlives its number.
+    #[test]
+    fn recording_rewrites_numbers_and_keeps_every_reason() {
+        let now = Measured {
+            count: 7,
+            excess: 3,
+            loc: 1_000,
+        };
+        assert_eq!(
+            restate("# RAISED for T1, and here is why", now),
+            "# RAISED for T1, and here is why"
+        );
+        assert_eq!(restate("density 99.9", now), "density 7.0");
+        assert_eq!(restate("shape 5.0", now), "shape 0.3");
+        assert_eq!(restate("count 1", now), "count 7");
+        assert_eq!(restate("", now), "");
+    }
+
+    /// A breach message names BOTH numbers, because "it rose" without the
+    /// pair is a verdict nobody can argue with.
+    #[test]
+    fn a_breach_names_the_ceiling_and_the_measurement() {
+        let d = breach_density(150, 140).unwrap_or_default();
+        assert!(d.contains("14.0") && d.contains("15.0"), "{d}");
+        assert_eq!(breach_density(140, 140), None, "holding is not a breach");
+        assert_eq!(breach_shape(90, 92), None, "falling is not a breach");
+    }
+
+    /// Both ceilings are read, and a file missing either is unusable rather
+    /// than half-read -- half a ratchet gates half the tree.
+    #[test]
+    fn both_ceilings_are_read_or_neither_is() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let (d, s) = recorded_ceilings(root).unwrap_or_default();
+        assert!(d > 0 && s > 0, "this repo records both: {d} {s}");
+        assert_eq!(
+            recorded_ceilings(Path::new("/definitely-not-a-repo")),
+            None
+        );
+    }
+
+    /// `V6`: the FIX half may only LOWER. `pre-commit` runs the fast set in
+    /// fix mode, so a fix that recorded whatever it measured would file down
+    /// the ratchet's own teeth -- writing the raise it exists to refuse.
+    #[test]
+    fn recording_lowers_and_refuses_to_raise() {
+        let dir = std::env::temp_dir()
+            .join(format!("sherd-debt-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let _ = std::fs::create_dir_all(&dir);
+        let write = |body: &str| {
+            let _ = std::fs::write(dir.join(".lint-debt"), body);
+        };
+        let read = || {
+            std::fs::read_to_string(dir.join(".lint-debt")).unwrap_or_default()
+        };
+
+        write(
+            "# why it is 10.0\ndensity 10.0\nshape 5.0\ncount 1\nexcess 1\nloc 1\n",
+        );
+        // A FALL is written, and the comment survives it (`V7`).
+        let better = Measured {
+            count: 5,
+            excess: 3,
+            loc: 1_000,
+        };
+        assert!(record(&dir, better).is_ok());
+        let after = read();
+        assert!(after.contains("density 5.0"), "{after}");
+        assert!(after.contains("shape 0.3"), "{after}");
+        assert!(after.contains("count 5") && after.contains("loc 1000"));
+        assert!(after.contains("# why it is 10.0"), "the reason survives");
+
+        // A RISE is refused, and nothing is written.
+        let worse = Measured {
+            count: 900,
+            excess: 900,
+            loc: 1_000,
+        };
+        let before = read();
+        assert!(
+            record(&dir, worse).is_err_and(|e| e.contains("not a ratchet")),
+            "a raise is refused"
+        );
+        assert_eq!(read(), before, "and the file is untouched");
+
+        // A tree with no `.lint-debt` is an error, never a silent success.
+        assert!(record(Path::new("/definitely-not-a-repo"), better).is_err());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A scripted `cargo` in `dir`, printing `out` on stderr.
+    fn scripted_cargo(dir: &Path, out: &str) -> String {
+        let p = dir.join("fake-cargo");
+        let body = format!("#!/bin/sh\ncat <<'EOF' >&2\n{out}\nEOF\nexit 0\n");
+        let _ = std::fs::write(&p, body);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = std::fs::set_permissions(
+                &p,
+                std::fs::Permissions::from_mode(0o755),
+            );
+        }
+        p.display().to_string()
+    }
+
+    /// `V3`: a count from a build that did NOT COMPILE is not a measurement.
+    /// Clippy emits no warnings for a target that fails to build, and the
+    /// ratchet would read that as debt paid -- 270 -> 180 (`B1`).
+    #[test]
+    fn a_failed_build_yields_no_measurement() {
+        let dir = std::env::temp_dir()
+            .join(format!("sherd-measure-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let _ = std::fs::create_dir_all(dir.join("src"));
+        let _ = std::fs::write(dir.join("src/a.rs"), "fn f() {}\n".repeat(100));
+
+        let good = scripted_cargo(
+            &dir,
+            "src/a.rs:1:1: warning: too many lines (40/15)\n\
+             dev/b.rs:2:2: warning: indexing may panic\n\
+             tests/c.rs:3:3: warning: ignored",
+        );
+        let m = measure(&dir, &good).unwrap_or(Measured {
+            count: 0,
+            excess: 0,
+            loc: 0,
+        });
+        assert_eq!(m.count, 2, "`tests/` is not measured");
+        assert_eq!(m.excess, 25, "40 lines over a limit of 15");
+        assert_eq!(m.loc, 100, "the denominator is the tree's own Rust");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// An ERROR anywhere means there is nothing to count, and a toolchain
+    /// that is not there is not a clean tree either (`V3`).
+    #[test]
+    fn a_broken_build_and_a_missing_toolchain_both_yield_nothing() {
+        let dir = std::env::temp_dir()
+            .join(format!("sherd-broken-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let _ = std::fs::create_dir_all(dir.join("src"));
+        let _ = std::fs::write(dir.join("src/a.rs"), "fn f() {}\n");
+        let broken = scripted_cargo(
+            &dir,
+            "error[E0425]: cannot find value\n\
+             src/a.rs:1:1: warning: indexing may panic",
+        );
+        assert_eq!(measure(&dir, &broken), None);
+        assert_eq!(measure(&dir, "definitely-not-a-cargo"), None);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
