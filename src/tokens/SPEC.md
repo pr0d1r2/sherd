@@ -42,10 +42,7 @@ V7: an unparsable ceiling is an ERROR naming its line, ⊥ a skipped row. itok B
 ## §T TASKS
 
 id|status|task|cites
-T1|x|`count`, `count_file`, method label|V1,V2
-T2|x|`ENTRY_COST`, `working`|V3,V4
 T3|.|needs `tdd::split_module` — cross-node, name it before driving|`.:V50`
 T4|.|apply a tighter ceiling to `mod.rs`/`lib.rs`|`.:V51`
-T5|x|`Ceilings` — read per-path ceilings in `.context-limits` format|`.:V52`
 T6|.|needs `sherd.toml` and a TOML parser — neither exists|V2
 T7|.|needs a compile-fail test, ⊥ a function|`.:V72`

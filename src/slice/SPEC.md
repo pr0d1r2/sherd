@@ -43,12 +43,8 @@ V7: `drifted` has ONE definition, called by `sherd slice --check` AND by the gat
 ## §T TASKS
 
 id|status|task|cites
-T1|x|`Rule` — lead, section, fence, prefix — & `parse_decls`|V1,V4
-T2|x|`render` w/ provenance header + empty-slice error|V3,V5
-T3|x|`sherd slice [--check|--list]`|V2
 T4|.|regenerate `notation.txt` from a vendored `FORMAT.md`|V2,B1
 T5|.|distil `§B` rows into worker prohibitions — the failures are stubs, ⊥ design|V6
-T6|x|`drifted` — shared by the CLI & the gate|V7
 
 ## §B BUGS
 

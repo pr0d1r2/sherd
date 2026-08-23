@@ -980,6 +980,16 @@ fn check(root: &Path) -> ExitCode {
             println!("{}:{d}", path.display());
             bad = bad.saturating_add(1);
         }
+        // A finished `§T` row is history and every chain pays for it on
+        // every turn (`sherd/fed:V9`). Advisory -- some carry a MEASURED
+        // result that belongs in `§R` before the row goes.
+        for (id, task) in spec::completed_tasks(&text) {
+            println!(
+                "{}: sherd/fed:V9: {id} is done -- `{task}` is history, \
+                 and §T states remaining work (advisory)",
+                path.display()
+            );
+        }
         // §F structure: duplicate rows (fed V12) and child dirs with no row
         // (fed V11). Advisory -- a missing row is often a dir that is simply
         // not a node yet, so it reports rather than fails.

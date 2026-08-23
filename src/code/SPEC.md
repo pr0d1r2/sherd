@@ -53,7 +53,6 @@ V4: a heuristic here ! carry the case that broke it as a TEST. the fn is 10 line
 ## §T TASKS
 
 id|status|task|cites
-T1|x|promote the node — `signatures`·`expected_calls`·`split_module` from `.:tdd`, `public_fns` + `is_called` from `.:review`|`.:V73`,`.:V109`,`.:B13`
 T2|.|audit `.:review` for parse logic still hiding in a FINDING builder — `unwired` gave up `is_called` & may ⊥ be the only one|V2,V3
 T3|.|`expected_calls` is 75 lines & `signatures` 62, both over `.:V50`'s function limit. decompose HERE, where they are the whole node & the seams are visible|`.:V109`
 T4|.|relocate the OWNING rows: `.:src/tdd:V7` (split_module) · `.:src/tdd:B13`/`B18` (expected_calls) · `.:src/review:B1`/`B2` (call detection). they constrain code that lives HERE now, & a reader of this node cannot see why `expected_calls` is 75 lines without them (V4). NOTE this LOWERS `.:tdd` & raises this chain — measure both (`.:V110`)|V4,`.:V110`
