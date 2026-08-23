@@ -220,23 +220,34 @@ pub fn render(f: &Facts) -> String {
     s
 }
 
-pub const BEGIN: &str = "<!-- BEGIN badges -->";
-pub const END: &str = "<!-- END badges -->";
+/// The markers around one generated block. NAMED, because the README carries
+/// four of them now -- the badges and the three `bbx graph` renderings -- and
+/// a single unnamed pair could only ever guard one.
+#[must_use]
+pub fn markers(name: &str) -> (String, String) {
+    (
+        format!("<!-- BEGIN {name} -->"),
+        format!("<!-- END {name} -->"),
+    )
+}
 
-/// What the README currently carries between the markers, if both are there.
-pub fn current(readme: &str) -> Option<String> {
-    let after = readme.split_once(BEGIN)?.1;
-    let (block, _) = after.split_once(END)?;
+/// What the README currently carries between one block's markers, if both are
+/// there.
+pub fn current_named(readme: &str, name: &str) -> Option<String> {
+    let (begin, end) = markers(name);
+    let after = readme.split_once(&begin)?.1;
+    let (block, _) = after.split_once(&end)?;
     Some(block.trim_start_matches('\n').to_string())
 }
 
-/// The README with the block replaced. `None` when a marker is missing --
-/// which is a repository that has not opted in, not a failure to report as
+/// The README with one block replaced. `None` when a marker is missing --
+/// which is a document that has not opted in, not a failure to report as
 /// staleness.
-pub fn splice(readme: &str, block: &str) -> Option<String> {
-    let (head, rest) = readme.split_once(BEGIN)?;
-    let (_, tail) = rest.split_once(END)?;
-    Some(format!("{head}{BEGIN}\n{block}{END}{tail}"))
+pub fn splice_named(readme: &str, name: &str, block: &str) -> Option<String> {
+    let (begin, end) = markers(name);
+    let (head, rest) = readme.split_once(&begin)?;
+    let (_, tail) = rest.split_once(&end)?;
+    Some(format!("{head}{begin}\n{block}{end}{tail}"))
 }
 
 #[cfg(test)]
@@ -428,15 +439,19 @@ hooks {
     }
 
     #[test]
-    fn splice_replaces_only_between_the_markers() {
-        let readme = format!("# t\n\n{BEGIN}\nold\n{END}\n\nbody\n");
-        let out = splice(&readme, "new\n");
+    fn splice_replaces_only_between_one_blocks_markers() {
+        let readme =
+            "# t\n\n<!-- BEGIN badges -->\nold\n<!-- END badges -->\n\nbody\n";
+        let out = splice_named(readme, "badges", "new\n");
         assert_eq!(
             out.as_deref(),
-            Some(format!("# t\n\n{BEGIN}\nnew\n{END}\n\nbody\n").as_str())
+            Some(
+                "# t\n\n<!-- BEGIN badges -->\nnew\n<!-- END badges -->\n\nbody\n"
+            )
         );
         assert_eq!(
-            current(out.as_deref().unwrap_or_default()).as_deref(),
+            current_named(out.as_deref().unwrap_or_default(), "badges")
+                .as_deref(),
             Some("new\n")
         );
     }
@@ -445,15 +460,22 @@ hooks {
     /// second render over its own output must change nothing.
     #[test]
     fn splicing_twice_changes_nothing_the_second_time() {
-        let readme = format!("# t\n\n{BEGIN}\nold\n{END}\n");
-        let once = splice(&readme, "new\n").unwrap_or_default();
-        assert_eq!(splice(&once, "new\n").as_deref(), Some(once.as_str()));
+        let readme = "# t\n<!-- BEGIN badges -->\nold\n<!-- END badges -->\n";
+        let once = splice_named(readme, "badges", "new\n").unwrap_or_default();
+        assert_eq!(
+            splice_named(&once, "badges", "new\n").as_deref(),
+            Some(once.as_str())
+        );
     }
 
+    /// A block named in the generator but absent from the document is a
+    /// document that has not opted in -- never a rewrite of a file that did
+    /// not ask for one.
     #[test]
-    fn a_readme_without_markers_is_not_stale_but_absent() {
-        assert_eq!(current("# t\n\nno markers\n"), None);
-        assert_eq!(splice("# t\n", "x\n"), None);
+    fn a_block_whose_markers_are_absent_is_absent_not_stale() {
+        let readme = "# t\n<!-- BEGIN badges -->\nx\n<!-- END badges -->\n";
+        assert_eq!(current_named(readme, "graph-tree"), None);
+        assert_eq!(splice_named(readme, "graph-tree", "x\n"), None);
     }
 }
 
@@ -470,7 +492,6 @@ pub struct Sources {
     pub pkl: String,
     pub lock: String,
     pub workflow: String,
-    pub readme: String,
 }
 
 /// What running the generator concluded. `Stale` carries the difference so a
@@ -510,118 +531,116 @@ pub fn facts(s: &Sources, nodes: usize) -> Result<Facts, String> {
     })
 }
 
-/// Render, compare, and say what should happen -- without touching the disk,
-/// so `--check` and the write path cannot disagree about what stale means.
+/// Every generated block in the document, by marker name.
+pub type Blocks = Vec<(String, String)>;
+
+/// Compare each generated block against what the README carries, and say what
+/// should happen for the document as a whole.
+///
+/// One pass over all blocks rather than one call per block, because a
+/// document is either current or it is not: reporting the badges fresh while
+/// the diagram is four nodes behind is the half-truth that let the
+/// Architecture section claim it could not drift while it had (`.:B16`).
 ///
 /// # Errors
-/// See [`facts`].
-pub fn run(
-    s: &Sources,
-    nodes: usize,
-    check_only: bool,
-) -> Result<Outcome, String> {
-    let block = render(&facts(s, nodes)?);
-    let Some(current) = current(&s.readme) else {
-        return Ok(Outcome::NoMarkers);
-    };
-    if current == block {
-        return Ok(Outcome::Fresh);
+/// Never -- the signature mirrors [`run`] so a caller handles one shape.
+pub fn apply(readme: &str, blocks: &Blocks, check_only: bool) -> Outcome {
+    let mut next = readme.to_string();
+    let mut diff = Vec::new();
+    let mut missing = false;
+    for (name, want) in blocks {
+        let Some(have) = current_named(&next, name) else {
+            missing = true;
+            continue;
+        };
+        if &have == want {
+            continue;
+        }
+        if check_only {
+            diff.push(format!("stale: {name}"));
+            diff.extend(
+                want.lines()
+                    .filter(|l| !have.contains(*l) && !l.trim().is_empty())
+                    .take(3)
+                    .map(|l| format!("  want: {l}")),
+            );
+            diff.extend(
+                have.lines()
+                    .filter(|l| !want.contains(*l) && !l.trim().is_empty())
+                    .take(3)
+                    .map(|l| format!("  have: {l}")),
+            );
+            continue;
+        }
+        match splice_named(&next, name, want) {
+            Some(s) => next = s,
+            None => missing = true,
+        }
     }
-    if check_only {
-        let mut diff: Vec<String> = block
-            .lines()
-            .filter(|l| !current.contains(*l) && !l.is_empty())
-            .map(|l| format!("want: {l}"))
-            .collect();
-        diff.extend(
-            current
-                .lines()
-                .filter(|l| !block.contains(*l) && !l.is_empty())
-                .map(|l| format!("have: {l}")),
-        );
-        return Ok(Outcome::Stale(diff));
+    if missing {
+        return Outcome::NoMarkers;
     }
-    splice(&s.readme, &block)
-        .map(Outcome::Wrote)
-        .ok_or_else(|| "bbx-dev: README markers vanished between reads".into())
+    if !diff.is_empty() {
+        return Outcome::Stale(diff);
+    }
+    if next == readme {
+        return Outcome::Fresh;
+    }
+    Outcome::Wrote(next)
 }
 
 #[cfg(test)]
-mod run_tests {
+mod apply_tests {
     use super::*;
 
-    fn sources(readme: &str) -> Sources {
-        Sources {
-            manifest:
-                "[package]\nedition = \"2024\"\nrust-version = \"1.95\"\n"
-                    .to_string(),
-            coverage: "lines 90.58\n".to_string(),
-            debt: "total 270\n".to_string(),
-            pkl: "local fast = new Mapping<String, Step> {\n  [\"fmt\"] {\n}\n"
-                .to_string(),
-            lock: "\"nixpkgs\": {\n\"rev\": \"a687c14ffffffff\"\n".to_string(),
-            workflow: "        os: [macos-latest]\n".to_string(),
-            readme: readme.to_string(),
-        }
+    fn doc(badges: &str, graph: &str) -> String {
+        format!(
+            "# t\n\n<!-- BEGIN badges -->\n{badges}<!-- END badges -->\n\ntext\n\n<!-- BEGIN graph -->\n{graph}<!-- END graph -->\n"
+        )
+    }
+
+    fn blocks(badges: &str, graph: &str) -> Blocks {
+        vec![
+            ("badges".to_string(), badges.to_string()),
+            ("graph".to_string(), graph.to_string()),
+        ]
     }
 
     #[test]
-    fn a_readme_already_carrying_the_block_is_fresh() {
-        let s = sources("x");
-        let block = render(&facts(&s, 17).unwrap_or_else(|_| unreachable!()));
-        let s = sources(&format!("# t\n{BEGIN}\n{block}{END}\n"));
-        assert_eq!(run(&s, 17, true), Ok(Outcome::Fresh));
-        assert_eq!(run(&s, 17, false), Ok(Outcome::Fresh));
+    fn a_document_where_every_block_matches_is_fresh() {
+        let d = doc("A\n", "B\n");
+        assert_eq!(apply(&d, &blocks("A\n", "B\n"), true), Outcome::Fresh);
+        assert_eq!(apply(&d, &blocks("A\n", "B\n"), false), Outcome::Fresh);
     }
 
-    /// The node count moving is the cheapest real staleness: it changes when
-    /// a node is added, which is exactly when nobody thinks about badges.
+    /// The failure `.:B16` records: one block current, another four nodes
+    /// behind. A per-block checker that stopped at the first fresh one would
+    /// have reported this document clean for weeks.
     #[test]
-    fn check_names_what_differs_and_writes_nothing() {
-        let s = sources("x");
-        let block = render(&facts(&s, 16).unwrap_or_else(|_| unreachable!()));
-        let s = sources(&format!("# t\n{BEGIN}\n{block}{END}\n"));
-        let Ok(Outcome::Stale(diff)) = run(&s, 17, true) else {
-            unreachable!("a moved node count must read as stale")
+    fn a_stale_second_block_is_reported_even_when_the_first_is_fresh() {
+        let d = doc("A\n", "OLD\n");
+        let Outcome::Stale(diff) = apply(&d, &blocks("A\n", "NEW\n"), true)
+        else {
+            unreachable!("a stale block must be reported")
         };
-        assert!(diff.iter().any(|l| l.starts_with("want:")));
-        assert!(diff.iter().any(|l| l.starts_with("have:")));
-        assert!(diff.iter().any(|l| l.contains("federated_nodes-17")));
+        assert!(diff.iter().any(|l| l == "stale: graph"));
+        assert!(!diff.iter().any(|l| l == "stale: badges"));
     }
 
     #[test]
-    fn the_write_path_returns_the_whole_readme() {
-        let s = sources(&format!("# t\n{BEGIN}\nold\n{END}\ntail\n"));
-        let Ok(Outcome::Wrote(next)) = run(&s, 17, false) else {
-            unreachable!("a stale readme must be rewritten")
+    fn writing_replaces_every_stale_block_in_one_pass() {
+        let d = doc("OLD\n", "OLD\n");
+        let Outcome::Wrote(next) = apply(&d, &blocks("A\n", "B\n"), false)
+        else {
+            unreachable!("two stale blocks must be rewritten")
         };
-        assert!(next.starts_with("# t\n"));
-        assert!(next.ends_with("tail\n"));
-        assert!(next.contains("federated_nodes-17"));
-        assert!(!next.contains("\nold\n"));
+        assert_eq!(next, doc("A\n", "B\n"));
+        assert_eq!(apply(&next, &blocks("A\n", "B\n"), false), Outcome::Fresh);
     }
 
     #[test]
-    fn a_readme_without_markers_reports_that_and_not_staleness() {
-        assert_eq!(
-            run(&sources("# t\nno markers\n"), 17, true),
-            Ok(Outcome::NoMarkers)
-        );
-    }
-
-    #[test]
-    fn a_missing_owner_is_an_error_naming_it() {
-        let mut s = sources("x");
-        s.coverage = "# no rows here\n".to_string();
-        assert_eq!(
-            facts(&s, 17).err().as_deref(),
-            Some("bbx-dev: no `lines` row in .coverage to read")
-        );
-        let mut s = sources("x");
-        s.manifest = "[package]\nname = \"x\"\n".to_string();
-        assert_eq!(
-            facts(&s, 17).err().as_deref(),
-            Some("bbx-dev: no `edition` in Cargo.toml to read")
-        );
+    fn a_block_whose_markers_are_absent_is_named_as_such() {
+        let d = "# t\n\n<!-- BEGIN badges -->\nA\n<!-- END badges -->\n";
+        assert_eq!(apply(d, &blocks("A\n", "B\n"), true), Outcome::NoMarkers);
     }
 }

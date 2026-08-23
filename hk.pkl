@@ -262,11 +262,11 @@ local fast = new Mapping<String, Step> {
   // typed and unit-tested like everything else here. The first draft WAS a
   // shell script, and it had two parser defects within ten minutes of
   // existing; `dev/SPEC.md:V4` is one of them, kept as a test.
-  ["readme-badges"] {
-    glob = List("README.md", "dev/src/**", "Cargo.toml", "hk.pkl", ".coverage", ".lint-debt", "flake.lock", ".github/workflows/ci.yml")
+  ["readme-generated"] {
+    glob = List("README.md", "dev/src/**", "Cargo.toml", "hk.pkl", ".coverage", ".lint-debt", "flake.lock", ".github/workflows/ci.yml", "**/SPEC.md")
     depends = List("test")
-    check = "cargo run -q -p bbx-dev -- badges --check"
-    fix = "cargo run -q -p bbx-dev -- badges"
+    check = "cargo run -q -p bbx-dev -- readme --check"
+    fix = "cargo run -q -p bbx-dev -- readme"
   }
   ["links"] {
     glob = List("**/*")

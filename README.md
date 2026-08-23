@@ -75,53 +75,98 @@ facet × horizontal brings one node's work to about 6%.
 
 ## Architecture
 
-Generated from the `§F` tables by `bbx graph` — never hand-drawn, so it
-cannot drift from what the specs declare.
+Generated from the `§F` tables by `bbx graph`, spliced in by `bbx-dev readme`
+and checked by the gate -- so it cannot drift from what the specs declare. It
+did drift, for as long as nothing regenerated it, and `§B16` records the nine
+nodes it was missing while this sentence claimed otherwise.
 
+<!-- BEGIN graph-tree -->
 ```
 .
-`-- src
-    |-- tokens
-    |-- spec
-    |-- fed
-    |-- lens
-    |-- ollama
-    `-- tdd
+|-- src
+|   |-- tokens
+|   |-- spec
+|   |-- fed
+|   |-- lens
+|   |-- ollama
+|   |-- tdd
+|   |-- plan
+|   |-- review
+|   |-- state
+|   |-- slice
+|   |-- land
+|   |-- cli
+|   |-- code
+|   `-- assay
+`-- dev
 ```
+<!-- END graph-tree -->
 
 The same graph as mermaid, for viewers that render it:
 
+<!-- BEGIN graph-mermaid -->
 ```mermaid
 graph TD
     root[root]
     src[src]
+    dev[dev]
     src_tokens[tokens]
     src_spec[spec]
     src_fed[fed]
     src_lens[lens]
     src_ollama[ollama]
     src_tdd[tdd]
+    src_plan[plan]
+    src_review[review]
+    src_state[state]
+    src_slice[slice]
+    src_land[land]
+    src_cli[cli]
+    src_code[code]
+    src_assay[assay]
     root --> src
+    root --> dev
     src --> src_tokens
     src --> src_spec
     src --> src_fed
     src --> src_lens
     src --> src_ollama
     src --> src_tdd
+    src --> src_plan
+    src --> src_review
+    src --> src_state
+    src --> src_slice
+    src --> src_land
+    src --> src_cli
+    src --> src_code
+    src --> src_assay
 ```
+<!-- END graph-mermaid -->
 
 What each node owns, and — more usefully — what it does not, so a reader
 knows when to stop looking. Also generated, by `bbx graph --table`:
 
+<!-- BEGIN graph-table -->
 | node | owns | does not own |
 |---|---|---|
 | `src` | code nodes — tokens, spec, fed, lens facades & logic | inference harness, endpoint config |
+| `dev` | repo-maintaining tooling, `publish = false` — README generation | anything a consumer installs |
 | `src/tokens` | `itok` facade, counts w/ method label, entry cost, working budget | spec structure, federation edges |
 | `src/spec` | `microlith` facade, §-section split, structural check, fmt | token counts, `§F`/`§N` |
 | `src/fed` | `§F` parse, edges, chain root→node, `SPEC.md` discovery | counting, rendering |
 | `src/lens` | pack assembly, depth `rule`\|`why`, budget verdict | parsing, counting internals |
 | `src/ollama` | local endpoint client, `num_ctx`, fence extraction | prompt construction, loop control |
 | `src/tdd` | red→judge→green→gate→repair loop, source region edits | HTTP, token counting |
+| `src/plan` | open `§T` rows, horizon, confidence, `apply` one step | writing code, judging it |
+| `src/review` | mechanical checks on what `apply` committed | reading the diff, judging intent |
+| `src/state` | one idempotent cached store — pace, telemetry, applied rows | everything else |
+| `src/slice` | distil a document to the part needed to ACT, generated | judging what the slice says |
+| `src/land` | run branch → `main` when believability earns it | writing code, judging it, reading the diff |
+| `src/cli` | arg dispatch, usage, exit codes | every verb's logic |
+| `src/code` | read Rust source as text — split, public fns, call detection, signatures | judging what it reads, `SPEC.md` structure |
+| `src/assay` | a corpus + a compiler grader — measure WHETHER the model can, ⊥ make it | writing code with a model, judging a diff |
+<!-- END graph-table -->
+
 ## What is measured
 
 Every number here came from running something, and several corrected an
