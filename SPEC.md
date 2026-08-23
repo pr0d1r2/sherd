@@ -309,7 +309,7 @@ T96|x|move the `#[ignore]`d titrations from `src/assay` inline tests to `tests/`
 T97|x|build the AMBIGUITY DETECTOR (V112): ∀ `§V` row ask for a test & an impl BLIND, compile them against each other, flag DISAGREEMENT as an underspecified row. a REPORT ⊥ a gate. it grades the spec, ⊥ the model|V112,R54
 T98|x|`bbx-dev docs` — generate the README Commands section from the binary. README names 5 unbuilt verbs & omits 7 built ones ∴ the prose is already behind the code|`dev:V1`
 T99|x|move `gate_with`/`cargo_bin` tdd → `src/land` (owner, & the only non-tdd caller) ∴ `--no-default-features` builds, + gate it in `hk.pkl` (B15)|V74,B15
-T100|.|ONLINE link check, scheduled in CI ⊥ in the commit gate. `lychee --offline` checks 39 relative paths & EXCLUDES 37 external ones by construction ∴ it cannot see the class we have TODAY: `docs/SECURITY.md` & `CHANGELOG.md` point @ `github.com/pr0d1r2/blackbox` URLs that ⊥ exist yet. a 404 on someone else's site ! ⊥ reject a commit, & OURS ! ⊥ go unnoticed|V26,V74
+T100|x|ONLINE link check, scheduled in CI ⊥ in the commit gate. `lychee --offline` checks 39 relative paths & EXCLUDES 37 external ones by construction ∴ it cannot see the class we have TODAY: `docs/SECURITY.md` & `CHANGELOG.md` point @ `github.com/pr0d1r2/blackbox` URLs that ⊥ exist yet. a 404 on someone else's site ! ⊥ reject a commit, & OURS ! ⊥ go unnoticed|V26,V74
 T101|.|move the scripted-toolchain fixtures (`scratch`·`scripted_cargo`·`write_exec`·`repo_fixture`·`node_fixture`) `src/tdd` tests → `testrepo`, then the 7 gate tests follow the code T99 moved. today they sit in `src/tdd` testing `crate::land::` fns ∵ the fixtures do|V74,B15
 
 ## §B BUGS
