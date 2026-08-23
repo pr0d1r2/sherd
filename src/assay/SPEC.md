@@ -55,13 +55,14 @@ V1: ERROR ⊥ FAIL. a call that did ⊥ RUN says nothing about capability, & cou
 V2: a rung built to FAIL asserts nothing about the score. only the REGRESSION rung asserts — a test demanding success where a boundary is sought is flaky by construction & the first red gets answered by weakening the corpus
 V5: a class predicted AFTER seeing the scores fits any result ∴ pre-register, & score the prediction
 V6: a graded child ! run under a WALL-CLOCK bound, & non-termination is its OWN outcome counted apart. the MODEL writes what gets run ∴ termination is ⊥ assumable — `abort_budget_ms`'s authored test loops to `u64::MAX/4` (~4.6e15 iters) & `.output()` waits forever. killing the child ⊥ a repair: the wait then returns non-success & `grade_detail` reads it as `Fail` ∴ a hang gets RECORDED as a disagreement about a row nothing disagreed about — V1 inverted, & a FABRICATED finding is worse than a lost run
+V7: the CORPUS is apparatus, ⊥ a lookup table ∴ it stays COMPILE-CHECKED. `predicted: Channel::Prose` is registered BEFORE the run so the 3-way split is falsifiable (`.:R43`), & `VAGUE`/`SUBTLE` are DERIVED from `RECORDED` — `code: RECORDED[n].code`, identical impl, 1 variable changed — ∴ whatever a rung loses is attributable to that variable alone. a parsed data file (`toml`, `jsonl`) moves a typo from a BUILD error to a runtime one, which is `.:V100`'s structure → gate DOWNGRADE on this repo's own measured ladder, & it makes the derivation a convention nobody checks ∴ the experiment silently loses its control. a 2nd `.rs` in the node keeps both (`.:V119`)
 
 ## §T TASKS
 
 id|status|task|cites
 T2|.|`NOTATION` belongs w/ `.:spec`, which owns `SPEC.md` structure — it is a caveman-reading primer, ⊥ loop machinery. moving it drops this node's dep on `.:tdd` to `blind_prompt` alone|`.:V72`
-T3|.|`GEN_CORPUS` is 101 lines & `RECORDED` 59 — data, ⊥ code, but they sit in the impl half & are read only by tests. decide: `#[cfg(test)]`, or a real fixture file|`.:V50`
 T4|.|all 3 variables of the `.:R44`→`.:src/tdd:T13` gap have now RUN — pack size `.:R49`, test authorship `.:R51`, signature `.:src/tdd:V28` — & none closes it. name the 4th before running one: one variable per comparison is `.:V108`|V5
+T5|~|FROZEN until rung `0.7` (`.:V117`). move the 7 corpora to `src/assay/corpus.rs` — `mod corpus;` beside `mod.rs`, ⊥ a parsed data file. 4,947 tok of the node's 13,413: `GEN_CORPUS` 2,398 · `RECORDED` 841 · `SUBTLE` 795 · `STUBS` 378 · `VAGUE` 364 · `TIERS` 112. supersedes the deleted `T3`, whose framing was WRONG: it said "read only by tests" & `RECORDED` has 15 impl-half references (10 of them `VAGUE`'s derivation) ∴ `#[cfg(test)]` was never available for it. only `GEN_CORPUS` fits that description — 12 test-half uses, 1 in impl|V7,`.:V119`,`.:V50`
 
 ## §B BUGS
 
