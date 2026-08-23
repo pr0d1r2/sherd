@@ -1,4 +1,4 @@
-# Per-path token CHAIN ceilings, gated by `bbx budget`. itok's format,
+# Per-path token CHAIN ceilings, gated by `sherd budget`. itok's format,
 # reused rather than reinvented -- a second format for one job would be two
 # readings of one rule.
 #
@@ -21,7 +21,7 @@
 # `src` by longest prefix, which IS checked (V104) -- but it left them less
 # slack than their parent, which reads as deliberate and was not.
 #
-# Measured 2026-08-19, `bbx budget`: root 8,401 · src 8,527 · deepest
+# Measured 2026-08-19, `sherd budget`: root 8,401 · src 8,527 · deepest
 # src/tdd 10,649.
 #
 # RESET 2026-08-23, and this one is a RESTORATION rather than a raise. The
@@ -43,7 +43,7 @@
 # header sets as the budget. The binding constraint stayed where R41 found
 # it, on competence rather than context.
 #
-# Measured 2026-08-23, `bbx budget`: root 10,399 · src 10,525 · deepest
+# Measured 2026-08-23, `sherd budget`: root 10,399 · src 10,525 · deepest
 # src/tdd 13,296.
 SPEC.md        12500
 src            12700

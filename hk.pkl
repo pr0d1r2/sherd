@@ -1,4 +1,4 @@
-/// blackbox's gate, defined ONCE.
+/// sherd's gate, defined ONCE.
 ///
 /// Every op below is a plain cargo command a human can paste into a shell. hk
 /// decides *when* they run -- which files changed, which hook, in what order --
@@ -40,8 +40,8 @@ local fast = new Mapping<String, Step> {
   }
   // `-D warnings` is passed AFTER `--`, so it applies to this crate and not to
   // `../itok`. RUSTFLAGS was the old hook's way and it reached every path dep:
-  // itok landing two `dead_code` warnings of its own turned blackbox's gate red
-  // for code blackbox does not own.
+  // itok landing two `dead_code` warnings of its own turned sherd's gate red
+  // for code sherd does not own.
   // `-D warnings` still holds for everything EXCEPT the thirteen lints under
   // ratchet. Those are allowed HERE and counted by `lint-debt` below, because
   // a tree with 290 pre-existing violations cannot compile under `-D` and
@@ -88,21 +88,21 @@ local fast = new Mapping<String, Step> {
     depends = List("clippy")
     check = "cargo test --workspace"
   }
-  // THE DOGFOOD. blackbox checks its own federated spec with the binary being
+  // THE DOGFOOD. sherd checks its own federated spec with the binary being
   // built, so a rule this repo cannot pass is a rule it cannot ship.
   //
-  // `cargo run` rather than `./target/debug/bbx`: `cargo test` does NOT refresh
+  // `cargo run` rather than `./target/debug/sherd`: `cargo test` does NOT refresh
   // the binary, so the path form gates a stale build (`src/tdd:B3`).
   ["slice"] {
-    glob = List("**/*.rs", "**/SPEC.md", ".bbx-slices")
+    glob = List("**/*.rs", "**/SPEC.md", ".sherd-slices")
     depends = List("test")
-    check = "cargo run -q --bin bbx -- slice --check || { echo 'hk: a distilled slice has drifted from its source. Run `bbx slice` to regenerate, then `git add` the result. Never hand-edit a generated slice -- that IS the drift.' >&2; exit 1; }"
-    fix = "cargo run -q --bin bbx -- slice"
+    check = "cargo run -q --bin sherd -- slice --check || { echo 'hk: a distilled slice has drifted from its source. Run `sherd slice` to regenerate, then `git add` the result. Never hand-edit a generated slice -- that IS the drift.' >&2; exit 1; }"
+    fix = "cargo run -q --bin sherd -- slice"
   }
   ["check"] {
     glob = List("**/*.rs", "**/SPEC.md", ".spec-records")
     depends = List("slice")
-    check = "cargo run -q --bin bbx -- check || { echo 'hk: bbx check found a structural violation -- it names the file, line and rule. Ids are monotonic and never reused: COMPUTE the next one, do not read `tail -1`. Rows sort by id within a section, so append IN ORDER.' >&2; exit 1; }"
+    check = "cargo run -q --bin sherd -- check || { echo 'hk: sherd check found a structural violation -- it names the file, line and rule. Ids are monotonic and never reused: COMPUTE the next one, do not read `tail -1`. Rows sort by id within a section, so append IN ORDER.' >&2; exit 1; }"
   }
   // V104: a declared limit needs a runner that EXITS NONZERO. `.context-limits`
   // sat unread from the first commit, and by the time T10 built the comparison
@@ -115,7 +115,7 @@ local fast = new Mapping<String, Step> {
   ["budget"] {
     glob = List("**/SPEC.md", ".context-limits")
     depends = List("check")
-    check = "cargo run -q --bin bbx -- budget || { echo 'hk: a chain is over its ceiling. Every chain pays ROOT, so a row added to the root SPEC.md is billed thirteen times. SPLIT or federate the spec (V50) -- raising the number trains the reflex instead of catching the problem, and a raise belongs in a commit with its reason.' >&2; exit 1; }"
+    check = "cargo run -q --bin sherd -- budget || { echo 'hk: a chain is over its ceiling. Every chain pays ROOT, so a row added to the root SPEC.md is billed thirteen times. SPLIT or federate the spec (V50) -- raising the number trains the reflex instead of catching the problem, and a raise belongs in a commit with its reason.' >&2; exit 1; }"
   }
 
   // T87. The hygiene family the siblings run and this repo did not. NO new
@@ -255,7 +255,7 @@ local fast = new Mapping<String, Step> {
   // when its TARGET moves, and the target's referrer is usually not in the
   // changed set -- scoping this to changed files would make it pass on
   // exactly the commit that breaks the link.
-  // The badge block is GENERATED, by `bbx-dev` rather than by a shell
+  // The badge block is GENERATED, by `sherd-dev` rather than by a shell
   // script. A number typed into prose is true the day it is typed and
   // quietly wrong after -- `.:B4` in a README instead of a commit message --
   // and the generator that prevents it is itself code, so it is gated,
@@ -265,8 +265,8 @@ local fast = new Mapping<String, Step> {
   ["readme-generated"] {
     glob = List("README.md", "dev/src/**", "Cargo.toml", "hk.pkl", ".coverage", ".lint-debt", "flake.lock", ".github/workflows/ci.yml", "**/SPEC.md")
     depends = List("test")
-    check = "cargo run -q -p bbx-dev -- --check {{files}}"
-    fix = "cargo run -q -p bbx-dev -- readme {{files}}"
+    check = "cargo run -q -p sherd-dev -- --check {{files}}"
+    fix = "cargo run -q -p sherd-dev -- readme {{files}}"
   }
   ["links"] {
     glob = List("**/*")
@@ -279,7 +279,7 @@ local fast = new Mapping<String, Step> {
 /// calls it.
 local all = (fast) {
   // LAYER TWO. The step above is scoped: `hk` hands it the changed files and
-  // `bbx-dev` narrows to the blocks those files are inputs to, so a commit
+  // `sherd-dev` narrows to the blocks those files are inputs to, so a commit
   // touching `.coverage` compares the badges and not the diagram. That map
   // is a HEURISTIC, and a heuristic that is too narrow lets a stale block
   // through -- so the same checker runs again on push with NO scope, where
@@ -291,8 +291,8 @@ local all = (fast) {
   ["readme-generated-full"] {
     glob = List("**/*")
     depends = List("test")
-    check = "cargo run -q -p bbx-dev -- --check"
-    fix = "cargo run -q -p bbx-dev -- readme"
+    check = "cargo run -q -p sherd-dev -- --check"
+    fix = "cargo run -q -p sherd-dev -- readme"
   }
 
   // The FEATURELESS build, which §C claims and nothing checked. `.:B15`:
@@ -346,7 +346,7 @@ hooks {
   /// verdict about code you are not committing.
   ///
   /// The hooks in `.githooks/` are TRACKED FILES, not generated ones, and they
-  /// REFUSE when hk is missing rather than skipping. blackbox's own V26 says a
+  /// REFUSE when hk is missing rather than skipping. sherd's own V26 says a
   /// gate that cannot run has not passed, and B17/B20/B24 are three recordings
   /// of that exact failure shape.
   ["pre-commit"] {

@@ -17,7 +17,7 @@ pub struct Generated {
     pub inputs: &'static [&'static str],
 }
 
-/// Every block `bbx-dev readme` maintains.
+/// Every block `sherd-dev readme` maintains.
 ///
 /// `**/SPEC.md` appears in all four because both halves read it: the graph
 /// renderings come from the `§F` tables, and the badge block counts nodes by
@@ -50,7 +50,7 @@ pub const BLOCKS: &[Generated] = &[
         name: "graph-table",
         inputs: &["**/SPEC.md", "dev/src/**"],
     },
-    // The Commands table renders from `bbx::cli::USAGE`, and the same file
+    // The Commands table renders from `sherd::cli::USAGE`, and the same file
     // carries the dispatch arms `undocumented` compares it against, so one
     // input covers both halves of `src/cli:V7`.
     Generated {

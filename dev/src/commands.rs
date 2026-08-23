@@ -1,6 +1,6 @@
 //! The README's Commands section, and the check that it names every verb.
 //!
-//! Two rules, one source. `bbx::cli::USAGE` is the text the binary prints, so
+//! Two rules, one source. `sherd::cli::USAGE` is the text the binary prints, so
 //! the section is rendered FROM it rather than beside it -- `.:B4`'s shape
 //! applied to a list instead of a number. And the dispatch arms in
 //! `src/cli/mod.rs` are compared AGAINST it, which is `src/cli:V7`: usage
@@ -13,7 +13,7 @@ fn usage_lines(usage: &str) -> Vec<(String, String)> {
     usage
         .lines()
         .filter_map(|l| {
-            let t = l.strip_prefix("  bbx ")?;
+            let t = l.strip_prefix("  sherd ")?;
             let verb = t.split_whitespace().next()?;
             (!verb.starts_with('-')).then(|| (verb.to_string(), l.to_string()))
         })
@@ -93,10 +93,10 @@ pub fn render(usage: &str) -> String {
     for (_, line) in usage_lines(usage) {
         let body = line.trim();
         // The usage text separates the invocation from its gloss with two or
-        // more spaces. One space is inside an invocation (`bbx lens <dir>`),
+        // more spaces. One space is inside an invocation (`sherd lens <dir>`),
         // so the split has to be on the RUN, not on the first space.
         let (inv, gloss) = body.split_once("  ").unwrap_or((body, ""));
-        // A `|` inside a cell ENDS the cell. `bbx lens <dir> [--depth
+        // A `|` inside a cell ENDS the cell. `sherd lens <dir> [--depth
         // rule|why|all]` renders as three broken columns unescaped, and the
         // table looked fine in the source and wrong on the page.
         s.push_str(&format!(
@@ -113,10 +113,10 @@ mod tests {
     use super::*;
 
     const USAGE: &str = "\
-bbx -- a tool
+sherd -- a tool
 
-  bbx budget [dir]     token cost of every node
-  bbx lens <dir> [--depth rule|why|all]  the context pack for one node
+  sherd budget [dir]     token cost of every node
+  sherd lens <dir> [--depth rule|why|all]  the context pack for one node
 
   -v, --verbose        dump every prompt
 
@@ -182,11 +182,13 @@ exit: 0 clean · 1 violation · 2 usage";
         let table = render(USAGE);
         assert!(table.starts_with("| command | what it does |\n|---|---|\n"));
         assert!(
-            table.contains("| `bbx budget [dir]` | token cost of every node |")
+            table.contains(
+                "| `sherd budget [dir]` | token cost of every node |"
+            )
         );
         assert!(
             table.contains(
-                "| `bbx lens <dir> [--depth rule\\|why\\|all]` | the context pack for one node |"
+                "| `sherd lens <dir> [--depth rule\\|why\\|all]` | the context pack for one node |"
             ),
             "a pipe inside a cell is escaped, or the table renders broken: {table}"
         );

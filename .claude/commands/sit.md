@@ -43,7 +43,7 @@ Halt conditions override the clock: a halt stops the run with time remaining.
 
 ## Why you review at all
 
-`bbx apply` is gated by `cargo test` + `bbx check`. Those gates have **passed
+`sherd apply` is gated by `cargo test` + `sherd check`. Those gates have **passed
 wrong code three times**, all in §B:
 
 - `check_edge_depth` filtered on `not_owns` — the prose column — as a path.
@@ -59,9 +59,9 @@ that satisfies gates instead of invariants and documents itself doing it.
 
 ## One cycle
 
-**1. `bbx plan`.** Read the horizon. Note `UNMANAGED` — it is scope, not noise.
+**1. `sherd plan`.** Read the horizon. Note `UNMANAGED` — it is scope, not noise.
 
-**2. `bbx apply`.** One step, then it stops. A refusal is usually right; read
+**2. `sherd apply`.** One step, then it stops. A refusal is usually right; read
 it rather than routing around it.
 
 **3. `git show HEAD` — review.** The job. In order:
@@ -89,7 +89,7 @@ function is worse than none, because it reads as coverage.
   `Y` still open" makes a machine test `X`, which already passes.
 
 Cross-node citations need the namespaced form (`` `src/fed:V9` ``) or microlith
-reads them as dangling. `bbx check` must be clean before you commit.
+reads them as dangling. `sherd check` must be clean before you commit.
 
 **6. Commit** the reasoning, not just the change. Git is the memory: what was
 tried, what it cost, what it taught.
@@ -98,9 +98,9 @@ tried, what it cost, what it taught.
 
 On any of these, **stop the cycle and record why**:
 
-- `bbx plan` shows nothing actionable → **maintenance mode**, below.
+- `sherd plan` shows nothing actionable → **maintenance mode**, below.
 - The same §T row fails twice → the row is wrong, not the model.
-- `bbx check` cannot be made clean → the spec is inconsistent; guessing worsens it.
+- `sherd check` cannot be made clean → the spec is inconsistent; guessing worsens it.
 - Two aborts at 10x → report the telemetry. Never raise a ceiling to pass.
 - Two reverts in a row → the loop is producing worse than nothing.
 
@@ -130,7 +130,7 @@ cost:      <cycles, local calls, tokens sent>
 next:      <what the following run should start on>"
 ```
 
-`bbx plan` and `git log --oneline` are the inputs; do not estimate what you
+`sherd plan` and `git log --oneline` are the inputs; do not estimate what you
 can read.
 
 ## Maintenance mode
@@ -143,7 +143,7 @@ ever drive them. Work in this order:
 3. **Duplication** — two readings of one rule is the founding defect here.
 4. **Unmanaged rows** — most need a `needs` column or a machine-actionable
    marker in §T; some need splitting to fit one node.
-5. **Budgets** — `bbx budget`. Over ceiling wants splitting, not a raise.
+5. **Budgets** — `sherd budget`. Over ceiling wants splitting, not a raise.
 6. **Stale §R** — every row carries its source. Re-run the cheap ones; an
    unchecked number becomes folklore.
 

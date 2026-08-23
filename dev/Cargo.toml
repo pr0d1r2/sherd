@@ -1,12 +1,12 @@
 [package]
-name = "bbx-dev"
+name = "sherd-dev"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.95"
 license = "MIT"
-description = "development-only tooling for the blackbox repository -- never published"
-# THE POINT OF THIS CRATE. `bbx-dev` maintains files in THIS repository and is
-# meaningless to anyone who installs `bbx-cli`. A second `[[bin]]` in the main
+description = "development-only tooling for the sherd repository -- never published"
+# THE POINT OF THIS CRATE. `sherd-dev` maintains files in THIS repository and is
+# meaningless to anyone who installs `sherd`. A second `[[bin]]` in the main
 # package would have shipped in the tarball and landed on a consumer's PATH; a
 # separate, unpublished workspace member cannot, with no `cfg` gymnastics and
 # no `exclude` entry to keep in sync.
@@ -25,7 +25,7 @@ publish = false
 # featureless build fails with four E0432/E0433 -- `.:B15`, found by writing
 # this line. `.:T99` moves the helpers to their owner and gates the build so
 # it cannot regress; this comment goes with it.
-bbx-cli = { path = ".." }
+sherd = { path = ".." }
 
 [lints.rust]
 unsafe_code = "forbid"

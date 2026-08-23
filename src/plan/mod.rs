@@ -122,7 +122,7 @@ pub fn classify(node: &Path, text: &str) -> Kind {
         "plant",
     ]) {
         Kind::NotAFunction
-    } else if has(&["cmd", "cli", "verb", "`bbx ", "flag", "--"]) {
+    } else if has(&["cmd", "cli", "verb", "`sherd ", "flag", "--"]) {
         Kind::Cli
     } else if word(&["upstream", "audit", "corpus", "fixture"])
         || has(&["ci ", "gate:"])
@@ -470,7 +470,7 @@ mod tests {
             Proposal::Move("fed")
         );
         assert_eq!(
-            propose("tier select from bbx.toml"),
+            propose("tier select from sherd.toml"),
             Proposal::Move("tokens")
         );
     }
@@ -591,7 +591,7 @@ mod tests {
 /// wrong thing.
 /// Record one outcome IN a given store.
 ///
-/// The store is a parameter because the ambient one is shared: `.bbx-state`
+/// The store is a parameter because the ambient one is shared: `.sherd-state`
 /// lives in the repo, every test that touches it races every other, and
 /// `.coverage` records this suite's coverage FLAPPING for exactly that
 /// reason (`src/ollama:T4`). A scorekeeper that can only write one global
@@ -767,7 +767,7 @@ fn preflight(root: &Path) -> Result<String, String> {
     // Generated code never lands on the trunk directly. This used to REFUSE
     // on main; refusing is the right requirement expressed as an obstacle, so
     // it now satisfies the requirement instead -- the run gets a branch. What
-    // moves that branch onto main is `bbx land`, which asks for evidence.
+    // moves that branch onto main is `sherd land`, which asks for evidence.
     let secs = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_err(|e| e.to_string())?
@@ -837,7 +837,7 @@ pub fn apply(root: &Path, max_repair: usize) -> Result<String, String> {
     let sent: u64 = log.iter().map(|s| s.prompt_tokens).sum();
     let max = log.iter().map(|s| s.prompt_tokens).max().unwrap_or(0);
     let body = format!(
-        "feat({}): {} via bbx apply\n\n\
+        "feat({}): {} via sherd apply\n\n\
          {inv}: driven from {} {}.\n\n\
          Written by a local model through the red -> judge -> green -> gate\n\
          loop: {} round-trips, {sent} tokens sent, max single call {max}.\n\
@@ -848,12 +848,12 @@ pub fn apply(root: &Path, max_repair: usize) -> Result<String, String> {
         step.node
             .file_name()
             .and_then(|s| s.to_str())
-            .unwrap_or("bbx"),
+            .unwrap_or("sherd"),
         step.text,
         step.node.display(),
         step.id,
         log.len(),
-        "cargo test + bbx check"
+        "cargo test + sherd check"
     );
 
     let git = |args: &[&str]| {
@@ -885,7 +885,7 @@ pub fn apply(root: &Path, max_repair: usize) -> Result<String, String> {
 
     // SYNC: the gate said green; review may not agree. Surface the
     // disagreement at the moment it happens rather than waiting for someone
-    // to type `bbx review` -- which is how an unwired function and an ignored
+    // to type `sherd review` -- which is how an unwired function and an ignored
     // input both landed unnoticed.
     match crate::review::commit(root, &sha) {
         Ok(f) if f.is_empty() => eprintln!("  review: no findings"),
@@ -898,7 +898,7 @@ pub fn apply(root: &Path, max_repair: usize) -> Result<String, String> {
                 eprintln!("    {}: {}: {}", file.display(), x.rule, x.detail);
             }
             eprintln!(
-                "  advisory (review V3). Read the diff before `bbx outcome ... kept`."
+                "  advisory (review V3). Read the diff before `sherd outcome ... kept`."
             );
         }
         Err(e) => eprintln!("  review: could not run -- {e}"),
@@ -906,13 +906,13 @@ pub fn apply(root: &Path, max_repair: usize) -> Result<String, String> {
 
     // Every commit goes to the remote so CI runs on it -- an independent
     // check on a machine that did not write the code. The run BRANCH, never
-    // main; the trunk moves only through `bbx land`.
+    // main; the trunk moves only through `sherd land`.
     crate::land::push_branch(root, &branch);
 
     // Record it applied, keyed by the row's TEXT -- edit the row and it
     // becomes plannable again.
     // Counted as an ATTEMPT here; `kept` is claimed only after review, via
-    // `bbx outcome`. A commit is not survival -- three stubs have committed.
+    // `sherd outcome`. A commit is not survival -- three stubs have committed.
     record_outcome(&step.node, false);
     let mut state = crate::state::State::load();
     state.set(
@@ -934,7 +934,7 @@ mod git_tests {
     fn preflight_refuses_a_tree_that_is_not_a_repo() {
         // `apply` COMMITS, so it needs a repo. Saying so beats failing later
         // with a git error nobody reads.
-        let d = std::env::temp_dir().join("bbx-not-a-repo");
+        let d = std::env::temp_dir().join("sherd-not-a-repo");
         let _ = std::fs::create_dir_all(&d);
         let r = preflight(&d);
         let _ = std::fs::remove_dir_all(&d);
@@ -1004,7 +1004,7 @@ mod git_tests {
             Kind::NotAFunction
         );
         assert_eq!(classify(&n, "promote the node"), Kind::NotAFunction);
-        assert_eq!(classify(&n, "add a `bbx foo` verb"), Kind::Cli);
+        assert_eq!(classify(&n, "add a `sherd foo` verb"), Kind::Cli);
         assert_eq!(classify(&n, "audit the corpus upstream"), Kind::NotCode);
     }
 
@@ -1086,7 +1086,7 @@ mod git_tests {
         let n = N.fetch_add(1, Ordering::Relaxed);
         crate::state::State::at(
             std::env::temp_dir()
-                .join(format!("bbx-score-{tag}-{}-{n}", std::process::id())),
+                .join(format!("sherd-score-{tag}-{}-{n}", std::process::id())),
         )
     }
 
@@ -1235,12 +1235,12 @@ mod git_tests {
     }
 
     /// Generated code never lands on the trunk directly: `preflight` puts the
-    /// run on its own branch, and `bbx land` is what moves it, on evidence.
+    /// run on its own branch, and `sherd land` is what moves it, on evidence.
     fn check_clean() -> Result<(), String> {
         let r = TestRepo::new("plan-clean")?;
         let branch = preflight(r.path())?;
         assert!(
-            branch.starts_with("bbx/"),
+            branch.starts_with("sherd/"),
             "a run gets its own branch, got {branch}"
         );
         let now = r.git(&["rev-parse", "--abbrev-ref", "HEAD"])?;

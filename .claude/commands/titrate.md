@@ -22,7 +22,7 @@ so with numbers, has done its job.
 
 ## Two limits, and only one of them is solved
 
-blackbox already descends recursively on **context**: federation splits the
+sherd already descends recursively on **context**: federation splits the
 spec by directory until each node's pack fits the window. `budget`, ceilings,
 `lens` and `split` are all that one move, and it is deterministic.
 
@@ -37,7 +37,7 @@ Rungs, coarse to fine:
 
 1. a whole `§T` row
 2. one function, named by one `§V`, signature given
-3. one function body, signature **and** tests given — where `bbx tdd` sits today
+3. one function body, signature **and** tests given — where `sherd tdd` sits today
 4. one match arm or branch inside an existing function
 5. one expression or constant
 
@@ -50,25 +50,25 @@ delegate while remaining checkable.* Record it and stop descending.
 
 ## One cycle
 
-**1. Pick a target.** `bbx plan` for the horizon. Prefer a row whose shape has
+**1. Pick a target.** `sherd plan` for the horizon. Prefer a row whose shape has
 a frontier record — a repeat measurement on a known shape is worth more than a
 first sample on a new one.
 
-**2. Predict the starting rung.** Read `.bbx-frontier` for this shape. Start at
+**2. Predict the starting rung.** Read `.sherd-frontier` for this shape. Start at
 the coarsest rung whose recorded `kept/tried` is above 0.5, or rung 2 if the
 shape is unrecorded. Never start at rung 1 for a shape that has failed there
 twice — the point of the record is to stop re-buying knowledge.
 
-**3. Attempt.** `bbx tdd <node> <Vn> "<task>"`, or the narrowed prompt if you
+**3. Attempt.** `sherd tdd <node> <Vn> "<task>"`, or the narrowed prompt if you
 are below rung 3. Note prompt tokens and wall clock; the endpoint at
-`BBX_ENDPOINT` is one shared box and a careless sweep monopolizes it.
+`SHERD_ENDPOINT` is one shared box and a careless sweep monopolizes it.
 
 **4. Judge.** Three outcomes, and only the first counts as success:
 
 - **kept** — survived *your* diff review, not merely the gate. Gates have passed
   wrong code three times in this repo, all recorded in `§B`.
 - **gate red** — deterministic failure, free to observe.
-- **review finding** — gate green, defect found by eye or by `bbx review`.
+- **review finding** — gate green, defect found by eye or by `sherd review`.
 
 **5. Decide: enrich, split, or stop.** This is the cycle's whole intelligence.
 Enrich before splitting — tokens are cheaper than your judgement:
@@ -82,8 +82,8 @@ Enrich before splitting — tokens are cheaper than your judgement:
 | judge rejects the test 3x | the `§V` row is unclear, not the model | **halt** — fix the row |
 | at the verifiability floor, still failing | frontier reached for this shape | record, stop descending |
 
-**6. Record the shape.** Append to `.bbx-frontier` — tracked, unlike
-`.bbx-state`, because learning that dies at the clone boundary is not learning:
+**6. Record the shape.** Append to `.sherd-frontier` — tracked, unlike
+`.sherd-state`, because learning that dies at the clone boundary is not learning:
 
 ```
 shape rung=2 kind=newfn pack=b8 sig=1 tests=0 tried=4 kept=1
@@ -137,7 +137,7 @@ Stop the cycle and record why:
   model.
 - Two consecutive shapes reach the verifiability floor still failing → the
   frontier is empty here; report it rather than descending into fragments.
-- `bbx check` cannot be made clean → the spec is inconsistent; guessing worsens it.
+- `sherd check` cannot be made clean → the spec is inconsistent; guessing worsens it.
 - Net value negative on three consecutive successes → the model is winning
   tasks that cost more to prepare than to write. This is the most important
   halt and the easiest to talk yourself out of.
@@ -165,7 +165,7 @@ net:       <did delegation save work -- with the denominator named>
 next:      <the shape the following run should sample>"
 ```
 
-`.bbx-frontier`, `bbx plan` and `git log` are the inputs. Do not estimate what
+`.sherd-frontier`, `sherd plan` and `git log` are the inputs. Do not estimate what
 you can read.
 
 ## Flags

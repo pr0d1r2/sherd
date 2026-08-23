@@ -1,4 +1,4 @@
-# blackbox
+# sherd
 
 <!-- BEGIN badges -->
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -29,11 +29,11 @@
 >
 > This repository — code, spec, tests and prose — was written by [Claude Code](https://claude.com/claude-code) running Anthropic's **Claude Opus 5**. 189 of 215 commits carry a `Co-Authored-By: Claude Opus 5` trailer. A human owns every decision, reviews every diff, and is accountable for what ships.
 >
-> **Two of the functions here were written by the 20B this project is about.** `src/fed/` contains work authored by gpt-oss:20b through `bbx tdd`, kept with its defects recorded in that node's `§B` rather than smoothed over — because a tool that claims small models can build software has to show what happens when one does.
+> **Two of the functions here were written by the 20B this project is about.** `src/fed/` contains work authored by gpt-oss:20b through `sherd tdd`, kept with its defects recorded in that node's `§B` rather than smoothed over — because a tool that claims small models can build software has to show what happens when one does.
 >
 > **The method is spec-driven development, federated.** [`SPEC.md`](SPEC.md) is the law rather than a description written afterwards, and there are seventeen of them: one per node, each owning the rules for its own directory. 88 `§B` rows across the tree record every defect found so far paired with the rule that now catches it. A rule and its checker land in the same commit, because a rule with no runner is a comment (§V74).
 >
-> **The guardrails are git hooks that also run on CI.** Entering the dev shell (`nix develop`, or `direnv allow`) installs `pre-commit` and `pre-push`, which run [hk](https://github.com/jdx/hk) against one definition of the gate in [`hk.pkl`](hk.pkl) — 23 steps on commit, 24 on push, the slow one being coverage. [`ci.yml`](.github/workflows/ci.yml) calls that same definition on three platforms, so a laptop and a runner cannot disagree. The architecture diagram below is `bbx graph` output for the same reason: generated from the `§F` tables, so it cannot drift from what the specs declare.
+> **The guardrails are git hooks that also run on CI.** Entering the dev shell (`nix develop`, or `direnv allow`) installs `pre-commit` and `pre-push`, which run [hk](https://github.com/jdx/hk) against one definition of the gate in [`hk.pkl`](hk.pkl) — 23 steps on commit, 24 on push, the slow one being coverage. [`ci.yml`](.github/workflows/ci.yml) calls that same definition on three platforms, so a laptop and a runner cannot disagree. The architecture diagram below is `sherd graph` output for the same reason: generated from the `§F` tables, so it cannot drift from what the specs declare.
 >
 > **The record is deliberately unflattering.** `§B12` records that `AGENTS.md` says "never commit to `main`", that nothing enforced it, and that ~20 commits landed on `main` in one session anyway — the rule was read by the agent it governs and still lost to convenience. `§B4` records a "95x" improvement claimed across six commit messages that measured 2.1x against a denominator anyone would actually use.
 >
@@ -49,7 +49,7 @@ consumer setup measured here — gpt-oss:20b on a 24GB M-series box, full
 overhead. A small, disciplined tool already does not fit its own best-case
 hardware, before any reasoning happens.
 
-blackbox splits a repo so no single call has to.
+sherd splits a repo so no single call has to.
 
 ## The three axes
 
@@ -75,7 +75,7 @@ facet × horizontal brings one node's work to about 6%.
 
 ## Architecture
 
-Generated from the `§F` tables by `bbx graph`, spliced in by `bbx-dev readme`
+Generated from the `§F` tables by `sherd graph`, spliced in by `sherd-dev readme`
 and checked by the gate -- so it cannot drift from what the specs declare. It
 did drift, for as long as nothing regenerated it, and `§B16` records the nine
 nodes it was missing while this sentence claimed otherwise.
@@ -144,7 +144,7 @@ graph TD
 <!-- END graph-mermaid -->
 
 What each node owns, and — more usefully — what it does not, so a reader
-knows when to stop looking. Also generated, by `bbx graph --table`:
+knows when to stop looking. Also generated, by `sherd graph --table`:
 
 <!-- BEGIN graph-table -->
 | node | owns | does not own |
@@ -198,15 +198,15 @@ decode. Federation is worth *more* on the slower machine.
 
 ## Install
 
-Not on crates.io yet, and this section will say `cargo install bbx-cli` the
+Not on crates.io yet, and this section will say `cargo install sherd` the
 day it is. Until then:
 
 ```sh
-nix develop            # the pinned toolchain, hk, and bbx on PATH
+nix develop            # the pinned toolchain, hk, and sherd on PATH
 cargo build --release  # or build it yourself; every dep is from crates.io
 ```
 
-`bbx` needs no endpoint for the deterministic verbs — `budget`, `lens`,
+`sherd` needs no endpoint for the deterministic verbs — `budget`, `lens`,
 `fed`, `graph`, `check`, `review`, `slice`, `plan` are pure functions of your
 tree and never call a model. Only `ask`, `tdd` and `oneshot` do, and they
 need an Ollama-compatible endpoint you point at yourself.
@@ -215,18 +215,18 @@ need an Ollama-compatible endpoint you point at yourself.
 
 ```sh
 cargo build                      # every dep from crates.io; no sibling checkout
-export BBX_ENDPOINT=http://your-box:11434
-export BBX_MODEL=gpt-oss:20b
+export SHERD_ENDPOINT=http://your-box:11434
+export SHERD_MODEL=gpt-oss:20b
 
-bbx budget                       # token cost of every node
-bbx lens src/fed                 # the context pack for one node
-bbx graph                        # this diagram
-bbx check                        # microlith structural check, every node
-bbx tdd src/fed V2 "<task>"      # red → judge → green → gate → repair
-bbx oneshot src/fed V2 "<task>"  # the monolith arm, for comparison
+sherd budget                       # token cost of every node
+sherd lens src/fed                 # the context pack for one node
+sherd graph                        # this diagram
+sherd check                        # microlith structural check, every node
+sherd tdd src/fed V2 "<task>"      # red → judge → green → gate → repair
+sherd oneshot src/fed V2 "<task>"  # the monolith arm, for comparison
 ```
 
-`bbx tdd` runs five kinds of call, each with a deliberately narrow context:
+`sherd tdd` runs five kinds of call, each with a deliberately narrow context:
 
 1. **red test** — spec rules + public signatures + existing tests. Not the bodies.
 2. **judge** — the invariant, the test, and the data model. Never the implementation.
@@ -244,7 +244,7 @@ A contract, because scripts read them, and the same three for every verb:
 | `1` | a violation: a chain over its ceiling, a structural finding, a drifted slice |
 | `2` | usage — a verb, flag or argument that does not exist |
 
-A refusal is not a crash. `bbx budget` exiting `1` is the gate working.
+A refusal is not a crash. `sherd budget` exiting `1` is the gate working.
 
 ## Use it as a library
 
@@ -255,13 +255,13 @@ should call rather than parsing our output:
 use std::path::Path;
 
 let root = Path::new(".");
-let pack = bbx::lens::pack(root, &root.join("src/fed"), bbx::lens::Depth::Rule)?;
-let ceiling = bbx::lens::ceiling_for(root, &root.join("src/fed"))?;
-let nodes = bbx::fed::discover(root);
+let pack = sherd::lens::pack(root, &root.join("src/fed"), sherd::lens::Depth::Rule)?;
+let ceiling = sherd::lens::ceiling_for(root, &root.join("src/fed"))?;
+let nodes = sherd::fed::discover(root);
 # Ok::<(), Box<dyn std::error::Error>>(())
 ```
 
-`bbx-dev`, this repository's own tooling, is the first consumer of that lib —
+`sherd-dev`, this repository's own tooling, is the first consumer of that lib —
 it counts nodes with `fed::discover` rather than walking the tree a second
 time.
 
@@ -273,8 +273,8 @@ time.
   configuration is currently broken, which is exactly the kind of claim this
   section is supposed to be checkable against.
 - **Generated output is generated, not maintained.** The architecture diagram
-  comes from `bbx graph`, the badge block from `bbx-dev badges`, the
-  distilled slices from `bbx slice --check`. A drifted slice fails the gate.
+  comes from `sherd graph`, the badge block from `sherd-dev badges`, the
+  distilled slices from `sherd slice --check`. A drifted slice fails the gate.
 - **The gate is one definition.** [`hk.pkl`](hk.pkl) declares every step;
   hooks and [CI](.github/workflows/ci.yml) both run that file, on three
   platforms.
@@ -310,50 +310,66 @@ are specced and unbuilt. `§F`/`§N` are extensions microlith cannot yet parse �
 they need to go upstream rather than fork the format.
 
 Two LLM-authored functions live in `src/fed/`, written by gpt-oss:20b through
-`bbx tdd`, with their defects recorded in that node's `§B` rather than smoothed
+`sherd tdd`, with their defects recorded in that node's `§B` rather than smoothed
 over.
 
 ## The name
 
-A **black box** is the thing you cannot see inside. That is the ordinary
-complaint about a language model, and it is not the sense meant here.
+A **[sherd](https://en.wikipedia.org/wiki/Sherd)** is a fragment of a fired
+clay vessel. Not a shard of anything — the word is older and narrower, and
+archaeology keeps the spelling because the thing it names is specific: a
+piece of a container, marked well enough to say which container.
 
-A flight recorder is also a black box, and it is the opposite: the one
-component built so that afterwards you can say exactly what happened. It
-survives the crash on purpose. `§B` in every `SPEC.md` is that recorder —
-fourteen entries at the root, each a defect paired with the rule that now
-catches it, kept whether or not it flatters the project.
+Three things about it are the whole reason for the name.
 
-The third sense is the working one. In control theory a black box is a system
-you can only characterise from outside, by what you feed it and what comes
-back. A 20B model with a 131,072-token window is precisely that: you cannot
-inspect its reasoning, so the only thing you can engineer is what goes in.
-This tool engineers what goes in.
+**A vessel is found as pieces, and read as pieces.** Nobody digs up the pot.
+You recover sherds, and each one carries its own evidence — the temper in the
+clay, the curve of the wall, the marks on the rim. Every directory here
+carries its own `SPEC.md` for exactly that reason: a node is legible on its
+own, so a reader can pick up one piece without the site.
+
+**You reassemble only what the question needs.** The point of sherd analysis
+is rarely a restored pot; it is answering one question from the fewest pieces
+that settle it. `sherd lens` does that literally — a node's chain and nothing
+below it, measured before it is handed over. A 20B with a 131,072-token
+window cannot hold the vessel, and does not need to.
+
+**`sherd` is where `shard` comes from.** Distributed systems borrowed the
+word for splitting one store across independent pieces, which is what the
+`§F` tables declare and what `sherd fed` walks. The older spelling was still
+free, and it is the honest one here: this tool splits a repository into
+pieces that each stand alone, and it is a storage word because a repository
+is a store.
+
+The theme is the fleet's. [`microlith`](https://github.com/pr0d1r2/microlith)
+is a small stone blade, hafted with others into a tool no single piece could
+be; `sherd` is a piece of the vessel that came later. Both are the thing you
+would actually be holding.
 
 ## Commands
 
-Generated from `bbx`'s own usage text by `bbx-dev readme`, and checked
+Generated from `sherd`'s own usage text by `sherd-dev readme`, and checked
 against the dispatch arms -- a verb that dispatches and appears in no usage
 line fails the gate (`src/cli:V7`, after `src/cli:B2`).
 
 <!-- BEGIN commands -->
 | command | what it does |
 |---|---|
-| `bbx budget [dir]` | token cost of every node, against the working budget |
-| `bbx lens <dir> [--depth rule\|why\|all]` | the context pack for one node |
-| `bbx fed [dir]` | the federation edges declared by a node |
-| `bbx check [dir]` | microlith structural check of every node |
-| `bbx review [rev]` | mechanical checks on what a commit added (default HEAD) |
-| `bbx slice [--check\|--list]` | regenerate distilled slices from their sources |
-| `bbx outcome <node> <kept\|reverted>` | record whether a node's work survived review |
-| `bbx graph [--tree\|--table\|--dot]` | federation DAG, generated from §F |
-| `bbx plan` | next 3 steps, with what would invalidate each |
-| `bbx plan --triage` | unmanaged rows, with a proposed home for each |
-| `bbx apply [--land]` | execute step 1 only, commit it to a run branch, stop |
-| `bbx land [--push]` | fast-forward main to this run branch, if it earned it |
-| `bbx ask <dir> <q>` | ask the endpoint from a node's lens pack |
-| `bbx tdd <dir> <Vn> <task>` | red -> judge -> green -> gate -> repair |
-| `bbx oneshot <dir> <Vn> <task>` | the monolith arm: one call, whole repo |
+| `sherd budget [dir]` | token cost of every node, against the working budget |
+| `sherd lens <dir> [--depth rule\|why\|all]` | the context pack for one node |
+| `sherd fed [dir]` | the federation edges declared by a node |
+| `sherd check [dir]` | microlith structural check of every node |
+| `sherd review [rev]` | mechanical checks on what a commit added (default HEAD) |
+| `sherd slice [--check\|--list]` | regenerate distilled slices from their sources |
+| `sherd outcome <node> <kept\|reverted>` | record whether a node's work survived review |
+| `sherd graph [--tree\|--table\|--dot]` | federation DAG, generated from §F |
+| `sherd plan` | next 3 steps, with what would invalidate each |
+| `sherd plan --triage` | unmanaged rows, with a proposed home for each |
+| `sherd apply [--land]` | execute step 1 only, commit it to a run branch, stop |
+| `sherd land [--push]` | fast-forward main to this run branch, if it earned it |
+| `sherd ask <dir> <q>` | ask the endpoint from a node's lens pack |
+| `sherd tdd <dir> <Vn> <task>` | red -> judge -> green -> gate -> repair |
+| `sherd oneshot <dir> <Vn> <task>` | the monolith arm: one call, whole repo |
 <!-- END commands -->
 
 ## Reading the specs
@@ -385,12 +401,12 @@ merely specced is in Status above rather than implied by the version number.
 
 ## Security
 
-`blackbox` runs `git` and `cargo test` under model direction, and sends slices
+`sherd` runs `git` and `cargo test` under model direction, and sends slices
 of your repository to the endpoint you name. Report privately rather than in a
 public issue — see [docs/SECURITY.md](docs/SECURITY.md), which states the
 surface plainly.
 
-Set `BBX_ENDPOINT` to an `https://` URL when the endpoint is not a machine you
+Set `SHERD_ENDPOINT` to an `https://` URL when the endpoint is not a machine you
 own; TLS is compiled in.
 
 ## License

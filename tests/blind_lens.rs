@@ -1,6 +1,6 @@
 #![cfg(feature = "ollama")]
 //! Gated with the loop it measures: every titration here needs a live 20B,
-//! and the corpora it reads live in `bbx::assay`, which the `ollama` feature
+//! and the corpora it reads live in `sherd::assay`, which the `ollama` feature
 //! carries (`.:B15`).
 
 //! The blind lens, run against a live endpoint.
@@ -21,8 +21,8 @@
 
 #![cfg(feature = "ollama")]
 
-use bbx::assay::{RECORDED, TIERS, titrate_tier};
-use bbx::tdd::{blind_prompt, is_yes};
+use sherd::assay::{RECORDED, TIERS, titrate_tier};
+use sherd::tdd::{blind_prompt, is_yes};
 
 /// One arm of `RECORDED`, scored against the endpoint.
 fn measure_arm(violates: bool) -> usize {
@@ -30,8 +30,8 @@ fn measure_arm(violates: bool) -> usize {
         .iter()
         .filter(|it| it.violates == violates)
         .filter(|it| {
-            let r = bbx::ollama::generate(&blind_prompt(it.inv, it.code))
-                .expect("endpoint unreachable -- BBX_ENDPOINT");
+            let r = sherd::ollama::generate(&blind_prompt(it.inv, it.code))
+                .expect("endpoint unreachable -- SHERD_ENDPOINT");
             let yes = is_yes(&r.text);
             println!(
                 "{} {} tok · {}",
@@ -79,7 +79,8 @@ fn blind_lens_vs_working_code() {
 #[test]
 #[ignore]
 fn blind_lens_titration() {
-    let mut judge = |p: &str| bbx::ollama::generate(p).map(|r| is_yes(&r.text));
+    let mut judge =
+        |p: &str| sherd::ollama::generate(p).map(|r| is_yes(&r.text));
     for tier in TIERS {
         let s = titrate_tier(tier, &mut judge).expect(
             "endpoint unreachable -- a rung that did not run is an error, \

@@ -9,7 +9,7 @@
 # hook a reviewer can check.
 #
 # It REFUSES when hk is absent; it does not skip. The siblings skip loudly and
-# that is right for them -- their CI gates regardless. blackbox has no CI yet,
+# that is right for them -- their CI gates regardless. sherd has no CI yet,
 # so these hooks ARE the gate of record, and V26 is explicit: a gate that
 # cannot run has NOT passed. B17, B20 and B24 are three recordings of that one
 # failure shape, twice reported as green.

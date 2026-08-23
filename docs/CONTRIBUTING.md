@@ -1,6 +1,6 @@
-# Contributing to blackbox
+# Contributing to sherd
 
-`blackbox` is built **spec-first**, and federated: the design and the build
+`sherd` is built **spec-first**, and federated: the design and the build
 queue live in `SPEC.md` files, one per directory that needs one, with a `§F`
 table naming the children. A human or an agent can drive the loop the same
 way — that is the point of the tool.
@@ -10,11 +10,11 @@ way — that is the point of the tool.
 ```bash
 direnv allow                     # or: nix develop
 cargo build                      # needs ../itok as a path dep
-export BBX_ENDPOINT=http://your-box:11434
-export BBX_MODEL=gpt-oss:20b
+export SHERD_ENDPOINT=http://your-box:11434
+export SHERD_MODEL=gpt-oss:20b
 ```
 
-`BBX_ENDPOINT` may be `https://` — TLS is compiled in. Use it whenever the
+`SHERD_ENDPOINT` may be `https://` — TLS is compiled in. Use it whenever the
 endpoint is not a machine you own, because what gets sent is slices of your
 spec and your source.
 
@@ -39,19 +39,19 @@ To run the whole set by hand, or from CI:
 
 ```bash
 hk check --all                   # fmt, clippy -D warnings, test, slice, check
-hk fix                           # the fixable half: cargo fmt, bbx slice
+hk fix                           # the fixable half: cargo fmt, sherd slice
 ```
 
 ## The loop
 
 ```bash
-bbx budget                       # token cost of every node
-bbx lens src/fed                 # the context pack for one node
-bbx check                        # structural check, every node
-bbx tdd src/fed V2 "<task>"      # red -> judge -> green -> gate -> repair
+sherd budget                       # token cost of every node
+sherd lens src/fed                 # the context pack for one node
+sherd check                        # structural check, every node
+sherd tdd src/fed V2 "<task>"      # red -> judge -> green -> gate -> repair
 ```
 
-`bbx tdd` runs five kinds of call, each with a deliberately narrow context.
+`sherd tdd` runs five kinds of call, each with a deliberately narrow context.
 The **gate** step is local, deterministic and costs zero tokens — that is
 where correctness is decided, not in the model.
 
@@ -80,13 +80,13 @@ to routing around a verdict, not to disagreeing with one.
 ## Never hand-edit a generated slice
 
 `vendor/principles/` is distilled into `src/tdd/principles.txt` by
-`bbx slice`, and `bbx slice --check` gates the drift. Editing the generated
+`sherd slice`, and `sherd slice --check` gates the drift. Editing the generated
 file *is* the drift. Regenerate and stage the result.
 
 ## Things that will get a patch turned down
 
 - **A bypassed or weakened gate.** See above.
-- **A claim with no evidence.** `bbx land` refuses a merge that cannot show
+- **A claim with no evidence.** `sherd land` refuses a merge that cannot show
   its working; a pull request is held to the same standard. "This is faster"
   invites a measurement.
 - **A stub that documents itself as sufficient.** Writing "sufficient for the
@@ -103,7 +103,7 @@ Open an issue with what you ran, what you expected, and what happened. A
 reproducing `SPEC.md` is worth more than a description of one.
 
 Security issues go privately instead — see [SECURITY.md](SECURITY.md).
-`blackbox` runs `git` and `cargo test` under model direction, so anything in
+`sherd` runs `git` and `cargo test` under model direction, so anything in
 that area should not go in a public issue first.
 
 ## Commits

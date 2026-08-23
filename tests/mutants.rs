@@ -1,6 +1,6 @@
 #![cfg(feature = "ollama")]
 //! Gated with the loop it measures: every titration here needs a live 20B,
-//! and the corpora it reads live in `bbx::assay`, which the `ollama` feature
+//! and the corpora it reads live in `sherd::assay`, which the `ollama` feature
 //! carries (`.:B15`).
 
 //! The mutation sweep, run against a live endpoint.
@@ -18,7 +18,7 @@
 
 #![cfg(feature = "ollama")]
 
-use bbx::assay::{
+use sherd::assay::{
     GEN_CORPUS, GenItem, Grade, Kill, grade_detail, kills_report, stub_for,
     test_prompt,
 };
@@ -26,8 +26,9 @@ use std::io::Write;
 
 fn one(it: &GenItem) -> Result<Kill, String> {
     let stub = stub_for(it.sig).ok_or("no mutant")?;
-    let t = bbx::ollama::generate(&test_prompt(it.sharp, it.sig, it.preamble))
-        .map(|r| bbx::ollama::rust_block(&r.text))?;
+    let t =
+        sherd::ollama::generate(&test_prompt(it.sharp, it.sig, it.preamble))
+            .map(|r| sherd::ollama::rust_block(&r.text))?;
     // Keep the test itself: T83 discarded its raw material and the next
     // question could not be asked without re-running (`assay:B1`). R54 was
     // read out of this file afterwards, and T97 came out of R54.

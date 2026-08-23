@@ -5,8 +5,8 @@
 Report privately, not in a public issue.
 
 - Preferred: [GitHub private vulnerability
-  reporting](https://github.com/pr0d1r2/blackbox/security/advisories/new)
-- Or email **pr0d1r2@gmail.com** with `blackbox security` in the subject.
+  reporting](https://github.com/pr0d1r2/sherd/security/advisories/new)
+- Or email **pr0d1r2@gmail.com** with `sherd security` in the subject.
 
 Include what you ran, what happened, and the input that triggered it. A
 reproducing `SPEC.md` is worth more than a description of one.
@@ -24,9 +24,9 @@ backports.
 Stated plainly, because this tool does more than read files and it would be
 misleading to present it as though it did not.
 
-**`blackbox` runs commands and mutates your repository.** It shells out to
+**`sherd` runs commands and mutates your repository.** It shells out to
 `git` — including `checkout -b` — and runs `cargo test`. It writes files,
-including `SPEC.md` files and state under `.bbx-state/` and `.bbx-slices/`.
+including `SPEC.md` files and state under `.sherd-state/` and `.sherd-slices/`.
 It does all of this in a loop driven by **the output of a language model**.
 
 That combination is the thing worth attacking, and the thing worth reporting:
@@ -36,17 +36,17 @@ That combination is the thing worth attacking, and the thing worth reporting:
    later executed. This is the highest-value class here by a distance. A
    model is not a trusted input, and it is fed content from your repository —
    so a hostile `SPEC.md`, or a hostile source file, is an input to it.
-2. **A write outside its lane.** `blackbox` is supposed to touch specs, its
+2. **A write outside its lane.** `sherd` is supposed to touch specs, its
    own state, and branches it created. A path that lets it write elsewhere —
    traversal out of the repo root, a symlink followed, a spec section
    overwritten that the verb does not own — is a defect regardless of whether
    a model was involved.
 3. **Prompt contents on the wire.** With `ollama` (a **default** feature)
-   `blackbox` POSTs slices of your spec and source to the endpoint named by
-   `BBX_ENDPOINT`. TLS is compiled in, so `https://` works and should be used
+   `sherd` POSTs slices of your spec and source to the endpoint named by
+   `SHERD_ENDPOINT`. TLS is compiled in, so `https://` works and should be used
    when the endpoint is not on a machine you own. Over `http://` this is
    cleartext, and nothing constrains the endpoint to a LAN.
-4. **Evidence that is not evidence.** `bbx land` asks for proof before a
+4. **Evidence that is not evidence.** `sherd land` asks for proof before a
    merge. A path that lets a check report success it did not observe — a
    fabricated test result, a skipped run reported as green — is a security
    defect here in the same sense a silently-passing gate is: it removes a
@@ -67,7 +67,7 @@ defect worth reporting, but it is not currently prevented by lint.
 
 - Choosing `http://` for an endpoint on your own machine and getting
   plaintext. That is the documented behaviour of the scheme you asked for.
-- `blackbox` modifying your repository when you asked it to. Creating
+- `sherd` modifying your repository when you asked it to. Creating
   branches and writing specs is the job; doing it *outside* the lane in
   point 2 is not.
 - A model producing a wrong answer. That is a quality issue, and an ordinary

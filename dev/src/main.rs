@@ -1,6 +1,6 @@
-//! `bbx-dev` -- tooling that maintains THIS repository.
+//! `sherd-dev` -- tooling that maintains THIS repository.
 //!
-//! Separate from `bbx` because it is meaningless to anyone who installs the
+//! Separate from `sherd` because it is meaningless to anyone who installs the
 //! crate: these verbs read the repository's own files and write its own
 //! documentation. A second `[[bin]]` in the published package would have put
 //! them on a consumer's PATH; an unpublished workspace member cannot.
@@ -23,14 +23,14 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 const USAGE: &str = "\
-bbx-dev -- tooling for the blackbox repository itself
+sherd-dev -- tooling for the sherd repository itself
 
-  bbx-dev --check [<path>...]  run every check, concurrently. Paths narrow the
+  sherd-dev --check [<path>...]  run every check, concurrently. Paths narrow the
                                work to what a change can have invalidated; no
                                paths means compare everything.
-  bbx-dev readme [--check] [<path>...]
+  sherd-dev readme [--check] [<path>...]
                                regenerate the generated blocks in README.md --
-                               the badges, and the three `bbx graph`
+                               the badges, and the three `sherd graph`
                                renderings. --check reports and writes nothing.
 
 exit: 0 clean · 1 violation · 2 usage
@@ -85,7 +85,7 @@ fn check_all(paths: &[String]) -> ExitCode {
 
     for (name, code) in &codes {
         if format!("{code:?}") != format!("{:?}", ExitCode::SUCCESS) {
-            eprintln!("bbx-dev: {name} failed");
+            eprintln!("sherd-dev: {name} failed");
             return ExitCode::from(1);
         }
     }
@@ -111,7 +111,7 @@ fn repo_root() -> Option<PathBuf> {
 
 fn read(root: &Path, rel: &str) -> Result<String, String> {
     std::fs::read_to_string(root.join(rel))
-        .map_err(|e| format!("bbx-dev: {rel}: {e}"))
+        .map_err(|e| format!("sherd-dev: {rel}: {e}"))
 }
 
 fn sources(root: &Path) -> Result<badge::Sources, String> {
@@ -127,7 +127,7 @@ fn sources(root: &Path) -> Result<badge::Sources, String> {
 
 /// Every generated block, and the owner each one is rendered from.
 ///
-/// The three graph renderings come from `bbx`'s own `fed` module rather than
+/// The three graph renderings come from `sherd`'s own `fed` module rather than
 /// by shelling out to the binary and reading its stdout: §C forbids a second
 /// reading of a rule that already has an owner, and a pipe is one.
 fn blocks(root: &Path, nodes: usize) -> Result<badge::Blocks, String> {
@@ -136,14 +136,14 @@ fn blocks(root: &Path, nodes: usize) -> Result<badge::Blocks, String> {
         ("badges".to_string(), badge::render(&facts)),
         (
             "graph-tree".to_string(),
-            format!("```\n{}```\n", bbx::fed::tree(root)),
+            format!("```\n{}```\n", sherd::fed::tree(root)),
         ),
         (
             "graph-mermaid".to_string(),
-            format!("```mermaid\n{}```\n", bbx::fed::mermaid(root)),
+            format!("```mermaid\n{}```\n", sherd::fed::mermaid(root)),
         ),
-        ("graph-table".to_string(), bbx::fed::table(root)),
-        ("commands".to_string(), commands::render(bbx::cli::USAGE)),
+        ("graph-table".to_string(), sherd::fed::table(root)),
+        ("commands".to_string(), commands::render(sherd::cli::USAGE)),
     ])
 }
 
@@ -158,14 +158,14 @@ fn readme(check_only: bool, paths: &[String]) -> ExitCode {
     }
     let Some(root) = repo_root() else {
         eprintln!(
-            "bbx-dev: not inside the repository -- no ancestor holds both .git and SPEC.md"
+            "sherd-dev: not inside the repository -- no ancestor holds both .git and SPEC.md"
         );
         return ExitCode::from(2);
     };
-    // The node count is `bbx`'s own walk, not a second one: §C forbids
+    // The node count is `sherd`'s own walk, not a second one: §C forbids
     // reimplementing a rule that already has an owner, and the DAG this badge
     // reports is exactly what `fed::discover` enumerates.
-    let nodes = bbx::fed::discover(&root).len();
+    let nodes = sherd::fed::discover(&root).len();
 
     // `src/cli:V7`, and the runner `src/cli:B2` never had: usage names EVERY
     // verb that dispatches. It lives here rather than in a test because the
@@ -174,10 +174,10 @@ fn readme(check_only: bool, paths: &[String]) -> ExitCode {
     // keeps both halves of the contract.
     match read(&root, "src/cli/mod.rs") {
         Ok(src) => {
-            let missing = commands::undocumented(bbx::cli::USAGE, &src);
+            let missing = commands::undocumented(sherd::cli::USAGE, &src);
             if !missing.is_empty() {
                 eprintln!(
-                    "bbx-dev: dispatched and named in no usage line (src/cli:V7): {}",
+                    "sherd-dev: dispatched and named in no usage line (src/cli:V7): {}",
                     missing.join(", ")
                 );
                 return ExitCode::from(1);
@@ -204,13 +204,13 @@ fn readme(check_only: bool, paths: &[String]) -> ExitCode {
         Ok(Outcome::Fresh) => ExitCode::SUCCESS,
         Ok(Outcome::NoMarkers) => {
             eprintln!(
-                "bbx-dev: README.md is missing a block's markers. Each generated block needs a `<!-- BEGIN <name> -->` / `<!-- END <name> -->` pair: badges, graph-tree, graph-mermaid, graph-table."
+                "sherd-dev: README.md is missing a block's markers. Each generated block needs a `<!-- BEGIN <name> -->` / `<!-- END <name> -->` pair: badges, graph-tree, graph-mermaid, graph-table."
             );
             ExitCode::from(1)
         }
         Ok(Outcome::Stale(diff)) => {
             eprintln!(
-                "bbx-dev: a generated README block is STALE. Run `bbx-dev readme` (or `hk fix`) to regenerate it from the files that own each number -- Cargo.toml, hk.pkl, .coverage, .lint-debt, flake.lock, ci.yml and the §F tables."
+                "sherd-dev: a generated README block is STALE. Run `sherd-dev readme` (or `hk fix`) to regenerate it from the files that own each number -- Cargo.toml, hk.pkl, .coverage, .lint-debt, flake.lock, ci.yml and the §F tables."
             );
             for line in diff {
                 eprintln!("  {line}");
@@ -221,7 +221,7 @@ fn readme(check_only: bool, paths: &[String]) -> ExitCode {
             match std::fs::write(root.join("README.md"), next) {
                 Ok(()) => ExitCode::SUCCESS,
                 Err(e) => {
-                    eprintln!("bbx-dev: README.md: {e}");
+                    eprintln!("sherd-dev: README.md: {e}");
                     ExitCode::from(1)
                 }
             }

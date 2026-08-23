@@ -1,6 +1,6 @@
 #![cfg(feature = "ollama")]
 //! Gated with the loop it measures: every titration here needs a live 20B,
-//! and the corpora it reads live in `bbx::assay`, which the `ollama` feature
+//! and the corpora it reads live in `sherd::assay`, which the `ollama` feature
 //! carries (`.:B15`).
 
 //! T77 and T82, run against a live endpoint.
@@ -19,7 +19,7 @@
 
 #![cfg(feature = "ollama")]
 
-use bbx::assay::{
+use sherd::assay::{
     GEN_CORPUS, GenItem, Grade, Outcome, gen_prompt, gen_prompt_in_context,
     grade_detail, titration_report,
 };
@@ -41,8 +41,8 @@ fn log_row(row: &str) {
 
 /// Grade a reply that arrived. A compiler that cannot RUN is an error, never
 /// a wrong answer, and a run that never TERMINATED is a third thing (`V6`).
-fn grade_reply(r: &bbx::ollama::Reply, it: &GenItem) -> (Outcome, String) {
-    let code = bbx::ollama::rust_block(&r.text);
+fn grade_reply(r: &sherd::ollama::Reply, it: &GenItem) -> (Outcome, String) {
+    let code = sherd::ollama::rust_block(&r.text);
     let tok = format!("{} tok", r.prompt_tokens);
     match grade_detail(&code, it.preamble, it.tests, "rustc") {
         Ok(Grade::Pass) => (Outcome::Pass, tok),
@@ -55,7 +55,7 @@ fn grade_reply(r: &bbx::ollama::Reply, it: &GenItem) -> (Outcome, String) {
 /// One measurement, which NEVER panics. A transient belongs in the record,
 /// not in a stack trace.
 fn run_one(prompt: &str, it: &GenItem) -> (Outcome, String) {
-    match bbx::ollama::generate(prompt) {
+    match sherd::ollama::generate(prompt) {
         Err(e) => (Outcome::Error, e),
         Ok(r) => grade_reply(&r, it),
     }
@@ -101,7 +101,8 @@ fn context_titration() {
     let node = root.join("src/tokens");
     // A pack that cannot be read is a run that did not happen, never a zero:
     // `assay:V1`, and `assay:B1` is what an `.expect()` here costs.
-    let Ok(pack) = bbx::lens::pack(root, &node, bbx::lens::Depth::Rule) else {
+    let Ok(pack) = sherd::lens::pack(root, &node, sherd::lens::Depth::Rule)
+    else {
         println!("lens pack unavailable -- nothing measured (V1)");
         return;
     };

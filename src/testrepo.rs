@@ -39,7 +39,7 @@ impl TestRepo {
         static N: AtomicUsize = AtomicUsize::new(0);
         let n = N.fetch_add(1, Ordering::Relaxed);
         let root = std::env::temp_dir()
-            .join(format!("bbx-repo-{tag}-{}-{n}", std::process::id()));
+            .join(format!("sherd-repo-{tag}-{}-{n}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).map_err(|e| format!("mkdir: {e}"))?;
         let r = Self { root };

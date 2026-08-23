@@ -1,6 +1,6 @@
 #![cfg(feature = "ollama")]
 //! Gated with the loop it measures: every titration here needs a live 20B,
-//! and the corpora it reads live in `bbx::assay`, which the `ollama` feature
+//! and the corpora it reads live in `sherd::assay`, which the `ollama` feature
 //! carries (`.:B15`).
 
 //! T83, run against a live endpoint: one implementation, graded twice.
@@ -16,13 +16,13 @@
 
 #![cfg(feature = "ollama")]
 
-use bbx::assay::{
+use sherd::assay::{
     GEN_CORPUS, GenItem, Grade, Verdicts, authorship_report, authorship_row,
     gen_prompt, grade_detail, test_prompt,
 };
 
 fn ask(prompt: &str) -> Result<String, String> {
-    bbx::ollama::generate(prompt).map(|r| bbx::ollama::rust_block(&r.text))
+    sherd::ollama::generate(prompt).map(|r| sherd::ollama::rust_block(&r.text))
 }
 
 /// One implementation, graded twice. Blind in both arms.

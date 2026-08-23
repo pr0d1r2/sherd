@@ -179,7 +179,7 @@ pub struct Facts {
 
 const SHIELD: &str = "https://img.shields.io/badge";
 
-/// Render the block. No CI, crates.io or docs.rs badge: `bbx-cli` is
+/// Render the block. No CI, crates.io or docs.rs badge: `sherd` is
 /// unpublished and the GitHub repository does not exist yet, so each would
 /// render a broken image or a green tick for a run nobody made. They land
 /// with the publish.
@@ -221,7 +221,7 @@ pub fn render(f: &Facts) -> String {
 }
 
 /// The markers around one generated block. NAMED, because the README carries
-/// four of them now -- the badges and the three `bbx graph` renderings -- and
+/// four of them now -- the badges and the three `sherd graph` renderings -- and
 /// a single unnamed pair could only ever guard one.
 #[must_use]
 pub fn markers(name: &str) -> (String, String) {
@@ -256,12 +256,12 @@ mod tests {
 
     const MANIFEST: &str = "\
 [package]
-name = \"bbx-cli\"
+name = \"sherd\"
 edition = \"2024\"
 rust-version = \"1.95\"
 
 [[bin]]
-name = \"bbx\"
+name = \"sherd\"
 path = \"src/main.rs\"
 
 [dependencies]
@@ -510,7 +510,7 @@ pub enum Outcome {
 /// # Errors
 /// Any owning file missing the value it owns.
 pub fn facts(s: &Sources, nodes: usize) -> Result<Facts, String> {
-    let missing = |what: &str| format!("bbx-dev: no {what} to read");
+    let missing = |what: &str| format!("sherd-dev: no {what} to read");
     let lines = ratchet(&s.coverage, "lines")
         .ok_or_else(|| missing("`lines` row in .coverage"))?;
     Ok(Facts {

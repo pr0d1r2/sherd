@@ -1,5 +1,5 @@
 {
-  # The `setting` facet for blackbox: the toolchain, and the `bbx` command
+  # The `setting` facet for sherd: the toolchain, and the `sherd` command
   # itself. Measured across the fleet at 16-24% of a repo and almost never
   # what you are editing -- which is why §C says it enters a lens pack as a
   # CONTRACT (one line per guard) rather than as this file.
@@ -10,7 +10,7 @@
   # standard was nixos-25.11. nixpkgs-lock is the one place that rev is
   # decided, for ~80 repos, and it moved to nixos-26.05 (rustc 1.95.0) in
   # pr0d1r2/nixpkgs-lock#19.
-  description = "blackbox -- federated SPEC.md for small-context local models";
+  description = "sherd -- federated SPEC.md for small-context local models";
 
   # hk is built by `nix-hk` and pushed to this cache. nixos-26.05 ships no hk
   # at all -- the package landed on nixpkgs master after the branch-off -- so
@@ -56,8 +56,8 @@
       forAll =
         f: nixpkgs.lib.genAttrs systems (s: f (nixpkgs.legacyPackages.${s}.extend nix-hk.overlays.default));
 
-      # blackbox dogfoods itself (V27) -- `bbx check` gates its own commits --
-      # so the dev shell must PROVIDE `bbx`, not merely the toolchain to build
+      # sherd dogfoods itself (V27) -- `sherd check` gates its own commits --
+      # so the dev shell must PROVIDE `sherd`, not merely the toolchain to build
       # it.
       #
       # Deliberately a SHIM and not a package in the shell's closure, for the
@@ -67,21 +67,21 @@
       # fresh, rebuilds only on change, and therefore always matches the
       # working tree -- which a pinned package never does.
       #
-      # BBX_MANIFEST is exported by the shellHook. BBX_PROFILE=release is the
+      # SHERD_MANIFEST is exported by the shellHook. SHERD_PROFILE=release is the
       # escape hatch when a debug build is too slow over a large tree.
-      bbxShim =
+      sherdShim =
         pkgs:
-        pkgs.writeShellScriptBin "bbx" ''
+        pkgs.writeShellScriptBin "sherd" ''
           set -eu
-          manifest="''${BBX_MANIFEST:-}"
+          manifest="''${SHERD_MANIFEST:-}"
           if [ -z "$manifest" ] || [ ! -f "$manifest" ]; then
-            echo "bbx(shim): BBX_MANIFEST unset or missing -- re-enter the dev shell from the crate root" >&2
+            echo "sherd(shim): SHERD_MANIFEST unset or missing -- re-enter the dev shell from the crate root" >&2
             exit 2
           fi
           profile=""
-          [ "''${BBX_PROFILE:-debug}" = "release" ] && profile="--release"
+          [ "''${SHERD_PROFILE:-debug}" = "release" ] && profile="--release"
           exec cargo run --quiet $profile \
-            --manifest-path "$manifest" --bin bbx -- "$@"
+            --manifest-path "$manifest" --bin sherd -- "$@"
         '';
     in
     {
@@ -98,7 +98,7 @@
       # not a check.
       packages = forAll (pkgs: {
         default = pkgs.rustPlatform.buildRustPackage {
-          pname = "bbx-cli";
+          pname = "sherd";
           version = "0.1.0";
           src = ./.;
           cargoLock.lockFile = ./Cargo.lock;
@@ -108,18 +108,18 @@
           nativeCheckInputs = [ pkgs.git ];
           # BUILD only the published crate, TEST the whole workspace. `dev/`
           # ships to nobody -- that is the reason it is a separate member --
-          # so `bbx-dev` must not land in this package's `bin/`, which it did
+          # so `sherd-dev` must not land in this package's `bin/`, which it did
           # on the first build here. Its tests still run in the sandbox,
           # because a member no sandbox ever exercises is a member whose
           # breakage waits for a human.
           cargoBuildFlags = [
             "-p"
-            "bbx-cli"
+            "sherd"
           ];
           cargoTestFlags = [ "--workspace" ];
           meta = {
             description = "two-axis federation of SPEC.md and source over a dir DAG";
-            mainProgram = "bbx";
+            mainProgram = "sherd";
             licenses = pkgs.lib.licenses.mit;
           };
         };
@@ -128,7 +128,7 @@
       devShells = forAll (pkgs: {
         default = pkgs.mkShell {
           packages = [
-            (bbxShim pkgs)
+            (sherdShim pkgs)
             pkgs.rustc
             pkgs.cargo
             pkgs.clippy
@@ -182,16 +182,16 @@
           # holding this flake, which is also the crate root.
           shellHook = ''
             if [ -f "$PWD/Cargo.toml" ]; then
-              export BBX_MANIFEST="$PWD/Cargo.toml"
-              export BBX_CARGO="$(command -v cargo)"
+              export SHERD_MANIFEST="$PWD/Cargo.toml"
+              export SHERD_CARGO="$(command -v cargo)"
             else
-              echo "bbx(shell): no Cargo.toml in $PWD -- \`bbx\` shim disabled" >&2
+              echo "sherd(shell): no Cargo.toml in $PWD -- \`sherd\` shim disabled" >&2
             fi
             # The endpoint is a fact about YOUR network, so it is not pinned
-            # here. §I defaults to localhost; export BBX_ENDPOINT to point at
-            # a LAN box. BBX_MODEL defaults to gpt-oss:20b.
-            : "''${BBX_ENDPOINT:=http://localhost:11434}"
-            export BBX_ENDPOINT
+            # here. §I defaults to localhost; export SHERD_ENDPOINT to point at
+            # a LAN box. SHERD_MODEL defaults to gpt-oss:20b.
+            : "''${SHERD_ENDPOINT:=http://localhost:11434}"
+            export SHERD_ENDPOINT
           '';
         };
       });

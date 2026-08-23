@@ -1,7 +1,7 @@
 # One PUBLISHED crate, and one member that is never published. §C says "one
 # crate" and this is the amendment to it: `dev/` holds tooling that maintains
 # THIS repository -- it reads our files and writes our docs, and a consumer of
-# `bbx-cli` has no use for any of it. A second `[[bin]]` here would have
+# `sherd` has no use for any of it. A second `[[bin]]` here would have
 # shipped in the tarball and landed on their PATH. A workspace member with
 # `publish = false` cannot, and needs no `cfg` gate or `exclude` entry kept in
 # sync to stay out.
@@ -9,7 +9,7 @@
 members = ["dev"]
 
 [package]
-name = "bbx-cli"
+name = "sherd"
 version = "0.1.0"
 edition = "2024"
 # MSRV tracks the FLEET PIN, which is what actually compiles this: nixpkgs-lock
@@ -20,9 +20,9 @@ edition = "2024"
 rust-version = "1.95"
 license = "MIT"
 description = "two-axis federation of SPEC.md and source over a dir DAG, for small-context local models"
-repository = "https://github.com/pr0d1r2/blackbox"
-homepage = "https://github.com/pr0d1r2/blackbox"
-documentation = "https://docs.rs/bbx-cli"
+repository = "https://github.com/pr0d1r2/sherd"
+homepage = "https://github.com/pr0d1r2/sherd"
+documentation = "https://docs.rs/sherd"
 readme = "README.md"
 keywords = ["spec", "llm", "context", "codegen", "local"]
 categories = ["command-line-utilities", "development-tools"]
@@ -33,8 +33,8 @@ exclude = [
   ".envrc",
   ".githooks",
   ".context-limits",
-  ".bbx-state",
-  ".bbx-slices",
+  ".sherd-state",
+  ".sherd-slices",
   # The gate: its ops and the pkl schema they amend. Same class as `.githooks`
   # above -- it runs on THIS working tree and means nothing inside a published
   # tarball. `pkl/Config.pkl` alone is a 1,014-line vendored schema.
@@ -44,15 +44,12 @@ exclude = [
   ".claude",
 ]
 
-# R8: crates.io `bbx` is taken (BBCode parser, lib-only). The BIN name is
-# verified free on brew, debian and PATH, so the package is renamed and the
-# binary is not.
 [[bin]]
-name = "bbx"
+name = "sherd"
 path = "src/main.rs"
 
 [lib]
-name = "bbx"
+name = "sherd"
 path = "src/lib.rs"
 
 [features]
@@ -74,7 +71,7 @@ itok = { version = "0.3", default-features = false, features = ["bpe"] }
 # A registry version plus the lock checksum is an immutable artifact instead
 # (V101), and the runner in `src/lib.rs` now allows no exceptions at all.
 microlith = "0.6"
-# ureq 3 with `rustls`, so `BBX_ENDPOINT` may be an `https://` host. What
+# ureq 3 with `rustls`, so `SHERD_ENDPOINT` may be an `https://` host. What
 # gets POSTed is the PROMPT -- slices of your spec and your source, because
 # feeding a repository to a model is the whole job -- and `ollama` is a
 # DEFAULT feature, so plaintext would be the default path rather than an

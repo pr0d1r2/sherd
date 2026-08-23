@@ -233,7 +233,7 @@ impl<'a> Caller<'a> {
 /// The MONOLITH arm of the premise gate (root V60): everything in one call.
 ///
 /// Full spec including §B/§R, full implementation bodies, full tests, asked
-/// for test AND implementation together. This is what blackbox claims to beat.
+/// for test AND implementation together. This is what sherd claims to beat.
 /// Same gate, same node, same invariant -- only the context shape differs.
 ///
 /// # Errors
@@ -370,7 +370,7 @@ impl<'a> Run<'a> {
     }
 
     /// Point the gate at a different toolchain. A test scripts one here
-    /// rather than setting `BBX_CARGO`, which is process-global and shared
+    /// rather than setting `SHERD_CARGO`, which is process-global and shared
     /// with every other test running in parallel.
     #[must_use]
     pub fn with_cargo(mut self, cargo: &str) -> Self {
@@ -401,7 +401,7 @@ pub fn drive(
 /// invariant is not in the node's own spec (`.:plan` B6).
 /// Restores a module unless the run earns the right to keep it.
 ///
-/// Written after `bbx tdd` exhausted its repair budget and left code that did
+/// Written after `sherd tdd` exhausted its repair budget and left code that did
 /// not COMPILE in the tree (B22). Three other exit paths restored by hand and
 /// that one did not -- and a non-compiling module fails every later command in
 /// the repo, not just its own node.
@@ -445,7 +445,7 @@ impl Drop for Restore {
 #[derive(Debug, Clone)]
 pub struct Candidate {
     pub code: String,
-    /// `cargo build` + `cargo test` + `bbx check`, all green.
+    /// `cargo build` + `cargo test` + `sherd check`, all green.
     pub green: bool,
     /// Mechanical review findings against what this candidate added.
     pub findings: usize,
@@ -511,14 +511,14 @@ pub fn select(cands: &[Candidate]) -> Pick {
     Pick::Unfinished(0)
 }
 
-/// How many implementations compete at step 2. `BBX_CANDIDATES`, default 1.
+/// How many implementations compete at step 2. `SHERD_CANDIDATES`, default 1.
 ///
 /// Default 1 costs exactly what today costs: candidate 0 IS the deterministic
 /// call, so the selection path runs on every step rather than lying dormant
 /// until someone opts in.
 #[must_use]
 pub fn candidate_count() -> usize {
-    std::env::var("BBX_CANDIDATES")
+    std::env::var("SHERD_CANDIDATES")
         .ok()
         .and_then(|v| v.parse::<usize>().ok())
         .unwrap_or(1)
@@ -982,7 +982,7 @@ mod tests {
 
     #[test]
     fn an_unkept_run_restores_the_module() {
-        let dir = std::env::temp_dir().join("bbx-restore-test");
+        let dir = std::env::temp_dir().join("sherd-restore-test");
         std::fs::create_dir_all(&dir).unwrap();
         let f = dir.join("mod.rs");
         std::fs::write(&f, "fn original() {}\n").unwrap();
@@ -1344,7 +1344,7 @@ mod loop_tests {
         Ok(script.display().to_string())
     }
 
-    /// The gate runs `bbx check` and slice drift over ROOT, so the fixture
+    /// The gate runs `sherd check` and slice drift over ROOT, so the fixture
     /// has to look like a repo and not merely like a node.
     fn repo_fixture(root: &Path) -> Result<(), String> {
         std::fs::write(
@@ -1353,7 +1353,7 @@ mod loop_tests {
              node|the fixture|everything else|-\n",
         )
         .map_err(|e| format!("root spec: {e}"))?;
-        std::fs::write(root.join(".bbx-slices"), "# none\n")
+        std::fs::write(root.join(".sherd-slices"), "# none\n")
             .map_err(|e| format!("slices: {e}"))
     }
 
@@ -1408,7 +1408,7 @@ mod loop_tests {
         static N: AtomicUsize = AtomicUsize::new(0);
         let n = N.fetch_add(1, Ordering::Relaxed);
         let dir = std::env::temp_dir()
-            .join(format!("bbx-loop-{tag}-{}-{n}", std::process::id()));
+            .join(format!("sherd-loop-{tag}-{}-{n}", std::process::id()));
         let node = dir.join("node");
         node_fixture(&node)?;
         repo_fixture(&dir)?;
@@ -1434,7 +1434,7 @@ mod loop_tests {
 
     /// The monolith arm, offline.
     ///
-    /// `oneshot` is what blackbox claims to BEAT -- full spec, full bodies,
+    /// `oneshot` is what sherd claims to BEAT -- full spec, full bodies,
     /// test and implementation asked for together in one call (R29/R30). It
     /// took `&ollama::Http` and the real `gate`, so the comparison arm could
     /// only ever run against a live endpoint and this repo's own toolchain.

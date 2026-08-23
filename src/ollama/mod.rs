@@ -280,7 +280,7 @@ pub fn predict_for(label: &str, prompt_tokens: u64) -> Eta {
 /// Raise the floor for `label` IN a given store.
 ///
 /// The store is a parameter for `V19`: the suite must be HERMETIC, and
-/// `.bbx-state` lives in the repo where every test that writes it changes
+/// `.sherd-state` lives in the repo where every test that writes it changes
 /// which branch the next test takes. `B8` is that flapping the ratchet and
 /// blocking a commit that had changed nothing. `T13` carries the full fix.
 pub fn raise_gen_floor_in(
@@ -402,7 +402,7 @@ pub trait Transport {
     }
 }
 
-/// The real one: `ureq` with TLS compiled in, so `BBX_ENDPOINT` may name an
+/// The real one: `ureq` with TLS compiled in, so `SHERD_ENDPOINT` may name an
 /// `https://` host.
 ///
 /// TLS is not decoration here. What this posts is the PROMPT -- which for
@@ -450,19 +450,19 @@ pub struct Reply {
 }
 
 fn endpoint() -> String {
-    std::env::var("BBX_ENDPOINT")
+    std::env::var("SHERD_ENDPOINT")
         .unwrap_or_else(|_| "http://localhost:11434".into())
 }
 
 fn model() -> String {
-    std::env::var("BBX_MODEL").unwrap_or_else(|_| "gpt-oss:20b".into())
+    std::env::var("SHERD_MODEL").unwrap_or_else(|_| "gpt-oss:20b".into())
 }
 
 /// Context window to request. Passed PER REQUEST, never set globally -- a
 /// global value makes every model allocate a full cache whether it needs one
 /// or not, and we know what we are asking for.
 fn num_ctx() -> u64 {
-    std::env::var("BBX_NUM_CTX")
+    std::env::var("SHERD_NUM_CTX")
         .ok()
         .and_then(|v| v.parse().ok())
         .unwrap_or(131_072)
@@ -659,7 +659,7 @@ pub fn stream(
                         "aborted after {el:.0}s -- 4x the {:.0}s estimate. \
                          {} output + {} reasoning tokens so far (recorded as a floor \
                          for `{label}`). Endpoint {} may be overloaded, or \
-                         BBX_NUM_CTX too large for its memory.",
+                         SHERD_NUM_CTX too large for its memory.",
                         budget.as_secs_f64(),
                         text.len() / 4,
                         thinking.len() / 4,
@@ -867,7 +867,7 @@ mod tests {
         let n = N.fetch_add(1, Ordering::Relaxed);
         crate::state::State::at(
             std::env::temp_dir()
-                .join(format!("bbx-pace-{tag}-{}-{n}", std::process::id())),
+                .join(format!("sherd-pace-{tag}-{}-{n}", std::process::id())),
         )
     }
 
@@ -928,7 +928,7 @@ mod tests {
     fn learning_from_a_reply_retains_it_and_persists_the_rates() {
         // The production path's persisting half, exercised in a store of its
         // own. Before the split this could only run by writing the ambient
-        // `.bbx-state`, which is `B9` -- so the only test of it was every
+        // `.sherd-state`, which is `B9` -- so the only test of it was every
         // other test, by accident.
         let mut st = store("learn");
         let r = Reply {
@@ -1041,7 +1041,7 @@ mod tests {
         (
             (),
             std::env::temp_dir()
-                .join(format!("bbx-warm-{tag}-{}-{n}", std::process::id())),
+                .join(format!("sherd-warm-{tag}-{}-{n}", std::process::id())),
         )
     }
 

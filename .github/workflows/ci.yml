@@ -33,7 +33,7 @@ name: ci
 # the deterministic core and does not hang waiting for one.
 #
 # PENDING -- listed rather than silently absent:
-#   * `bbx validate` self-check, once the verb exists   T55
+#   * `sherd validate` self-check, once the verb exists   T55
 #   * release automation and a crates.io publish        unversioned
 #   * x86_64-darwin, DECLARED in flake.nix `systems` and not gated here.
 #     GitHub's Intel macOS runners are retired, so gating it needs a runner
@@ -95,7 +95,7 @@ jobs:
       # because a SHA alone tells a reader nothing about which version they
       # are on. Same SHAs as the sibling repos, so a bump is one review.
       #
-      # fetch-depth: 0 -- `bbx review` reads a real revision and its test
+      # fetch-depth: 0 -- `sherd review` reads a real revision and its test
       # asserts the verb succeeds against one, so a shallow clone would fail
       # it for having no history rather than for anything about the code.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

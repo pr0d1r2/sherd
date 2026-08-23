@@ -51,10 +51,10 @@ pub fn stamp(secs: u64) -> String {
 /// minute, and a run is the unit anyone actually reviews.
 #[must_use]
 pub fn run_branch(current: &str, secs: u64) -> String {
-    if current.starts_with("bbx/apply-") {
+    if current.starts_with("sherd/apply-") {
         current.to_string()
     } else {
-        format!("bbx/apply-{}", stamp(secs))
+        format!("sherd/apply-{}", stamp(secs))
     }
 }
 
@@ -62,7 +62,7 @@ pub fn run_branch(current: &str, secs: u64) -> String {
 #[derive(Debug, Clone)]
 pub struct Evidence {
     pub commits: usize,
-    /// `cargo build` + `cargo test` + `bbx check`, re-run on the branch head.
+    /// `cargo build` + `cargo test` + `sherd check`, re-run on the branch head.
     pub gate_ok: bool,
     /// Mechanical review findings across every commit on the branch.
     pub findings: usize,
@@ -109,7 +109,7 @@ pub fn landable(e: &Evidence) -> Result<(), String> {
         // arithmetic is the bare int V24 refuses.
         return Err(format!(
             "believability {:.2} < {LAND_MIN:.2} -- this node has not earned an \
-             unattended merge. `bbx outcome <node> kept` after review is what \
+             unattended merge. `sherd outcome <node> kept` after review is what \
              raises it; five consecutive keeps clears the bar",
             e.believability
         ));
@@ -137,7 +137,7 @@ fn git(root: &Path, args: &[&str]) -> Result<String, String> {
 /// with no remote is a valid place to run, it just gets no CI.
 ///
 /// Matching ONLY `gitlab` meant [`push_branch`] returned early on every other
-/// clone and printed nothing, so `bbx land --push` was indistinguishable from
+/// clone and printed nothing, so `sherd land --push` was indistinguishable from
 /// a push that worked (B5).
 #[must_use]
 pub fn remote(root: &Path) -> Option<String> {
@@ -309,7 +309,7 @@ mod tests {
     #[test]
     fn a_run_gets_one_branch_not_one_per_apply() {
         let first = run_branch("main", 1_785_681_300);
-        assert_eq!(first, "bbx/apply-2026-08-02--14-35");
+        assert_eq!(first, "sherd/apply-2026-08-02--14-35");
         // The second apply of the same run is already on it, and a later clock
         // must not move it -- twenty applies, one branch.
         assert_eq!(run_branch(&first, 1_785_681_300 + 9_000), first);
@@ -489,8 +489,8 @@ mod git_tests {
     /// No remote at all. `B5` was SILENCE here.
     fn push_with_no_remote() -> Result<(), String> {
         let r = crate::testrepo::TestRepo::new("land-push-none")?;
-        r.git(&["checkout", "-q", "-b", "bbx/apply-p"])?;
-        push_branch(r.path(), "bbx/apply-p");
+        r.git(&["checkout", "-q", "-b", "sherd/apply-p"])?;
+        push_branch(r.path(), "sherd/apply-p");
         Ok(())
     }
 
@@ -501,10 +501,10 @@ mod git_tests {
         let target = up.path().join("bare.git").display().to_string();
         init_bare(&target)?;
         up.git(&["remote", "add", "origin", &target])?;
-        up.git(&["checkout", "-q", "-b", "bbx/apply-up"])?;
-        push_branch(up.path(), "bbx/apply-up");
+        up.git(&["checkout", "-q", "-b", "sherd/apply-up"])?;
+        push_branch(up.path(), "sherd/apply-up");
         assert!(
-            branches_at(&target)?.contains("bbx/apply-up"),
+            branches_at(&target)?.contains("sherd/apply-up"),
             "the push actually landed on the remote"
         );
         Ok(())
@@ -533,8 +533,8 @@ mod git_tests {
     fn push_to_a_broken_remote() -> Result<(), String> {
         let b = crate::testrepo::TestRepo::new("land-push-bad")?;
         b.git(&["remote", "add", "origin", "/no/such/remote.git"])?;
-        b.git(&["checkout", "-q", "-b", "bbx/apply-b"])?;
-        push_branch(b.path(), "bbx/apply-b");
+        b.git(&["checkout", "-q", "-b", "sherd/apply-b"])?;
+        push_branch(b.path(), "sherd/apply-b");
         Ok(())
     }
 
@@ -565,7 +565,7 @@ mod git_tests {
     fn check_ff() -> Result<(), String> {
         let r = crate::testrepo::TestRepo::new("land-ff")?;
         let cargo = green_gate(r.path())?;
-        r.git(&["checkout", "-q", "-b", "bbx/apply-ff"])?;
+        r.git(&["checkout", "-q", "-b", "sherd/apply-ff"])?;
         r.write("notes.md", "work\n")?;
         r.commit("one commit, no pub fn, no findings")?;
         let head = r.git(&["rev-parse", "HEAD"])?;
@@ -592,11 +592,11 @@ mod git_tests {
 
     fn check_ff_ok() -> Result<(), String> {
         let r = crate::testrepo::TestRepo::new("land-ff-ok")?;
-        r.git(&["checkout", "-q", "-b", "bbx/apply-ok"])?;
+        r.git(&["checkout", "-q", "-b", "sherd/apply-ok"])?;
         r.write("src/n/mod.rs", "pub fn a() -> u8 { 1 }\n")?;
         r.commit("the work")?;
         let head = r.git(&["rev-parse", "HEAD"])?;
-        let msg = merge_ff(r.path(), "bbx/apply-ok", false)?;
+        let msg = merge_ff(r.path(), "sherd/apply-ok", false)?;
         assert!(msg.contains("landed on main"), "{msg}");
         assert_eq!(
             r.git(&["rev-parse", "main"])?,
@@ -616,10 +616,10 @@ mod git_tests {
 
     fn check_push_no_remote() -> Result<(), String> {
         let r = crate::testrepo::TestRepo::new("land-nopush")?;
-        r.git(&["checkout", "-q", "-b", "bbx/apply-np"])?;
+        r.git(&["checkout", "-q", "-b", "sherd/apply-np"])?;
         r.write("src/n/mod.rs", "pub fn a() -> u8 { 1 }\n")?;
         r.commit("the work")?;
-        let msg = merge_ff(r.path(), "bbx/apply-np", true)?;
+        let msg = merge_ff(r.path(), "sherd/apply-np", true)?;
         assert!(
             msg.contains("no remote"),
             "a push that could not happen must be reported: {msg}"
@@ -635,23 +635,23 @@ mod git_tests {
 
     fn check_diverged() -> Result<(), String> {
         let r = crate::testrepo::TestRepo::new("land-diverged")?;
-        r.git(&["checkout", "-q", "-b", "bbx/apply-div"])?;
+        r.git(&["checkout", "-q", "-b", "sherd/apply-div"])?;
         r.write("src/n/mod.rs", "pub fn a() -> u8 { 1 }\n")?;
         r.commit("branch work")?;
         // Someone commits to the trunk meanwhile.
         r.git(&["checkout", "-q", "main"])?;
         r.write("trunk.md", "meanwhile\n")?;
         r.commit("trunk moved")?;
-        r.git(&["checkout", "-q", "bbx/apply-div"])?;
+        r.git(&["checkout", "-q", "sherd/apply-div"])?;
         let before = r.git(&["rev-parse", "HEAD"])?;
         // `merge_ff` directly: the evidence half is covered elsewhere, and
         // what needs asserting here is that a non-fast-forward restores the
         // branch rather than leaving the tree on main mid-merge (V5, V9).
-        let out = merge_ff(r.path(), "bbx/apply-div", false);
+        let out = merge_ff(r.path(), "sherd/apply-div", false);
         assert!(out.is_err(), "a diverged main is not a fast-forward");
         assert_eq!(
             r.git(&["rev-parse", "--abbrev-ref", "HEAD"])?.trim(),
-            "bbx/apply-div",
+            "sherd/apply-div",
             "V9: the branch is checked out again -- it is the record of the try"
         );
         assert_eq!(r.git(&["rev-parse", "HEAD"])?, before, "and unmoved");
@@ -671,12 +671,12 @@ mod git_tests {
 
     fn check_evidence() -> Result<(), String> {
         let r = crate::testrepo::TestRepo::new("land-evidence")?;
-        r.git(&["checkout", "-q", "-b", "bbx/apply-test"])?;
+        r.git(&["checkout", "-q", "-b", "sherd/apply-test"])?;
         r.write("src/n/mod.rs", "pub fn a() -> u8 { 1 }\n")?;
         r.commit("one")?;
         r.write("src/n/mod.rs", "pub fn a() -> u8 { 1 }\npub fn b() {}\n")?;
         r.commit("two")?;
-        let e = evidence(r.path(), "bbx/apply-test", true)?;
+        let e = evidence(r.path(), "sherd/apply-test", true)?;
         assert_eq!(e.commits, 2, "only what is ahead of main counts");
         assert!(e.gate_ok, "the gate verdict is passed in, not re-run");
         assert!(e.nodes >= 1, "the touched node is attributed: {e:?}");
@@ -691,8 +691,8 @@ mod git_tests {
 
     fn check_empty_evidence() -> Result<(), String> {
         let r = crate::testrepo::TestRepo::new("land-empty")?;
-        r.git(&["checkout", "-q", "-b", "bbx/apply-empty"])?;
-        let e = evidence(r.path(), "bbx/apply-empty", true)?;
+        r.git(&["checkout", "-q", "-b", "sherd/apply-empty"])?;
+        let e = evidence(r.path(), "sherd/apply-empty", true)?;
         assert_eq!(e.commits, 0);
         assert_eq!(
             e.nodes, 0,
@@ -710,7 +710,7 @@ mod git_tests {
 
     fn check_dirty() -> Result<(), String> {
         let r = crate::testrepo::TestRepo::new("land-dirty")?;
-        r.git(&["checkout", "-q", "-b", "bbx/apply-dirty"])?;
+        r.git(&["checkout", "-q", "-b", "sherd/apply-dirty"])?;
         r.write("uncommitted.txt", "not staged\n")?;
         let Err(msg) = land(r.path(), false) else {
             return Err("a dirty tree cannot land".into());
@@ -730,8 +730,8 @@ mod git_tests {
     fn check_branch() -> Result<(), String> {
         let r = TestRepo::new("land-branch")?;
         assert_eq!(current_branch(r.path())?, "main");
-        r.git(&["checkout", "-q", "-b", "bbx/run"])?;
-        assert_eq!(current_branch(r.path())?, "bbx/run");
+        r.git(&["checkout", "-q", "-b", "sherd/run"])?;
+        assert_eq!(current_branch(r.path())?, "sherd/run");
         Ok(())
     }
 
@@ -771,7 +771,7 @@ mod git_tests {
     }
 }
 
-/// Step 3 of the loop, and the gate `bbx land` runs before it's allowed to
+/// Step 3 of the loop, and the gate `sherd land` runs before it's allowed to
 /// fast-forward. Local, deterministic, zero tokens. Reports what RAN, not
 /// only what failed (`.:V48`).
 ///
@@ -801,7 +801,7 @@ pub fn gate(root: &Path) -> Result<(bool, String), String> {
 pub fn gate_with(root: &Path, cargo: &str) -> Result<(bool, String), String> {
     // Plain `cargo test`, exactly `hk`'s test step. NOT `RUSTFLAGS=-D
     // warnings`: RUSTFLAGS reaches every path dep, so `itok`'s own two
-    // `dead_code` warnings turned this gate red for code blackbox does not
+    // `dead_code` warnings turned this gate red for code sherd does not
     // own -- and then every candidate and every repair was judged against a
     // gate that could not go green whatever the model wrote (B26).
     //
@@ -812,7 +812,7 @@ pub fn gate_with(root: &Path, cargo: &str) -> Result<(bool, String), String> {
     //
     // BOUNDED: warnings are now clippy's job and clippy is `hk`'s step, not
     // this one. The loop's gate no longer catches a warnings-only regression;
-    // the commit gate still does, and `bbx apply` cannot commit without it.
+    // the commit gate still does, and `sherd apply` cannot commit without it.
     let out = Command::new(cargo)
         .args(["test", "--offline"])
         .current_dir(root)
@@ -835,7 +835,7 @@ pub fn gate_with(root: &Path, cargo: &str) -> Result<(bool, String), String> {
         }
         Err(e) => {
             return Err(format!(
-                "the gate could not RUN: `{cargo}` -- {e}. set BBX_CARGO or enter the \
+                "the gate could not RUN: `{cargo}` -- {e}. set SHERD_CARGO or enter the \
              dev shell. a gate that did not execute is not a gate that passed \
              or failed"
             ));
@@ -850,11 +850,11 @@ pub fn gate_with(root: &Path, cargo: &str) -> Result<(bool, String), String> {
         }
     }
     report.push_str(&format!(
-        "\n=== bbx check: {} === {} nodes examined, {viol} violations\n",
+        "\n=== sherd check: {} === {} nodes examined, {viol} violations\n",
         if viol == 0 { "PASS" } else { "FAIL" },
         nodes.len()
     ));
-    // Slice drift, by the same function `bbx slice --check` calls.
+    // Slice drift, by the same function `sherd slice --check` calls.
     let drift = crate::slice::drifted(root)?;
     report.push_str(&format!(
         "=== slice: {} === {} drifted\n",
@@ -874,12 +874,12 @@ pub fn gate_with(root: &Path, cargo: &str) -> Result<(bool, String), String> {
     ))
 }
 
-/// The toolchain, from `BBX_CARGO` or the default. The EDGES read the env;
+/// The toolchain, from `SHERD_CARGO` or the default. The EDGES read the env;
 /// the loop carries it in `Run` so a test can point at a scripted one
 /// without mutating process-global state that other tests share.
 #[must_use]
 pub fn cargo_bin() -> String {
-    std::env::var("BBX_CARGO").unwrap_or_else(|_| "cargo".into())
+    std::env::var("SHERD_CARGO").unwrap_or_else(|_| "cargo".into())
 }
 
 /// `cargo fmt --check`, as `hk`'s first step runs it.

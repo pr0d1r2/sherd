@@ -2,14 +2,14 @@
 
 ## §G GOAL
 
-Tooling that maintains THIS repository & ships to nobody. `bbx-dev`, a `publish = false` workspace member.
+Tooling that maintains THIS repository & ships to nobody. `sherd-dev`, a `publish = false` workspace member.
 
 ## §C CONSTRAINTS
 
-- ⊥ published. a consumer of `bbx-cli` ! ever receive these verbs.
+- ⊥ published. a consumer of `sherd` ! ever receive these verbs.
 - pure fn over `&str` ∀ parser. the repo is read by the CALLER & handed in ∴ ∀ rule testable w/ ⊥ a repository (`src/cli:V6`).
 - exit codes = `src/cli:V1` — 0 clean · 1 violation · 2 usage. a 2nd convention for one thing is the duplication `.:§C` ends.
-- ⊥ reimpl what `bbx` owns. node count = `fed::discover`, ⊥ a 2nd walk.
+- ⊥ reimpl what `sherd` owns. node count = `fed::discover`, ⊥ a 2nd walk.
 
 ## §V INVARIANTS
 
@@ -24,7 +24,7 @@ V7: a change SELECTS the blocks it can have invalidated — ∀ block declares i
 ## §T TASKS
 
 id|status|task|cites
-T1|x|`bbx-dev badges` — render the block from owning files, `--check` reports staleness & writes nothing|V1,V2,V5
-T2|x|`bbx-dev readme` commands block — generate the README's Commands section from the binary, so the verb list cannot go stale. `.:README` claims 5 unbuilt verbs & omits 7 built ones|V1
+T1|x|`sherd-dev badges` — render the block from owning files, `--check` reports staleness & writes nothing|V1,V2,V5
+T2|x|`sherd-dev readme` commands block — generate the README's Commands section from the binary, so the verb list cannot go stale. `.:README` claims 5 unbuilt verbs & omits 7 built ones|V1
 T3|.|EXTRACT to a fleet crate once a 2nd repo wants it. ∀ fn here is already a pure fn over `&str` ∴ the move is a move, ⊥ a rewrite. `itok`/`microlith` each carry their own copy of a badge generator TODAY (`.:R20`'s duplication, one rung up)|V1
-T4|x|`bbx-dev --check [<path>…]` — ONE entry point, ∀ check concurrent (`std::thread::scope`, ⊥ a runtime). a hook naming each check by hand grows a 2nd list of what the gate does|V7
+T4|x|`sherd-dev --check [<path>…]` — ONE entry point, ∀ check concurrent (`std::thread::scope`, ⊥ a runtime). a hook naming each check by hand grows a 2nd list of what the gate does|V7
