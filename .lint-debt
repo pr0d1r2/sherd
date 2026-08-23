@@ -71,4 +71,18 @@
 # Both come down with `.:T92`, and the second stops mattering the day
 # dispatch becomes a registry the loop iterates -- which is what
 # `dev/src/commands.rs` already wants for a different reason.
-total 280
+#
+# RAISED 280 -> 282 on 2026-08-23 for `B15`. Both new sites are TESTS, and
+# both are `too_many_lines` on a test that reads a real spec out of this tree
+# and compares two counts of it. Neither has a piece worth naming: splitting
+# `a_filename_is_not_a_row_about_the_node_it_spells` means moving the old
+# lowercasing rule into a helper, and the assertion would then read against a
+# function instead of against the defect it records.
+#
+# `V14` is why they are long -- a fix is tested on the example its own §B row
+# names, and `B15`'s examples are 54-against-26 on the root spec and a leaf
+# whose nav lists five siblings. Both are measurements, so both need the tree
+# in front of them.
+#
+# Down with `.:T92` alongside the rest.
+total 282
