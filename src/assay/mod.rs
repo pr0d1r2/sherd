@@ -400,7 +400,7 @@ impl Reading {
 /// `NoCompile` and `Hung` are the two that must NOT become verdicts about
 /// the row.
 ///
-/// `assay:V1` at the level of a single call. A pair that never compiled says
+/// `src/assay:V1` at the level of a single call. A pair that never compiled says
 /// nothing about the invariant, and folding it into `Disagree` would flag
 /// every row whose signature the writer had to invent -- the model's naming,
 /// reported as the spec's ambiguity.
@@ -426,7 +426,7 @@ pub const fn reading(g: Grade) -> Reading {
 ///
 /// # Errors
 /// The compiler could not be executed, or the scratch file could not be
-/// written. Both are ERRORS, never verdicts (`assay:V1`).
+/// written. Both are ERRORS, never verdicts (`src/assay:V1`).
 pub fn cross(
     code: &str,
     test: &str,
@@ -1105,7 +1105,7 @@ pub fn authorship_report(vs: &[Verdicts]) -> String {
 
 /// One call's outcome in a titration.
 ///
-/// FOUR, not two. `Error` is `assay:V1`: a call that did not RUN says nothing
+/// FOUR, not two. `Error` is `src/assay:V1`: a call that did not RUN says nothing
 /// about capability, and counting it as a miss makes a flaky network look
 /// like a located frontier. `Hung` is `V6`, the same rule again for a run
 /// that never ended.
@@ -1585,7 +1585,7 @@ mod ambiguity {
     #[test]
     fn a_pair_that_did_not_compile_is_not_a_disagreement() {
         // The whole distinction the instrument rests on. A test that could
-        // not be CALLED graded nothing (`assay:V1`), and counting it as a
+        // not be CALLED graded nothing (`src/assay:V1`), and counting it as a
         // disagreement would report the model's naming (`src/tdd:B12`, T84)
         // as the row's ambiguity -- the one confound this method has.
         assert_eq!(reading(Grade::NoCompile), Reading::Uncallable);
@@ -1797,7 +1797,7 @@ mod reports {
 
     #[test]
     fn a_channel_predicts_before_the_scores_are_seen() {
-        // `assay:V5`: a class assigned AFTER seeing the scores fits any
+        // `src/assay:V5`: a class assigned AFTER seeing the scores fits any
         // result. R43 pre-registered these three and scored 8 of 11 (R45),
         // which is only a meaningful number because the predictions were
         // written down first.

@@ -1,4 +1,4 @@
-//! Arg dispatch and exit codes. The binary is a shim over `run` (`.:V41`).
+//! Arg dispatch and exit codes. The binary is a shim over `run` (`src/cli:V14`).
 //!
 //! A node, not a loose `main.rs`, because exit codes and usage are real
 //! contracts and every §T row about them was unreachable while this file had
@@ -41,7 +41,7 @@ sherd -- federated SPEC.md for small-context local models
 
 exit: 0 clean · 1 violation · 2 usage";
 
-/// Parse argv and dispatch. The binary itself holds nothing (`.:V41`).
+/// Parse argv and dispatch. The binary itself holds nothing (`src/cli:V14`).
 #[must_use]
 pub fn run() -> ExitCode {
     run_args(std::env::args().skip(1).collect())
@@ -337,9 +337,9 @@ fn split_cmd(root: &Path, dir: &Path, apply: bool) -> ExitCode {
     let (cost, ceiling) = split_budget(root, dir);
     println!("{}: chain {cost} tok of {ceiling}", node_label(root, dir));
 
-    // STRUCTURE FIRST (`.:plan:V17`): what the code already separated, then
+    // STRUCTURE FIRST (`.:src/plan:V17`): what the code already separated, then
     // the prose weight of each. A module the spec never mentions is still a
-    // node; a ranking by rows cannot see it (`.:plan:B12`).
+    // node; a ranking by rows cannot see it (`.:src/plan:B12`).
     let proposed = plan::structure(dir);
     if proposed.is_empty() {
         println!("  no module declarations found -- nothing to propose");
@@ -919,6 +919,37 @@ fn over_ceiling(root: &Path, node: &Path) -> bool {
     false
 }
 
+/// Citations that point at no node or no row (`src/spec:V7`).
+///
+/// A citation is a LINK, and a link nothing resolves is a comment. `.:V41` was
+/// cited from four files since the first commit and never written at root,
+/// which is what `src/spec:B2` found once anything looked.
+fn dangling_citations(root: &Path, text: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    for c in spec::citations(text) {
+        let target = if c.owner == "." {
+            root.join("SPEC.md")
+        } else {
+            root.join(&c.owner).join("SPEC.md")
+        };
+        let Ok(owner_spec) = std::fs::read_to_string(&target) else {
+            out.push(format!(
+                "{}: sherd/spec:V7: `{}:{}` names no node -- \
+                 a citation is a path from the root, `.` for root itself",
+                c.line, c.owner, c.id
+            ));
+            continue;
+        };
+        if !spec::declares(&owner_spec, &c.id) {
+            out.push(format!(
+                "{}: sherd/spec:V7: `{}:{}` resolves to no row",
+                c.line, c.owner, c.id
+            ));
+        }
+    }
+    out
+}
+
 fn check(root: &Path) -> ExitCode {
     let nodes = fed::discover(root);
     let mut bad: usize = 0;
@@ -942,6 +973,12 @@ fn check(root: &Path) -> ExitCode {
                       will recur (advisory)",
                 path.display()
             );
+        }
+        // A citation is a LINK: it names a node path and a row that exists
+        // there (`src/spec:V7`). Nothing resolved them until `src/spec:B2`.
+        for d in dangling_citations(root, &text) {
+            println!("{}:{d}", path.display());
+            bad = bad.saturating_add(1);
         }
         // §F structure: duplicate rows (fed V12) and child dirs with no row
         // (fed V11). Advisory -- a missing row is often a dir that is simply
@@ -1737,11 +1774,11 @@ mod tests {
     }
 
     /// The structure-first proposal on a fixture whose modules the spec
-    /// never names: `.:plan:B12` is that a row ranking sees nothing here,
+    /// never names: `.:src/plan:B12` is that a row ranking sees nothing here,
     /// while the code plainly declares two nodes.
     /// Every grade, including the bottom rung that always fires: a plain
     /// `mod` and a `pub(crate) mod` are both DECLARED, which is what
-    /// `microlith` is made of (`.:plan:B13`).
+    /// `microlith` is made of (`.:src/plan:B13`).
     #[test]
     fn a_private_or_crate_visible_module_is_still_a_node() {
         let repo = routing_fixture("cli-split-grades");
@@ -1875,7 +1912,7 @@ mod tests {
 
     /// The drift half, which the other two `validate` tests never reach: a
     /// tree with no slice registry counts ZERO, and a registry that cannot
-    /// be read still counts one (`.:cli:B3`, `V12`).
+    /// be read still counts one (`.:src/cli:B3`, `V12`).
     #[test]
     fn a_missing_slice_registry_is_not_drift() {
         let repo = routing_fixture("cli-drift");

@@ -40,7 +40,7 @@ fn one(it: &GenItem) -> Result<Verdicts, String> {
 
 /// One item, recorded. An endpoint failure is an ERROR line and never a
 /// verdict, so a transient cannot look like the model getting it wrong
-/// (`assay:V1`, and `assay:B1` is that mistake costing forty minutes).
+/// (`src/assay:V1`, and `src/assay:B1` is that mistake costing forty minutes).
 fn measure(run: usize, it: &GenItem, vs: &mut Vec<Verdicts>) {
     match one(it) {
         Ok(v) => {

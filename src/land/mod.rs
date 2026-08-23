@@ -789,7 +789,7 @@ mod git_tests {
 /// `cargo` indistinguishable from a failing test. In `drive_from` that
 /// mattered -- step 1 requires the gate to be RED, so an absent toolchain
 /// read as "red as required" and the loop would have written code against a
-/// gate that never ran. `.:V48` for a subprocess (`.:tdd:B24`).
+/// gate that never ran. `.:V48` for a subprocess (`.:src/tdd:B24`).
 pub fn gate(root: &Path) -> Result<(bool, String), String> {
     gate_with(root, &cargo_bin())
 }

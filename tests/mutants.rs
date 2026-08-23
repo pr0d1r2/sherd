@@ -30,7 +30,7 @@ fn one(it: &GenItem) -> Result<Kill, String> {
         sherd::ollama::generate(&test_prompt(it.sharp, it.sig, it.preamble))
             .map(|r| sherd::ollama::rust_block(&r.text))?;
     // Keep the test itself: T83 discarded its raw material and the next
-    // question could not be asked without re-running (`assay:B1`). R54 was
+    // question could not be asked without re-running (`src/assay:B1`). R54 was
     // read out of this file afterwards, and T97 came out of R54.
     log_test(it.sig, &t);
     let g = grade_detail(stub, it.preamble, &t, "rustc")?;
@@ -52,7 +52,7 @@ fn log_test(sig: &str, body: &str) {
 }
 
 /// An endpoint failure is an ERROR line, never a verdict -- a transient must
-/// not read as a test that failed to discriminate (`assay:V1`).
+/// not read as a test that failed to discriminate (`src/assay:V1`).
 fn measure(run: usize, it: &GenItem, ks: &mut Vec<Kill>) {
     let name = it.sig.split('(').next().unwrap_or(it.sig).trim();
     match one(it) {

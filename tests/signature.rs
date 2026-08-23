@@ -38,7 +38,7 @@ fn one(it: &GenItem) -> Result<SignaturePair, String> {
     ))
 }
 
-/// An endpoint failure is an ERROR line and never a verdict (`assay:V1`).
+/// An endpoint failure is an ERROR line and never a verdict (`src/assay:V1`).
 fn measure(run: usize, it: &GenItem, rs: &mut Vec<SignaturePair>) {
     let name = it.sig.split('(').next().unwrap_or(it.sig).trim();
     match one(it) {

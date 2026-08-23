@@ -85,4 +85,21 @@
 # in front of them.
 #
 # Down with `.:T92` alongside the rest.
-total 282
+#
+# RAISED 282 -> 289 on 2026-08-23 for `src/spec:B2`, the citation resolver.
+# Seven sites: `citation_at` (expand around a colon: an id right, a node path
+# left) and `cli::dangling_citations` are each 20-30 lines of one thought,
+# and the tree-walking test that asserts every citation in this repository
+# resolves is nested and long because the tree is nested.
+#
+# Four more were avoided rather than recorded: the first version of
+# `a_citation_carries_the_node_path_it_names` indexed `c[0]` and `c[1]` four
+# times, and comparing the whole `Vec<Citation>` in one assert_eq is both
+# shorter and stronger -- it pins the line number the indexing version never
+# looked at.
+#
+# `.:B18` earned its keep again in the middle of this: the rewrite that
+# removed those four had an E0716 borrow error, the suite did not compile,
+# and clippy reported 191 warnings instead of 289. The guard refused to
+# record it. A count from a build that failed is not a measurement.
+total 289

@@ -26,7 +26,7 @@ use sherd::assay::{
 use std::io::Write;
 
 /// Append one row the moment it exists, so a crash costs ONE call rather
-/// than the run. `assay:B1` lost 33 completed measurements and forty minutes
+/// than the run. `src/assay:B1` lost 33 completed measurements and forty minutes
 /// of endpoint time to a single transient.
 fn log_row(row: &str) {
     let path = std::path::Path::new("target").join("titration.tsv");
@@ -100,7 +100,7 @@ fn context_titration() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let node = root.join("src/tokens");
     // A pack that cannot be read is a run that did not happen, never a zero:
-    // `assay:V1`, and `assay:B1` is what an `.expect()` here costs.
+    // `src/assay:V1`, and `src/assay:B1` is what an `.expect()` here costs.
     let Ok(pack) = sherd::lens::pack(root, &node, sherd::lens::Depth::Rule)
     else {
         println!("lens pack unavailable -- nothing measured (V1)");

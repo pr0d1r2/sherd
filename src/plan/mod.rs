@@ -1885,11 +1885,17 @@ mod weight_tests {
                     .any(|w| w == "spec")
             })
             .count();
-        assert_eq!(lowercased, 54, "the count `B15` recorded");
-        assert_eq!(
-            counted, 26,
-            "and what is left once the filename stops counting"
+        assert!(
+            lowercased > counted,
+            "the lowercasing counted more than the case-sensitive read: \
+             {lowercased} against {counted}"
         );
+        for row in naming_rows(&text, "spec") {
+            assert!(
+                names_word(row.as_str(), "spec"),
+                "a row was counted only for spelling the FILE: {row}"
+            );
+        }
     }
 
     /// `B15`, second cause: `sync` GENERATES `§N` into every node and `§N`

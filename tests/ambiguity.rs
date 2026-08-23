@@ -56,7 +56,7 @@ fn log_pair(sig: &str, code: &str, test: &str) {
     }
 }
 
-/// An endpoint failure is an ERROR line and never a verdict (`assay:V1`): a
+/// An endpoint failure is an ERROR line and never a verdict (`src/assay:V1`): a
 /// transient must not read as a row that left something unstated.
 fn measure(run: usize, it: &GenItem, row: &mut RowReadings) {
     match one(it) {
@@ -79,7 +79,7 @@ fn name(sig: &str) -> &str {
 /// ONE run, and that is a measured decision rather than the obvious default.
 /// The first sweep ran three and every row came back identical (`.:R55`),
 /// which is what "ever, not mostly" needed: a row that leaves a gap leaves it
-/// every time. `assay:R1` had already measured runs buying nothing and items
+/// every time. `src/assay:R1` had already measured runs buying nothing and items
 /// buying everything, pooled; this is the same result per ROW. So the calls
 /// go to more rows instead.
 #[test]
