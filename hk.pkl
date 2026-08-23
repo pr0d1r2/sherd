@@ -117,6 +117,77 @@ local fast = new Mapping<String, Step> {
     depends = List("check")
     check = "cargo run -q --bin bbx -- budget || { echo 'hk: a chain is over its ceiling. Every chain pays ROOT, so a row added to the root SPEC.md is billed thirteen times. SPLIT or federate the spec (V50) -- raising the number trains the reflex instead of catching the problem, and a raise belongs in a commit with its reason.' >&2; exit 1; }"
   }
+
+  // T87. The hygiene family the siblings run and this repo did not. NO new
+  // dependency: `hk util` is the runner already on PATH, so the whole set
+  // costs a closure of nothing.
+  //
+  // MEASURED before landing, across every tracked file: zero findings, all
+  // nine. That number alone would be worthless -- a check that finds nothing
+  // and a check that cannot find anything read identically, which is the
+  // vacuous pass V16 is about. So each was also run against a PLANTED
+  // violation in a scratch tree, and eight of nine rejected it.
+  //
+  // The ninth is why `--assume-in-merge` is here: without that flag
+  // `check-merge-conflict` silently passes a file carrying real `<<<<<<<`
+  // markers, because it only looks when git says a merge is in progress.
+  // The flag was copied from microlith's version and then TESTED rather
+  // than trusted, which is the only reason this comment can name what it
+  // does. `check-added-large-files` accepted a 2 MB file at its default
+  // limit -- it fires, above some threshold we have not needed to find.
+  //
+  // Read-only checks run over everything. The three FIXERS exclude `pkl/`
+  // and `vendor/`: both are other people's files vendored verbatim, and a
+  // fixer that rewrites them makes them no longer the thing that was
+  // vendored -- `docs/THIRD-PARTY-NOTICES.md` says what they are, and a
+  // whitespace edit would quietly make that false.
+  ["no-merge-conflict"] {
+    glob = List("**/*")
+    check = "hk util check-merge-conflict --assume-in-merge {{files}}"
+  }
+  // Irreversible if it ever fires late: a key in git history stays in git
+  // history, and this repo is being prepared for publication.
+  ["no-private-key"] {
+    glob = List("**/*")
+    check = "hk util detect-private-key {{files}}"
+  }
+  ["no-large-files"] {
+    glob = List("**/*")
+    check = "hk util check-added-large-files {{files}}"
+  }
+  ["no-bom"] {
+    glob = List("**/*")
+    check = "hk util check-byte-order-marker {{files}}"
+  }
+  // A crate that ships to case-insensitive filesystems cannot afford two
+  // paths differing only in case -- and the machine that would notice is
+  // never the one that committed them.
+  ["no-case-conflict"] {
+    glob = List("**/*")
+    check = "hk util check-case-conflict {{files}}"
+  }
+  ["no-broken-symlinks"] {
+    glob = List("**/*")
+    check = "hk util check-symlinks {{files}}"
+  }
+  ["trailing-whitespace"] {
+    glob = List("**/*")
+    exclude = List("pkl/**", "vendor/**")
+    check_diff = "hk util trailing-whitespace --diff {{files}}"
+    fix = "hk util trailing-whitespace --fix {{files}}"
+  }
+  ["final-newline"] {
+    glob = List("**/*")
+    exclude = List("pkl/**", "vendor/**")
+    check_diff = "hk util end-of-file-fixer --diff {{files}}"
+    fix = "hk util end-of-file-fixer --fix {{files}}"
+  }
+  ["line-endings"] {
+    glob = List("**/*")
+    exclude = List("pkl/**", "vendor/**")
+    check_diff = "hk util mixed-line-ending --diff {{files}}"
+    fix = "hk util mixed-line-ending --fix {{files}}"
+  }
 }
 
 /// One set today. `all` exists as the name CI and pre-push use, so adding an
