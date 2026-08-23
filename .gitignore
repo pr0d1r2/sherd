@@ -2,3 +2,5 @@ target/
 .direnv/
 .sherd-state
 .envrc.local
+result
+result-*

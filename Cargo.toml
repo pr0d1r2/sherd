@@ -42,6 +42,12 @@ exclude = [
   "pkl",
   # Agent tooling for THIS repo; a consumer has no use for our commands.
   ".claude",
+  # `nix build` leaves `result` as a symlink to the store path, and cargo
+  # packages whatever git does not ignore: the dry run shipped an 8.8 MB
+  # binary built on THIS machine inside the crate. Ignored in git as well,
+  # so the two agree.
+  "result",
+  "result-*",
 ]
 
 [[bin]]
