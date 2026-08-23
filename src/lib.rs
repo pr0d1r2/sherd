@@ -4,6 +4,12 @@
 //! `SPEC.md` (§C: node = dir = Rust module). `mod.rs` composes, it does not
 //! implement (V51).
 
+// `assay` owns the corpora and the grader for the MODEL loop -- its whole
+// subject is what a 20B wrote and whether it holds up -- so it is gated with
+// the loop it serves. Without the feature there is no writer to assay, and
+// `.:B15` is what leaving it ungated cost: a module that reaches into `tdd`
+// while compiling in a configuration `tdd` does not exist in.
+#[cfg(feature = "ollama")]
 pub mod assay;
 pub mod cli;
 pub mod code;

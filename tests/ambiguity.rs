@@ -1,3 +1,8 @@
+#![cfg(feature = "ollama")]
+//! Gated with the loop it measures: every titration here needs a live 20B,
+//! and the corpora it reads live in `bbx::assay`, which the `ollama` feature
+//! carries (`.:B15`).
+
 //! T97. The ambiguity detector, run against a live endpoint.
 //!
 //! `.:V112`: ask for a TEST and an IMPLEMENTATION blind from ONE `§V` row,

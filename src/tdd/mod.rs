@@ -14,7 +14,7 @@
 //! test encoding its own misreading of an invariant, then implements to match,
 //! and everything passes. The judge never sees the implementation.
 
-use crate::{fed, ollama, spec};
+use crate::ollama;
 
 /// The notation contract: what the symbols in an invariant MEAN.
 ///
@@ -23,7 +23,6 @@ use crate::{fed, ollama, spec};
 /// applied to our own prompts (B6).
 pub const NOTATION: &str = include_str!("notation.txt");
 use std::path::Path;
-use std::process::Command;
 
 /// What one round-trip cost. Steps without their cost are not evidence.
 #[derive(Debug)]
@@ -68,31 +67,6 @@ fn insert_impl(src: &str, code: &str) -> String {
     format!("{}\n{}\n\n{}", impl_r.trim_end(), code_impl.trim(), tests)
 }
 
-/// Step 3. Local, deterministic, zero tokens. Reports what RAN, not only what
-/// failed (root V48).
-/// # Errors
-/// The toolchain could not be RUN. That is not a red gate: a gate that did
-/// not execute has said nothing, and returning `false` for it made a missing
-/// `cargo` indistinguishable from a failing test. In `drive_from` that
-/// mattered -- step 1 requires the gate to be RED, so an absent toolchain
-/// read as "red as required" and the loop would have written code against a
-/// gate that never ran. `.:V48` for a subprocess (B24, tdd B17 recurring).
-/// The toolchain, from `BBX_CARGO` or the default. The EDGES read the env;
-/// the loop carries it in `Run` so a test can point at a scripted one without
-/// mutating process-global state that other tests share (`V27`).
-#[must_use]
-pub fn cargo_bin() -> String {
-    std::env::var("BBX_CARGO").unwrap_or_else(|_| "cargo".into())
-}
-
-/// Run the gate with an explicit toolchain.
-///
-/// # Errors
-/// See [`gate`].
-/// The gate, with the toolchain from the environment.
-///
-/// # Errors
-/// The toolchain could not be RUN. That is not a red gate (V26).
 /// What to tell the judge about a function the row asks the loop to WRITE.
 ///
 /// The row asks for a function that does not exist yet -- a call to it is
@@ -109,153 +83,6 @@ pub fn red_note(task: &str) -> String {
              to answer NO. "
         )
     })
-}
-
-pub fn gate(root: &Path) -> Result<(bool, String), String> {
-    gate_with(root, &cargo_bin())
-}
-
-pub fn gate_with(root: &Path, cargo: &str) -> Result<(bool, String), String> {
-    // Plain `cargo test`, exactly `hk`'s test step. NOT `RUSTFLAGS=-D
-    // warnings`: RUSTFLAGS reaches every path dep, so `itok`'s own two
-    // `dead_code` warnings turned this gate red for code blackbox does not
-    // own -- and then every candidate and every repair was judged against a
-    // gate that could not go green whatever the model wrote (B26).
-    //
-    // `.:B6` found this and fixed `hk.pkl` by moving `-D warnings` after `--`
-    // on the CLIPPY step, where it scopes to this crate. The loop kept the
-    // old mechanism, which is `src/fed:B9`: fixing a shared rule must be
-    // followed by finding who does not use it.
-    //
-    // BOUNDED: warnings are now clippy's job and clippy is `hk`'s step, not
-    // this one. The loop's gate no longer catches a warnings-only regression;
-    // the commit gate still does, and `bbx apply` cannot commit without it.
-    let out = Command::new(cargo)
-        .args(["test", "--offline"])
-        .current_dir(root)
-        .output();
-    let (tests_ok, mut report) = match out {
-        Ok(o) => {
-            let s = format!(
-                "{}{}",
-                String::from_utf8_lossy(&o.stdout),
-                String::from_utf8_lossy(&o.stderr)
-            );
-            (
-                o.status.success(),
-                format!(
-                    "=== cargo test: {} ===\n{}",
-                    if o.status.success() { "PASS" } else { "FAIL" },
-                    tail(&s, 2500)
-                ),
-            )
-        }
-        Err(e) => {
-            return Err(format!(
-                "the gate could not RUN: `{cargo}` -- {e}. set BBX_CARGO or enter the \
-             dev shell. a gate that did not execute is not a gate that passed \
-             or failed"
-            ));
-        }
-    };
-    // spec::check runs in-process -- no subprocess, no stdout scraping.
-    let mut viol = 0;
-    let nodes = fed::discover(root);
-    for n in &nodes {
-        if let Ok(t) = std::fs::read_to_string(n.join("SPEC.md")) {
-            viol += spec::check(&t).len();
-        }
-    }
-    report.push_str(&format!(
-        "\n=== bbx check: {} === {} nodes examined, {viol} violations\n",
-        if viol == 0 { "PASS" } else { "FAIL" },
-        nodes.len()
-    ));
-    // Slice drift, by the same function `bbx slice --check` calls.
-    let drift = crate::slice::drifted(root)?;
-    report.push_str(&format!(
-        "=== slice: {} === {} drifted\n",
-        if drift.is_empty() { "PASS" } else { "FAIL" },
-        drift.len()
-    ));
-    // The loop's gate and the commit's gate are ONE rule, which is what the
-    // header claims and what B30 measured as false: MERGEABLE was declared
-    // for code `hk` refuses on fmt and on the lint ratchet.
-    let (fmt, fmt_r) = fmt_ok(root, cargo);
-    let (debt, debt_r) = lint_debt_ok(root, cargo);
-    report.push_str(&fmt_r);
-    report.push_str(&debt_r);
-    Ok((
-        tests_ok && viol == 0 && drift.is_empty() && fmt && debt,
-        report,
-    ))
-}
-
-/// `cargo fmt --check`, as `hk`'s first step runs it.
-///
-/// The model's insertion is not formatted -- the generated test landed at
-/// column 0 inside a module -- so this refuses a candidate the commit gate
-/// would refuse (B30).
-fn fmt_ok(root: &Path, cargo: &str) -> (bool, String) {
-    let out = Command::new(cargo)
-        .args(["fmt", "--check"])
-        .current_dir(root)
-        .output();
-    let ok = out.is_ok_and(|o| o.status.success());
-    (
-        ok,
-        format!("=== fmt: {} ===\n", if ok { "PASS" } else { "FAIL" }),
-    )
-}
-
-/// THE RATCHET, as `hk` runs it: the count may fall, never rise.
-///
-/// `.lint-debt` carries the number. Without this the loop called code
-/// MERGEABLE that raised the debt 271 -> 276, which `hk` then refuses --
-/// so the loop's verdict did not predict the commit (B30).
-fn lint_debt_ok(root: &Path, cargo: &str) -> (bool, String) {
-    let Some(was) = recorded_debt(root) else {
-        return (true, String::new());
-    };
-    let Some(now) = clippy_warnings(root, cargo) else {
-        return (true, String::new());
-    };
-    let ok = now <= was;
-    let word = if ok { "PASS" } else { "ROSE" };
-    (
-        ok,
-        format!("=== lint debt: {word} === {now} (recorded {was})\n"),
-    )
-}
-
-/// How many warnings clippy reports for THIS crate's own sources.
-///
-/// `None` when clippy could not run: `.lint-debt` was read first, so there is
-/// simply nothing to compare, and refusing would block every candidate on a
-/// bench problem. The TEST step is what fails a broken toolchain (V26).
-fn clippy_warnings(root: &Path, cargo: &str) -> Option<usize> {
-    let o = Command::new(cargo)
-        .args(["clippy", "--all-targets", "--message-format=short"])
-        .current_dir(root)
-        .output()
-        .ok()?;
-    Some(
-        String::from_utf8_lossy(&o.stderr)
-            .lines()
-            .filter(|l| l.starts_with("src/") && l.contains(": warning"))
-            .count(),
-    )
-}
-
-/// The `total` line of `.lint-debt`, if the file is there.
-fn recorded_debt(root: &Path) -> Option<usize> {
-    let text = std::fs::read_to_string(root.join(".lint-debt")).ok()?;
-    text.lines()
-        .find_map(|l| l.strip_prefix("total ")?.trim().parse().ok())
-}
-
-fn tail(s: &str, n: usize) -> &str {
-    if s.len() <= n { s } else { &s[s.len() - n..] }
 }
 
 /// One streamed chunk: echo it under `-v`, else a dot every 25. Returns the
@@ -460,14 +287,14 @@ pub fn oneshot(r: &Run) -> Result<Vec<Step>, String> {
         insert_impl(&insert_test(&original, blocks[0]), blocks[1]),
     )
     .map_err(|e| e.to_string())?;
-    let (ok, out) = gate_with(r.root, &r.cargo)?;
+    let (ok, out) = crate::land::gate_with(r.root, &r.cargo)?;
     let sent: u64 = c.log.iter().map(|s| s.prompt_tokens).sum();
     eprintln!("\n  1 round-trip · {sent} tok sent · max single call {sent}");
     if ok {
         eprintln!("  VERDICT: MERGEABLE -- gates green");
         Ok(c.log)
     } else {
-        eprintln!("{}", tail(&out, 1200));
+        eprintln!("{}", crate::land::tail(&out, 1200));
         Err("NOT mergeable -- gates red".into())
     }
 }
@@ -530,7 +357,7 @@ impl<'a> Run<'a> {
             invariant,
             task,
             max_repair: DEFAULT_REPAIRS,
-            cargo: cargo_bin(),
+            cargo: crate::land::cargo_bin(),
             transport: &ollama::Http,
         }
     }
@@ -914,7 +741,7 @@ pub fn drive_run(r: &Run) -> Result<Vec<Step>, String> {
 
     std::fs::write(&mod_path, insert_test(&original, &test_fn))
         .map_err(|e| e.to_string())?;
-    let (red_ok, red_out) = gate_with(root, &r.cargo)?;
+    let (red_ok, red_out) = crate::land::gate_with(root, &r.cargo)?;
     if red_ok {
         return Err(
             "test passes already -- not a red test, nothing to drive".into()
@@ -947,7 +774,7 @@ pub fn drive_run(r: &Run) -> Result<Vec<Step>, String> {
          Write ONLY the new function(s) to ADD to the implementation so this test passes. \
          Do not restate existing code. \
          Do not modify the test. Reply with a single ```rust fenced block.",
-        tail(&red_out, 1500)
+        crate::land::tail(&red_out, 1500)
     );
 
     // 3 -- the competition. N candidates, each judged on the same evidence,
@@ -968,7 +795,7 @@ pub fn drive_run(r: &Run) -> Result<Vec<Step>, String> {
         )?);
         std::fs::write(&mod_path, insert_impl(&with_test, &code))
             .map_err(|e| e.to_string())?;
-        let (g, o) = gate_with(root, &r.cargo)?;
+        let (g, o) = crate::land::gate_with(root, &r.cargo)?;
         let added = crate::code::public_fns(&code);
         let cur =
             std::fs::read_to_string(&mod_path).map_err(|e| e.to_string())?;
@@ -1059,7 +886,7 @@ pub fn drive_run(r: &Run) -> Result<Vec<Step>, String> {
              added, in one ```rust block. Do not restate unrelated code, do not remove \
              module documentation, and do not change the behaviour of functions that \
              already existed. Do not modify the test.",
-                tail(&out, 2000)
+                crate::land::tail(&out, 2000)
             ),
             label,
         )?);
@@ -1076,7 +903,7 @@ pub fn drive_run(r: &Run) -> Result<Vec<Step>, String> {
             format!("{}\n\n{}", replaced.trim_end(), cur_tests),
         )
         .map_err(|e| e.to_string())?;
-        let g = gate_with(root, &r.cargo)?;
+        let g = crate::land::gate_with(root, &r.cargo)?;
         ok = g.0;
         out = g.1;
     }
@@ -1107,7 +934,7 @@ pub fn drive_run(r: &Run) -> Result<Vec<Step>, String> {
         guard.keep();
         Ok(c.log)
     } else {
-        eprintln!("{}", tail(&out, 2000));
+        eprintln!("{}", crate::land::tail(&out, 2000));
         Err(
             "NOT mergeable -- gates red after repair budget, module restored"
                 .into(),
@@ -1358,49 +1185,6 @@ mod tests {
     }
 
     #[test]
-    fn a_toolchain_that_cannot_run_fails_fmt_rather_than_passing_it() {
-        // V26's shape for this half: a `cargo` that is not there must not
-        // read as "formatted clean". Silence would let a candidate through
-        // on a broken bench.
-        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-        let (ok, report) = fmt_ok(root, "definitely-not-a-cargo");
-        assert!(!ok, "an unrunnable toolchain is not a PASS");
-        assert!(report.contains("fmt: FAIL"), "{report}");
-    }
-
-    #[test]
-    fn the_ratchet_is_silent_when_clippy_cannot_run() {
-        // The debt half degrades the other way ON PURPOSE: `.lint-debt` is
-        // read first, and a clippy that cannot run yields no count to
-        // compare, so refusing would block every candidate on a bench
-        // problem. The TEST step is what fails a broken toolchain (V26).
-        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-        let (ok, report) = lint_debt_ok(root, "definitely-not-a-cargo");
-        assert!(ok, "no count means nothing to compare");
-        assert!(report.is_empty(), "{report}");
-    }
-
-    #[test]
-    fn the_gate_reads_the_recorded_lint_debt() {
-        // B30: the loop called code MERGEABLE that raised the debt 271 -> 276,
-        // which `hk` then refuses -- so its verdict did not predict the
-        // commit. The ratchet's number has to be READ for that to change.
-        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-        let was = recorded_debt(root);
-        assert!(was.is_some(), "this repo records a debt total");
-        assert!(was.is_some_and(|n| n > 0), "and it is a real count");
-    }
-
-    #[test]
-    fn a_tree_with_no_lint_debt_file_does_not_fail_the_gate() {
-        // A node fixture is not a repo with a ratchet. Absent means "no
-        // ratchet here", never "zero allowed" -- which would fail every
-        // candidate in every scratch tree.
-        let dir = std::env::temp_dir();
-        assert_eq!(recorded_debt(&dir.join("definitely-not-a-repo")), None);
-    }
-
-    #[test]
     fn insert_test_lands_inside_the_tests_module() {
         let out = insert_test(SRC, "    #[test]\n    fn u() {}");
         assert!(split_module(&out).1.contains("fn u()"));
@@ -1436,58 +1220,6 @@ mod tests {
 mod loop_tests {
     use super::*;
 
-    /// A `cargo` whose clippy step emits `n` warning lines on stderr.
-    fn cargo_with_warnings(dir: &Path, n: usize) -> Result<String, String> {
-        let script = dir.join("noisy-cargo");
-        let mut emit = String::new();
-        for i in 0..n {
-            emit.push_str(&format!(
-                "echo 'src/x/mod.rs:{i}:1: warning: made up' >&2\n"
-            ));
-        }
-        write_exec(&script, &format!("#!/bin/sh\n{emit}exit 0\n"))?;
-        Ok(script.display().to_string())
-    }
-
-    #[test]
-    fn the_ratchet_passes_when_the_count_holds_and_refuses_when_it_rises() {
-        assert_eq!(ratchet_both_ways(), Ok(()));
-    }
-
-    fn ratchet_both_ways() -> Result<(), String> {
-        let (dir, _n) = scratch("ratchet")?;
-        std::fs::write(dir.join(".lint-debt"), "total 2\n")
-            .map_err(|e| format!("write: {e}"))?;
-        let (ok, r) = lint_debt_ok(&dir, &cargo_with_warnings(&dir, 2)?);
-        assert!(ok, "holding at the recorded count PASSES: {r}");
-        assert!(r.contains("=== lint debt: PASS === 2 (recorded 2)"), "{r}");
-        let (rose, rr) = lint_debt_ok(&dir, &cargo_with_warnings(&dir, 3)?);
-        assert!(!rose, "one more warning REFUSES: {rr}");
-        assert!(rr.contains("ROSE === 3 (recorded 2)"), "{rr}");
-        let _ = std::fs::remove_dir_all(&dir);
-        Ok(())
-    }
-
-    #[test]
-    fn fmt_and_the_ratchet_pass_against_a_scripted_toolchain() {
-        assert_eq!(scripted_gate_halves(), Ok(()));
-    }
-
-    fn scripted_gate_halves() -> Result<(), String> {
-        let (dir, _node) = scratch("gatehalves")?;
-        let cargo = scripted_cargo(&dir, 0)?;
-        let (fmt, fmt_r) = fmt_ok(&dir, &cargo);
-        assert!(fmt, "a scripted toolchain formats clean: {fmt_r}");
-        assert!(fmt_r.contains("fmt: PASS"), "{fmt_r}");
-        // No `.lint-debt` in a scratch tree: absent is "no ratchet here",
-        // never "zero allowed", or every candidate would fail everywhere.
-        let (debt, debt_r) = lint_debt_ok(&dir, &cargo);
-        assert!(debt, "an absent ratchet does not fail the gate");
-        assert!(debt_r.is_empty(), "and says nothing: {debt_r}");
-        let _ = std::fs::remove_dir_all(&dir);
-        Ok(())
-    }
-
     #[test]
     fn a_row_naming_a_function_tells_the_judge_it_is_not_written_yet() {
         // B28: the judge rejected the test for calling something that does
@@ -1515,21 +1247,6 @@ mod loop_tests {
         );
     }
 
-    #[test]
-    fn a_gate_that_could_not_run_is_an_error_not_a_verdict() {
-        // V26, and it is the distinction the whole harness rests on: a
-        // missing toolchain scoring RED is indistinguishable from code that
-        // failed its tests, and every titration would read as a located
-        // boundary rather than as a broken bench.
-        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-        let Err(msg) = gate_with(root, "definitely-not-a-cargo-binary") else {
-            return;
-        };
-        assert!(
-            msg.contains("could not RUN"),
-            "say the gate did not EXECUTE, not that it failed: {msg}"
-        );
-    }
     use std::cell::Cell;
     use std::io::BufRead;
     use std::time::Duration;
@@ -1953,5 +1670,133 @@ mod loop_tests {
              {after}"
         );
         Ok(())
+    }
+
+    // The gate cluster moved to `src/land` (`.:T99`); these tests did not,
+    // because the scripted-toolchain fixtures they drive live here and
+    // copying a fixture into a second node is the duplication §C ends.
+    // `.:T101` moves the fixtures to `testrepo` and the tests follow them.
+    // The gate cluster's tests, moved with it (`.:T99`). They exercise
+    // `fmt_ok`, `lint_debt_ok` and `recorded_debt` against scripted
+    // toolchains, and a test left behind in the node that no longer owns
+    // the code is how a module ends up with tests for functions it does
+    // not have.
+    #[test]
+    fn a_toolchain_that_cannot_run_fails_fmt_rather_than_passing_it() {
+        // V26's shape for this half: a `cargo` that is not there must not
+        // read as "formatted clean". Silence would let a candidate through
+        // on a broken bench.
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let (ok, report) = crate::land::fmt_ok(root, "definitely-not-a-cargo");
+        assert!(!ok, "an unrunnable toolchain is not a PASS");
+        assert!(report.contains("fmt: FAIL"), "{report}");
+    }
+
+    #[test]
+    fn the_ratchet_is_silent_when_clippy_cannot_run() {
+        // The debt half degrades the other way ON PURPOSE: `.lint-debt` is
+        // read first, and a clippy that cannot run yields no count to
+        // compare, so refusing would block every candidate on a bench
+        // problem. The TEST step is what fails a broken toolchain (V26).
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let (ok, report) =
+            crate::land::lint_debt_ok(root, "definitely-not-a-cargo");
+        assert!(ok, "no count means nothing to compare");
+        assert!(report.is_empty(), "{report}");
+    }
+
+    #[test]
+    fn the_gate_reads_the_recorded_lint_debt() {
+        // B30: the loop called code MERGEABLE that raised the debt 271 -> 276,
+        // which `hk` then refuses -- so its verdict did not predict the
+        // commit. The ratchet's number has to be READ for that to change.
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let was = crate::land::recorded_debt(root);
+        assert!(was.is_some(), "this repo records a debt total");
+        assert!(was.is_some_and(|n| n > 0), "and it is a real count");
+    }
+
+    #[test]
+    fn a_tree_with_no_lint_debt_file_does_not_fail_the_gate() {
+        // A node fixture is not a repo with a ratchet. Absent means "no
+        // ratchet here", never "zero allowed" -- which would fail every
+        // candidate in every scratch tree.
+        let dir = std::env::temp_dir();
+        assert_eq!(
+            crate::land::recorded_debt(&dir.join("definitely-not-a-repo")),
+            None
+        );
+    }
+
+    /// A `cargo` whose clippy step emits `n` warning lines on stderr.
+    fn cargo_with_warnings(dir: &Path, n: usize) -> Result<String, String> {
+        let script = dir.join("noisy-cargo");
+        let mut emit = String::new();
+        for i in 0..n {
+            emit.push_str(&format!(
+                "echo 'src/x/mod.rs:{i}:1: warning: made up' >&2\n"
+            ));
+        }
+        write_exec(&script, &format!("#!/bin/sh\n{emit}exit 0\n"))?;
+        Ok(script.display().to_string())
+    }
+
+    #[test]
+    fn the_ratchet_passes_when_the_count_holds_and_refuses_when_it_rises() {
+        assert_eq!(ratchet_both_ways(), Ok(()));
+    }
+
+    fn ratchet_both_ways() -> Result<(), String> {
+        let (dir, _n) = scratch("ratchet")?;
+        std::fs::write(dir.join(".lint-debt"), "total 2\n")
+            .map_err(|e| format!("write: {e}"))?;
+        let (ok, r) =
+            crate::land::lint_debt_ok(&dir, &cargo_with_warnings(&dir, 2)?);
+        assert!(ok, "holding at the recorded count PASSES: {r}");
+        assert!(r.contains("=== lint debt: PASS === 2 (recorded 2)"), "{r}");
+        let (rose, rr) =
+            crate::land::lint_debt_ok(&dir, &cargo_with_warnings(&dir, 3)?);
+        assert!(!rose, "one more warning REFUSES: {rr}");
+        assert!(rr.contains("ROSE === 3 (recorded 2)"), "{rr}");
+        let _ = std::fs::remove_dir_all(&dir);
+        Ok(())
+    }
+
+    #[test]
+    fn fmt_and_the_ratchet_pass_against_a_scripted_toolchain() {
+        assert_eq!(scripted_gate_halves(), Ok(()));
+    }
+
+    fn scripted_gate_halves() -> Result<(), String> {
+        let (dir, _node) = scratch("gatehalves")?;
+        let cargo = scripted_cargo(&dir, 0)?;
+        let (fmt, fmt_r) = crate::land::fmt_ok(&dir, &cargo);
+        assert!(fmt, "a scripted toolchain formats clean: {fmt_r}");
+        assert!(fmt_r.contains("fmt: PASS"), "{fmt_r}");
+        // No `.lint-debt` in a scratch tree: absent is "no ratchet here",
+        // never "zero allowed", or every candidate would fail everywhere.
+        let (debt, debt_r) = crate::land::lint_debt_ok(&dir, &cargo);
+        assert!(debt, "an absent ratchet does not fail the gate");
+        assert!(debt_r.is_empty(), "and says nothing: {debt_r}");
+        let _ = std::fs::remove_dir_all(&dir);
+        Ok(())
+    }
+
+    #[test]
+    fn a_gate_that_could_not_run_is_an_error_not_a_verdict() {
+        // V26, and it is the distinction the whole harness rests on: a
+        // missing toolchain scoring RED is indistinguishable from code that
+        // failed its tests, and every titration would read as a located
+        // boundary rather than as a broken bench.
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let Err(msg) =
+            crate::land::gate_with(root, "definitely-not-a-cargo-binary")
+        else {
+            return;
+        };
+        assert!(
+            msg.contains("could not RUN"),
+            "say the gate did not EXECUTE, not that it failed: {msg}"
+        );
     }
 }

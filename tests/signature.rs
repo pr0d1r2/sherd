@@ -1,3 +1,8 @@
+#![cfg(feature = "ollama")]
+//! Gated with the loop it measures: every titration here needs a live 20B,
+//! and the corpora it reads live in `bbx::assay`, which the `ollama` feature
+//! carries (`.:B15`).
+
 //! T84, run against a live endpoint: the same invariant and the same hidden
 //! tests, with the signature GIVEN and with it INVENTED.
 //!
