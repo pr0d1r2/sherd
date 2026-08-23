@@ -53,9 +53,19 @@
 # more, and the limit measures the wrong thing for a match over a fixed verb
 # set. `.:T103`'s remaining rungs each add one.
 #
+# RAISED 274 -> 278 on 2026-08-23 for structure-first `split`. Five new
+# sites, all the same family as the two above: `plan::structure` and
+# `cli::print_structure` are each one thought over a list, and the pieces
+# worth naming are already out (`one_decl`, `families`, `proposed_family`,
+# `shared_across`). The fixture builders in the new tests are the rest.
+#
+# Recorded rather than split further: three rounds of splitting earlier
+# today produced a five-parameter helper and a test that asserted nothing,
+# and both were reverted. The threshold is a signal, not a score.
+#
 # One more arrived with `split`'s own tests, same shape.
 #
 # Both come down with `.:T92`, and the second stops mattering the day
 # dispatch becomes a registry the loop iterates -- which is what
 # `dev/src/commands.rs` already wants for a different reason.
-total 274
+total 278
