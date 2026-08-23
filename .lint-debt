@@ -216,8 +216,21 @@
 # `f[0].rule` assertions in `src/review` became `f.first().map(..)`, which
 # is the whole-value comparison that failed the length rule for `Edge` and
 # fits in one line for a single field.
+#
+# SHAPE 10.6 -> 9.7 on 2026-08-23, and this is the number the second ratchet
+# was added to make movable. `tdd::drive_run` was 269 lines -- the longest
+# function in the tree by a factor of two -- and is now a coordinator over
+# eight pieces: red_test, judge_test, green_candidates, green_prompt,
+# candidate_findings, repair, repair_prompt, blind_check, report_verdict.
+#
+# Under the old count this refactor would have read 1 warning -> 8 and the
+# gate would have REFUSED it. That is `.:B21` in one line.
+#
+# Density held at 17.1 rather than falling: splitting adds signatures and doc
+# comments, so `loc` grew with `count`. That is the ratio behaving correctly
+# -- the tree got no worse per line, and the shape got much better.
 density 17.1
-shape 10.6
-count 275
-excess 1697
-loc 15990
+shape 9.7
+count 278
+excess 1585
+loc 16205

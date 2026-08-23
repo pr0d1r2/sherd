@@ -291,7 +291,6 @@ T92|~|`src/tdd`: move `RECORDED`/`VAGUE`/`SUBTLE`/`GEN_CORPUS`/`grade`/the titra
 T101|.|move the scripted-toolchain fixtures (`scratch`·`scripted_cargo`·`write_exec`·`repo_fixture`·`node_fixture`) `src/tdd` tests → `testrepo`, then the 7 gate tests follow the code T99 moved. today they sit in `src/tdd` testing `crate::land::` fns ∵ the fixtures do|V74,B15
 T103|~|LADDER rungs as work: 0.4 = `split`+`sync` DONE · 0.5 = the MECHANICAL surface correct & reusable, measured on a foreign repo · 0.6 = settle · 0.7 = the model half resumes (V117). 0.1-0.3 reached|V114,V117
 T104|.|lint ratchet ! also count `--no-default-features` — 131 warnings on the SHIPPED binary are uncounted today|V118,B20
-T105|.|SPLIT `tdd::drive_run` — 269 lines, the longest in the tree by 2x, & now MEASURABLE as progress (B21). shape 1682 is the number it moves|B21,`.:T92`
 
 ## §B BUGS
 

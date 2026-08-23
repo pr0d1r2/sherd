@@ -615,59 +615,52 @@ pub fn drive_from(
             .owned_by(owner),
     )
 }
+/// What every stage of the loop reads: derived once from the node, never
+/// mutated, and passed by reference so a stage takes TWO arguments instead of
+/// six.
+///
+/// One struct rather than a wide parameter list, because splitting a long
+/// function into helpers that each take five positional arguments trades one
+/// lint for a worse one -- measured, and reverted, earlier in this repo
+/// (`.lint-debt`).
+struct Ctx<'a> {
+    /// The `Run` this belongs to: root, node, cargo, transport.
+    run: &'a Run<'a>,
+    /// The module being edited.
+    mod_path: std::path::PathBuf,
+    /// The invariant's own line, verbatim from the spec that declares it.
+    inv: String,
+    /// `--depth rule` of the node's spec.
+    spec_rules: String,
+    /// Public signatures of the implementation half.
+    surface: String,
+    /// The test half, verbatim.
+    tests: String,
+    /// Names a test may already use without declaring them (B27).
+    in_scope: String,
+}
 
-pub fn drive_run(r: &Run) -> Result<Vec<Step>, String> {
-    let (root, node, owner, invariant, task, max_repair) =
-        (r.root, r.node, r.owner, r.invariant, r.task, r.max_repair);
-    let spec_path = node.join("SPEC.md");
-    let inv_path = owner.join("SPEC.md");
-    let mod_path = node.join("mod.rs");
-    let spec_txt = std::fs::read_to_string(&spec_path)
-        .map_err(|e| format!("{}: {e}", spec_path.display()))?;
-    let original = std::fs::read_to_string(&mod_path)
-        .map_err(|e| format!("{}: {e}", mod_path.display()))?;
-    let (impl_r, tests_r) = split_module(&original);
-    // Armed from here on: every exit below this line restores unless the run
-    // ends by earning `keep()`.
-    let mut guard = Restore::arm(&mod_path, &original);
-
-    let inv_txt =
-        std::fs::read_to_string(&inv_path).unwrap_or_else(|_| spec_txt.clone());
-    let inv = inv_txt.lines().find(|l| l.starts_with(&format!("{invariant}:")))
-        .ok_or_else(|| format!("{invariant} not declared in {} -- a test for an invariant that does not exist encodes an unstated rule", inv_path.display()))?
-        .to_string();
-    eprintln!("node {} · {}\n", node.display(), inv.trim());
-
-    let spec_rules = rule_depth(&spec_txt);
-    let surface = signatures(impl_r);
-    // The judge is shown the impl half and told to check names against it,
-    // but the test it judges lives in the OTHER half and may legitimately
-    // reuse a double declared there. Without these it rejects a good test
-    // for referring to something that "does not appear" (B27).
-    let in_scope = test_decls(tests_r);
-    // A cold endpoint's first call carries a disk load the eta was never
-    // taught about, and the 4x ceiling then kills step 1 (`.:ollama:prewarm`).
-    ollama::prewarm(r.transport);
-    let mut c = Caller::new(r.transport);
-
-    // 1 -- RED test, with the judge's objection fed back on rejection. The
-    // judge's reason is actionable signal; discarding it and hand-tuning the
-    // prompt instead is what I did for six configurations before noticing (B10).
+/// Step 1 -- a RED test, with the judge's objection fed back on rejection.
+///
+/// The judge's reason is actionable signal; discarding it and hand-tuning the
+/// prompt instead is what I did for six configurations before noticing (B10).
+fn red_test(ctx: &Ctx, c: &mut Caller) -> Result<String, String> {
+    let (inv, surface, task) = (&ctx.inv, &ctx.surface, ctx.run.task);
     let base = format!(
-        "{NOTATION}\n--- spec (rules) ---\n{spec_rules}\n\n\
+        "{NOTATION}\n--- spec (rules) ---\n{}\n\n\
          --- public surface (signatures only) ---\n{surface}\n\n\
-         --- existing tests in this module ---\n{tests_r}\n\n\
+         --- existing tests in this module ---\n{}\n\n\
          Write ONE new Rust `#[test]` function proving this invariant:\n  {inv}\n\n\
          Task: {task}\n\n\
          It must FAIL against the current implementation, and fail at an assertion -- \
          not by failing to compile. It MUST include data that actually violates the \
          invariant, and assert that the violation is reported. Use only items that \
          already exist, plus the ONE new public function you expect to be written. \
-         Reply with a single ```rust fenced block containing only the test function."
+         Reply with a single ```rust fenced block containing only the test function.",
+        ctx.spec_rules, ctx.tests
     );
 
     let mut test_fn = String::new();
-    let mut accepted = false;
     let mut objection = String::new();
     for attempt in 0..3 {
         let prompt = if attempt == 0 {
@@ -675,8 +668,8 @@ pub fn drive_run(r: &Run) -> Result<Vec<Step>, String> {
         } else {
             format!(
                 "{base}\n\nYour previous attempt was REJECTED by review:\n\
-                     ```rust\n{test_fn}\n```\nReason: {objection}\n\
-                     Write a corrected test that answers that objection."
+                 ```rust\n{test_fn}\n```\nReason: {objection}\n\
+                 Write a corrected test that answers that objection."
             )
         };
         let label: &'static str = if attempt == 0 {
@@ -686,29 +679,50 @@ pub fn drive_run(r: &Run) -> Result<Vec<Step>, String> {
         };
         test_fn = ollama::rust_block(&c.run(&prompt, label)?);
 
-        // Deterministic, before the judge, at zero tokens: if the row names
-        // the function to write, the test has to CALL it. Measured -- the row
-        // named `post_with_retry`, the test drove `generate_via` instead, the
-        // judge said YES, and step 2 then had no new function to write so it
-        // rewrote the old one. 10 round-trips, 25,991 tokens, 4 compile errors
-        // including a redefinition (B23).
         if let Some(name) = named_fn(task)
             && !test_fn.contains(&format!("{name}("))
         {
-            objection = format!(
-                "the task names `{name}` and this test never calls it. \
-                     Write a test that calls `{name}` directly."
-            );
-            eprintln!(
-                "  contract: test does not call `{name}` -- rejected locally"
-            );
+            objection = contract_objection(&name);
             continue;
         }
+        match judge_test(ctx, c, &test_fn, attempt)? {
+            None => return Ok(test_fn),
+            Some(no) => objection = no,
+        }
+    }
+    Err(format!(
+        "judge rejected the test 3 times -- last objection: {objection}"
+    ))
+}
 
-        let red_note = red_note(task);
-        let verdict = c.run(
-            &format!(
-                "{NOTATION}\n--- data model ---\n{surface}\n--- already available to a test ---\n{in_scope}\n\nInvariant:\n  {inv}\n\n\
+/// The deterministic check, before the judge, at zero tokens: if the row names
+/// the function to write, the test has to CALL it.
+///
+/// Measured -- the row named `post_with_retry`, the test drove `generate_via`
+/// instead, the judge said YES, and step 2 then had no new function to write
+/// so it rewrote the old one. 10 round-trips, 25,991 tokens, 4 compile errors
+/// including a redefinition (B23).
+fn contract_objection(name: &str) -> String {
+    eprintln!("  contract: test does not call `{name}` -- rejected locally");
+    format!(
+        "the task names `{name}` and this test never calls it. \
+         Write a test that calls `{name}` directly."
+    )
+}
+
+/// The judge's verdict on one proposed test: `None` is acceptance, `Some` is
+/// the objection to feed back.
+fn judge_test(
+    ctx: &Ctx,
+    c: &mut Caller,
+    test_fn: &str,
+    attempt: usize,
+) -> Result<Option<String>, String> {
+    let (surface, in_scope, inv) = (&ctx.surface, &ctx.in_scope, &ctx.inv);
+    let red_note = red_note(ctx.run.task);
+    let verdict = c.run(
+        &format!(
+            "{NOTATION}\n--- data model ---\n{surface}\n--- already available to a test ---\n{in_scope}\n\nInvariant:\n  {inv}\n\n\
              Proposed test:\n```rust\n{test_fn}\n```\n\n\
              {red_note}Answer YES only if BOTH hold: (a) the test exercises the quantity the \
              invariant is actually about -- check the field names against the data model \
@@ -718,47 +732,79 @@ pub fn drive_run(r: &Run) -> Result<Vec<Step>, String> {
              and assert it IS -- a test asserting only that nothing was found is \
              satisfied by a function that always finds nothing. Exhaustiveness is NOT \
              required. Answer YES or NO on the first line, then one sentence."
-            ),
-            if attempt == 0 {
-                "1b judge"
-            } else {
-                "1b re-judge"
-            },
-        )?;
-        let first = verdict.trim().lines().next().unwrap_or("").to_string();
-        eprintln!("  judge: {}", first.chars().take(78).collect::<String>());
-        if is_yes(&verdict) {
-            accepted = true;
-            break;
-        }
-        objection = verdict.trim().to_string();
-    }
-    if !accepted {
-        return Err(format!(
-            "judge rejected the test 3 times -- last objection: {objection}"
-        ));
-    }
-
-    std::fs::write(&mod_path, insert_test(&original, &test_fn))
-        .map_err(|e| e.to_string())?;
-    let (red_ok, red_out) = crate::land::gate_with(root, &r.cargo)?;
-    if red_ok {
-        return Err(
-            "test passes already -- not a red test, nothing to drive".into()
-        );
-    }
-    eprintln!("  gate: RED as required");
-
-    // 2 -- GREEN. Sees the one test and the implementation, not the whole spec.
-    let wanted = expected_calls(&test_fn, &surface);
-    let contract = if wanted.is_empty() {
-        String::new()
+        ),
+        if attempt == 0 { "1b judge" } else { "1b re-judge" },
+    )?;
+    let first = verdict.trim().lines().next().unwrap_or("").to_string();
+    eprintln!("  judge: {}", first.chars().take(78).collect::<String>());
+    Ok(if is_yes(&verdict) {
+        None
     } else {
-        format!(
-            "--- the test calls these; define EXACTLY these names and signatures ---\n{}\n\n",
-            wanted.join("\n")
-        )
-    };
+        Some(verdict.trim().to_string())
+    })
+}
+
+/// One candidate and the gate output it produced.
+///
+/// Two parallel `Vec`s indexed by the same `pick` was the shape before, which
+/// is a complex type in the signature and an index in two places that must
+/// agree. They belong together because they are one attempt.
+struct Tried {
+    cand: Candidate,
+    /// The gate's output for this candidate -- what repair is shown.
+    out: String,
+}
+
+/// Steps 2 and 3 -- N candidate implementations, each judged on the same
+/// evidence.
+///
+/// At N=1 this is exactly the old single call: candidate 0 is the
+/// deterministic one, so nothing here is dormant until opted into.
+fn green_candidates(
+    ctx: &Ctx,
+    c: &mut Caller,
+    test_fn: &str,
+    red_out: &str,
+) -> Result<Vec<Tried>, String> {
+    let prompt = green_prompt(ctx, test_fn, red_out);
+    let n = candidate_count();
+    let mut tried: Vec<Tried> = Vec::new();
+    let with_test =
+        std::fs::read_to_string(&ctx.mod_path).map_err(|e| e.to_string())?;
+    for k in 0..n {
+        let label: &'static str =
+            if k == 0 { "2 green" } else { "2 green-alt" };
+        let code = ollama::rust_block(&c.run_sampled(
+            &prompt,
+            label,
+            ollama::Sampling::candidate(k),
+        )?);
+        std::fs::write(&ctx.mod_path, insert_impl(&with_test, &code))
+            .map_err(|e| e.to_string())?;
+        let (g, o) = crate::land::gate_with(ctx.run.root, &ctx.run.cargo)?;
+        let found = candidate_findings(ctx, &code)?;
+        if n > 1 {
+            report_candidate(k, g, &found);
+        }
+        tried.push(Tried {
+            cand: Candidate {
+                code,
+                green: g,
+                findings: found.len(),
+            },
+            out: o,
+        });
+    }
+    Ok(tried)
+}
+
+/// The step-2 prompt: the ONE test and the implementation, not the whole spec.
+///
+/// The contract line names exactly what the test calls, so step 2 cannot
+/// invent a neighbouring name and leave the test uncallable.
+fn green_prompt(ctx: &Ctx, test_fn: &str, red_out: &str) -> String {
+    let surface = &ctx.surface;
+    let wanted = expected_calls(test_fn, surface);
     eprintln!(
         "  contract: {}",
         if wanted.is_empty() {
@@ -767,179 +813,296 @@ pub fn drive_run(r: &Run) -> Result<Vec<Step>, String> {
             wanted.join(", ")
         }
     );
-    let green_prompt = format!(
+    let contract = if wanted.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "--- the test calls these; define EXACTLY these names and signatures ---\n{}\n\n",
+            wanted.join("\n")
+        )
+    };
+    format!(
         "--- existing API (signatures; call these, do not reimplement) ---\n{surface}\n\n--- failing test ---\n```rust\n{test_fn}\n```\n\n\
          {contract}\
          --- failure ---\n{}\n\n\
          Write ONLY the new function(s) to ADD to the implementation so this test passes. \
          Do not restate existing code. \
          Do not modify the test. Reply with a single ```rust fenced block.",
-        crate::land::tail(&red_out, 1500)
-    );
+        crate::land::tail(red_out, 1500)
+    )
+}
 
-    // 3 -- the competition. N candidates, each judged on the same evidence,
-    // best kept. At N=1 this is exactly the old single call: candidate 0 is
-    // the deterministic one, so nothing here is dormant until opted into.
-    let n = candidate_count();
-    let mut cands: Vec<Candidate> = Vec::new();
-    let mut results: Vec<(bool, String)> = Vec::new();
-    let with_test =
-        std::fs::read_to_string(&mod_path).map_err(|e| e.to_string())?;
-    for k in 0..n {
-        let label: &'static str =
-            if k == 0 { "2 green" } else { "2 green-alt" };
-        let code = ollama::rust_block(&c.run_sampled(
-            &green_prompt,
-            label,
-            ollama::Sampling::candidate(k),
-        )?);
-        std::fs::write(&mod_path, insert_impl(&with_test, &code))
-            .map_err(|e| e.to_string())?;
-        let (g, o) = crate::land::gate_with(root, &r.cargo)?;
-        let added = crate::code::public_fns(&code);
-        let cur =
-            std::fs::read_to_string(&mod_path).map_err(|e| e.to_string())?;
-        let (_ci, ct) = split_module(&cur);
-        // NOT `unwired` here. Its own wording is "a `pub fn` called only from
-        // tests LANDED but was never wired in" -- the subject is code that
-        // shipped and STAYED unwired. A function born in the same breath as
-        // its test has landed nothing yet, and at the moment of judgement
-        // nothing else can call it: the loop only appends, so EVERY correct
-        // run tripped it and V23 made that fatal (V29). The rule is not
-        // weakened -- `land::evidence` runs `review::commit` over every
-        // commit on the branch, which is where "landed" applies (T19).
-        //
-        // These three DO belong here: each judges the candidate's own
-        // quality, which is complete the moment it is written.
-        let mut found = crate::review::negative_only(&code, ct, &added);
-        found.extend(crate::review::ignored_input(&code, &added));
-        found.extend(crate::review::undocumented(&code, &added));
-        if n > 1 {
-            // Name them. Three candidates scoring "1 finding" told me nothing
-            // about whether it was one shared defect or three different ones.
-            eprintln!(
-                "  candidate {k}: {} · {}",
-                if g { "gate GREEN" } else { "gate red" },
-                if found.is_empty() {
-                    "clean".to_string()
-                } else {
-                    found
-                        .iter()
-                        .map(|f| f.rule.to_string())
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                }
-            );
+/// Mechanical review of ONE candidate, against what that candidate added.
+///
+/// NOT `unwired` here. Its own wording is "a `pub fn` called only from tests
+/// LANDED but was never wired in" -- the subject is code that shipped and
+/// STAYED unwired. A function born in the same breath as its test has landed
+/// nothing yet, and at the moment of judgement nothing else can call it: the
+/// loop only appends, so EVERY correct run tripped it and V23 made that fatal
+/// (V29). The rule is not weakened -- `land::evidence` runs `review::commit`
+/// over every commit on the branch, which is where "landed" applies (T19).
+///
+/// These three DO belong here: each judges the candidate's own quality, which
+/// is complete the moment it is written.
+fn candidate_findings(
+    ctx: &Ctx,
+    code: &str,
+) -> Result<Vec<crate::review::Finding>, String> {
+    let added = crate::code::public_fns(code);
+    let cur =
+        std::fs::read_to_string(&ctx.mod_path).map_err(|e| e.to_string())?;
+    let (_ci, ct) = split_module(&cur);
+    let mut found = crate::review::negative_only(code, ct, &added);
+    found.extend(crate::review::ignored_input(code, &added));
+    found.extend(crate::review::undocumented(code, &added));
+    Ok(found)
+}
+
+/// Name what each candidate scored.
+///
+/// Three candidates scoring "1 finding" told me nothing about whether it was
+/// one shared defect or three different ones.
+fn report_candidate(k: usize, green: bool, found: &[crate::review::Finding]) {
+    eprintln!(
+        "  candidate {k}: {} · {}",
+        if green { "gate GREEN" } else { "gate red" },
+        if found.is_empty() {
+            "clean".to_string()
+        } else {
+            found
+                .iter()
+                .map(|f| f.rule.to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
         }
-        cands.push(Candidate {
-            code,
-            green: g,
-            findings: found.len(),
-        });
-        results.push((g, o));
-    }
+    );
+}
 
-    let pick = match select(&cands) {
+/// Step 4 -- repair, capped. Returns the last gate verdict and its output.
+///
+/// Repair REPLACES what the loop added rather than guessing at a name prefix
+/// or rewriting the whole region (B5), so it tracks `last_added` across
+/// attempts and refuses when it can no longer find it.
+fn repair(
+    ctx: &Ctx,
+    c: &mut Caller,
+    test_fn: &str,
+    seed: (bool, String, String),
+) -> Result<(bool, String, String), String> {
+    let (mut ok, mut out, mut last_added) = seed;
+    for i in 0..ctx.run.max_repair {
+        if ok {
+            break;
+        }
+        eprintln!("  gate: FAIL -- repair {}/{}", i + 1, ctx.run.max_repair);
+        let cur = std::fs::read_to_string(&ctx.mod_path)
+            .map_err(|e| e.to_string())?;
+        let (cur_impl, cur_tests) = split_module(&cur);
+        let label: &'static str =
+            if i == 0 { "4 repair-1" } else { "4 repair-n" };
+        let fixed = ollama::rust_block(&c.run(
+            &repair_prompt(signatures(cur_impl), &last_added, test_fn, &out),
+            label,
+        )?);
+        let Some(replaced) = cur_impl
+            .contains(last_added.trim())
+            .then(|| cur_impl.replace(last_added.trim(), fixed.trim()))
+        else {
+            // Could not find what we added -- refuse to guess. Appending would
+            // duplicate the definition, rewriting would destroy unrelated code.
+            return Err("repair lost track of the previous insertion -- \
+                        refusing to guess where it went"
+                .into());
+        };
+        last_added = fixed;
+        std::fs::write(
+            &ctx.mod_path,
+            format!("{}\n\n{}", replaced.trim_end(), cur_tests),
+        )
+        .map_err(|e| e.to_string())?;
+        let g = crate::land::gate_with(ctx.run.root, &ctx.run.cargo)?;
+        ok = g.0;
+        out = g.1;
+    }
+    Ok((ok, out, last_added))
+}
+
+/// The repair prompt: the current surface, what we last added, the test, and
+/// the failure -- and nothing else, so the model cannot restate the module.
+fn repair_prompt(
+    surface: String,
+    last_added: &str,
+    test_fn: &str,
+    out: &str,
+) -> String {
+    format!(
+        "--- existing API (signatures) ---\n{surface}\n\n--- your current attempt ---\n{last_added}\n\n--- test ---\n```rust\n{test_fn}\n```\n\n\
+         --- failure ---\n{}\n\n\
+         Reply with ONLY the corrected version of the function(s) you previously \
+         added, in one ```rust block. Do not restate unrelated code, do not remove \
+         module documentation, and do not change the behaviour of functions that \
+         already existed. Do not modify the test.",
+        crate::land::tail(out, 2000)
+    )
+}
+
+/// The loop: RED test, GREEN candidates, repair, second lens.
+///
+/// This function COORDINATES; each numbered step is its own function above.
+/// It holds the `Restore` guard because arming and keeping are the two ends of
+/// one decision, and splitting them across functions would put the module's
+/// safety in two places (B21 is why this split is worth measuring at all).
+pub fn drive_run(r: &Run) -> Result<Vec<Step>, String> {
+    let spec_path = r.node.join("SPEC.md");
+    let mod_path = r.node.join("mod.rs");
+    let spec_txt = std::fs::read_to_string(&spec_path)
+        .map_err(|e| format!("{}: {e}", spec_path.display()))?;
+    let original = std::fs::read_to_string(&mod_path)
+        .map_err(|e| format!("{}: {e}", mod_path.display()))?;
+    let (impl_r, tests_r) = split_module(&original);
+    // Armed from here on: every exit below this line restores unless the run
+    // ends by earning `keep()`.
+    let mut guard = Restore::arm(&mod_path, &original);
+
+    let ctx = Ctx {
+        run: r,
+        inv: declared_invariant(r, &spec_txt)?,
+        spec_rules: rule_depth(&spec_txt),
+        surface: signatures(impl_r),
+        // The judge is shown the impl half and told to check names against it,
+        // but the test it judges lives in the OTHER half and may legitimately
+        // reuse a double declared there. Without these it rejects a good test
+        // for referring to something that "does not appear" (B27).
+        in_scope: test_decls(tests_r),
+        tests: tests_r.to_string(),
+        mod_path,
+    };
+    eprintln!("node {} · {}\n", r.node.display(), ctx.inv.trim());
+
+    // A cold endpoint's first call carries a disk load the eta was never
+    // taught about, and the 4x ceiling then kills step 1 (`.:ollama:prewarm`).
+    ollama::prewarm(r.transport);
+    let mut c = Caller::new(r.transport);
+
+    let test_fn = red_test(&ctx, &mut c)?;
+    std::fs::write(&ctx.mod_path, insert_test(&original, &test_fn))
+        .map_err(|e| e.to_string())?;
+    let (red_ok, red_out) = crate::land::gate_with(r.root, &r.cargo)?;
+    if red_ok {
+        return Err(
+            "test passes already -- not a red test, nothing to drive".into()
+        );
+    }
+    eprintln!("  gate: RED as required");
+
+    let tried = green_candidates(&ctx, &mut c, &test_fn, &red_out)?;
+    let pick = pick_candidate(&tried)?;
+    let Some(won) = tried.get(pick) else {
+        unreachable!("select returns an index into the slice it was given")
+    };
+    let with_test =
+        std::fs::read_to_string(&ctx.mod_path).map_err(|e| e.to_string())?;
+    std::fs::write(&ctx.mod_path, insert_impl(&with_test, &won.cand.code))
+        .map_err(|e| e.to_string())?;
+    let seed = (won.cand.green, won.out.clone(), won.cand.code.clone());
+
+    let (ok, out, last_added) = repair(&ctx, &mut c, &test_fn, seed)?;
+
+    // 5 -- the second lens. Only when the gate is green: a red gate has
+    // already said no, and asking a judge to confirm it costs a call to learn
+    // nothing.
+    if ok {
+        blind_check(&ctx, &mut c, &last_added)?;
+    }
+    report_verdict(c, ok, &out, &mut guard)
+}
+
+/// The invariant's own line, from the spec that DECLARES it -- which may be an
+/// ancestor (`.:plan` B6).
+fn declared_invariant(r: &Run, spec_txt: &str) -> Result<String, String> {
+    let inv_path = r.owner.join("SPEC.md");
+    let inv_txt = std::fs::read_to_string(&inv_path)
+        .unwrap_or_else(|_| spec_txt.to_string());
+    inv_txt
+        .lines()
+        .find(|l| l.starts_with(&format!("{}:", r.invariant)))
+        .map(str::to_string)
+        .ok_or_else(|| {
+            format!(
+                "{} not declared in {} -- a test for an invariant that does \
+                 not exist encodes an unstated rule",
+                r.invariant,
+                inv_path.display()
+            )
+        })
+}
+
+/// Which candidate is kept, and why -- or the refusal when none earned it.
+fn pick_candidate(tried: &[Tried]) -> Result<usize, String> {
+    let n = tried.len();
+    let cands: Vec<Candidate> = tried.iter().map(|t| t.cand.clone()).collect();
+    match select(&cands) {
         Pick::Merit(i) => {
             if n > 1 {
                 eprintln!("  merit: candidate {i} of {n} kept");
             }
-            i
+            Ok(i)
         }
         Pick::Unfinished(i) => {
             if n > 1 {
                 eprintln!("  merit: all {n} red -- repairing candidate {i}");
             }
-            i
+            Ok(i)
         }
-        Pick::NoWinner => {
-            return Err(format!(
-                "{n} candidate(s) green but carrying findings -- reverted. repair \
-                 polishes a stub, it does not fix one"
-            ));
-        }
-    };
-    std::fs::write(&mod_path, insert_impl(&with_test, &cands[pick].code))
-        .map_err(|e| e.to_string())?;
-    // Track exactly what we added, so repair REPLACES it rather than guessing
-    // at a name prefix or rewriting the whole region (B5).
-    let mut last_added = cands[pick].code.clone();
-
-    let (mut ok, mut out) = (results[pick].0, results[pick].1.clone());
-    // 4 -- repair, capped. On exhaustion, report what was tried.
-    for i in 0..max_repair {
-        if ok {
-            break;
-        }
-        eprintln!("  gate: FAIL -- repair {}/{}", i + 1, max_repair);
-        let cur =
-            std::fs::read_to_string(&mod_path).map_err(|e| e.to_string())?;
-        let (cur_impl, cur_tests) = split_module(&cur);
-        let cur_surface = signatures(cur_impl);
-        let label: &'static str =
-            if i == 0 { "4 repair-1" } else { "4 repair-n" };
-        let fixed = ollama::rust_block(&c.run(
-            &format!(
-                "--- existing API (signatures) ---\n{cur_surface}\n\n--- your current attempt ---\n{last_added}\n\n--- test ---\n```rust\n{test_fn}\n```\n\n\
-             --- failure ---\n{}\n\n\
-             Reply with ONLY the corrected version of the function(s) you previously \
-             added, in one ```rust block. Do not restate unrelated code, do not remove \
-             module documentation, and do not change the behaviour of functions that \
-             already existed. Do not modify the test.",
-                crate::land::tail(&out, 2000)
-            ),
-            label,
-        )?);
-        let replaced = if cur_impl.contains(last_added.trim()) {
-            cur_impl.replace(last_added.trim(), fixed.trim())
-        } else {
-            // Could not find what we added -- refuse to guess. Appending would
-            // duplicate the definition, rewriting would destroy unrelated code.
-            return Err("repair lost track of the previous insertion -- refusing to                         guess where it went".into());
-        };
-        last_added = fixed.clone();
-        std::fs::write(
-            &mod_path,
-            format!("{}\n\n{}", replaced.trim_end(), cur_tests),
-        )
-        .map_err(|e| e.to_string())?;
-        let g = crate::land::gate_with(root, &r.cargo)?;
-        ok = g.0;
-        out = g.1;
+        Pick::NoWinner => Err(format!(
+            "{n} candidate(s) green but carrying findings -- reverted. repair \
+             polishes a stub, it does not fix one"
+        )),
     }
+}
 
-    // 5 -- the second lens. Only when the gate is green: a red gate has already
-    // said no, and asking a judge to confirm it costs a call to learn nothing.
-    if ok {
-        let verdict =
-            c.run(&blind_prompt(&inv, &last_added), "5 blind judge")?;
-        let first = verdict.trim().lines().next().unwrap_or("").to_string();
-        eprintln!("  blind: {}", first.chars().take(78).collect::<String>());
-        if !is_yes(&verdict) {
-            return Err(format!(
-                "gates green, second lens says NO -- reverted. objection: {}",
-                verdict.trim()
-            ));
-        }
+/// Step 5 -- the second lens, blind to the gate's verdict.
+fn blind_check(
+    ctx: &Ctx,
+    c: &mut Caller,
+    last_added: &str,
+) -> Result<(), String> {
+    let verdict =
+        c.run(&blind_prompt(&ctx.inv, last_added), "5 blind judge")?;
+    let first = verdict.trim().lines().next().unwrap_or("").to_string();
+    eprintln!("  blind: {}", first.chars().take(78).collect::<String>());
+    if is_yes(&verdict) {
+        return Ok(());
     }
+    Err(format!(
+        "gates green, second lens says NO -- reverted. objection: {}",
+        verdict.trim()
+    ))
+}
 
+/// What the run cost, and whether the module is kept.
+fn report_verdict(
+    c: Caller,
+    ok: bool,
+    out: &str,
+    guard: &mut Restore,
+) -> Result<Vec<Step>, String> {
     let sent: u64 = c.log.iter().map(|s| s.prompt_tokens).sum();
     let max = c.log.iter().map(|s| s.prompt_tokens).max().unwrap_or(0);
     eprintln!(
         "\n  {} round-trips · {sent} tok sent · max single call {max}",
         c.log.len()
     );
-    if ok {
-        eprintln!("  VERDICT: MERGEABLE -- gates green + second lens");
-        guard.keep();
-        Ok(c.log)
-    } else {
-        eprintln!("{}", crate::land::tail(&out, 2000));
-        Err(
+    if !ok {
+        eprintln!("{}", crate::land::tail(out, 2000));
+        return Err(
             "NOT mergeable -- gates red after repair budget, module restored"
                 .into(),
-        )
+        );
     }
+    eprintln!("  VERDICT: MERGEABLE -- gates green + second lens");
+    guard.keep();
+    Ok(c.log)
 }
 /// Classify a failure report as a compile‑time error.
 ///
@@ -1741,6 +1904,58 @@ mod loop_tests {
         assert!(ok, "no denominator is not a refusal: {r}");
         assert!(r.is_empty(), "and it says nothing: {r}");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// `.:B21`: the loop's five numbered steps are five functions, and the
+    /// coordinator holds the guard because arming and keeping are two ends of
+    /// one decision.
+    ///
+    /// Asserted on the source rather than on behaviour, because the behaviour
+    /// is unchanged by construction -- what changed is the shape, and the
+    /// shape is what `.:B21`'s ratchet measures.
+    #[test]
+    fn the_loop_coordinates_and_each_step_is_its_own_function() {
+        let src = include_str!("mod.rs");
+        let (impl_r, _tests) = split_module(src);
+        for step in [
+            "fn red_test(",
+            "fn judge_test(",
+            "fn green_candidates(",
+            "fn repair(",
+            "fn blind_check(",
+        ] {
+            assert!(impl_r.contains(step), "the loop lost {step}");
+        }
+        // The claim is DELEGATION, not a line count: the coordinator calls
+        // each step rather than inlining it. A threshold here would be the
+        // same defect `.:B21` records -- a number that punishes the next
+        // honest edit.
+        let drive = impl_r
+            .split_once("pub fn drive_run(")
+            .and_then(|(_, r)| r.split_once("\n}\n"))
+            .map(|(body, _)| body)
+            .unwrap_or_default();
+        for call in [
+            "red_test(&ctx",
+            "green_candidates(&ctx",
+            "repair(&ctx",
+            "blind_check(&ctx",
+        ] {
+            assert!(
+                drive.contains(call),
+                "the coordinator stopped calling {call}"
+            );
+        }
+        assert!(
+            !drive.contains("NOTATION"),
+            "a prompt body belongs to its step, not to the coordinator"
+        );
+        // The guard stays with the coordinator: it arms before any step can
+        // write, and only the verdict may keep it.
+        assert!(
+            impl_r.contains("let mut guard = Restore::arm("),
+            "the coordinator arms the guard"
+        );
     }
 
     /// A `cargo` whose clippy step emits `n` warning lines on stderr.
