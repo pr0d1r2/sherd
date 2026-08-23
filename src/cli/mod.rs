@@ -25,6 +25,7 @@ bbx -- federated SPEC.md for small-context local models
   bbx land [--push]    fast-forward main to this run branch, if it earned it
   bbx ask <dir> <q>    ask the endpoint from a node's lens pack
   bbx tdd <dir> <Vn> <task>   red -> judge -> green -> gate -> repair
+  bbx oneshot <dir> <Vn> <task>   the monolith arm: one call, whole repo
 
   -v, --verbose        dump every prompt and stream every reply
 
