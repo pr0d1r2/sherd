@@ -306,6 +306,56 @@ pub fn test_decls(tests_src: &str) -> String {
     out
 }
 
+/// Bindings a body indexes by a LITERAL, with how many times.
+///
+/// `xs[0]` and `xs[1]` are two; `xs[i]` is none, because a computed index
+/// says nothing about the arity the author expects. Here rather than in
+/// `src/review`, because reading Rust as text is this node's job and a second
+/// scanner over there is `.:B13` exactly.
+#[must_use]
+pub fn literal_indexes(body: &str) -> Vec<(String, usize)> {
+    let b = body.as_bytes();
+    let mut seen: Vec<(String, usize)> = Vec::new();
+    for (i, c) in b.iter().enumerate() {
+        if *c != b'[' {
+            continue;
+        }
+        let Some(name) = indexed_binding(body, b, i) else {
+            continue;
+        };
+        match seen.iter_mut().find(|(n, _)| n == &name) {
+            Some((_, n)) => *n = n.saturating_add(1),
+            None => seen.push((name, 1)),
+        }
+    }
+    seen
+}
+
+/// The binding immediately before a `[` that holds only digits.
+fn indexed_binding(body: &str, b: &[u8], at: usize) -> Option<String> {
+    let digits: String = body
+        .get(at.saturating_add(1)..)?
+        .chars()
+        .take_while(char::is_ascii_digit)
+        .collect();
+    if digits.is_empty()
+        || b.get(at.saturating_add(1).saturating_add(digits.len()))
+            != Some(&b']')
+    {
+        return None;
+    }
+    let name: String = body
+        .get(..at)?
+        .chars()
+        .rev()
+        .take_while(|c| c.is_alphanumeric() || *c == '_')
+        .collect::<Vec<char>>()
+        .into_iter()
+        .rev()
+        .collect();
+    (!name.is_empty()).then_some(name)
+}
+
 /// Every function declared in a source, in order.
 ///
 /// Here rather than in `src/review`, because `.:B13` is precisely the defect

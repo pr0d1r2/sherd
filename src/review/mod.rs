@@ -24,12 +24,15 @@ pub struct Finding {
 /// shipped and the report never mentioned it. Here it sits beside the
 /// functions it names, so adding a rule and forgetting the report is one
 /// edit away rather than two files apart.
-pub const RULES: [&str; 5] = [
+pub const RULES: [&str; 8] = [
     "unwired",
     "negative-only",
     "ignored-input",
     "undocumented",
     "duplication",
+    "positional-index",
+    "byte-scanner",
+    "status-unread",
 ];
 
 /// A public fn added but called by nothing outside the tests.
@@ -235,6 +238,7 @@ pub fn node(path: &Path, added: &[String]) -> std::io::Result<Vec<Finding>> {
     out.extend(undocumented(impl_r, added));
     // Whole-crate like `unwired`: the case worth catching is cross-node.
     out.extend(duplication(&crate_src, added));
+    out.extend(fix_shapes(&crate_src, added));
     Ok(out)
 }
 
@@ -379,6 +383,110 @@ fn calls(src: &str, f: &str, other: &str) -> bool {
     fn_body(src, f).is_some_and(|b| b.contains(&format!("{other}(")))
 }
 
+/// A transform this repository has already applied, with the evidence.
+///
+/// Named, never applied: `V3` says review reports and the reader judges, and
+/// `.:B24` records why that is not timidity -- every one of these rewrites
+/// needed a TYPE to get right, and two of the first attempts were refused by
+/// the compiler or the gate.
+pub struct FixShape {
+    /// The rule name, as it appears in a report.
+    pub rule: &'static str,
+    /// What to write instead.
+    pub shape: &'static str,
+}
+
+/// Positional indexes into a binding whose length was just checked.
+///
+/// MEASURED: applied 34 times across two commits, and the code got shorter
+/// every time -- the length check and the indexes state one fact in two
+/// places that can disagree, and the pattern states it once.
+const SLICE_PATTERN: FixShape = FixShape {
+    rule: "positional-index",
+    shape: "let [a, b] = xs.as_slice() else { ... } -- the pattern carries \
+            the arity, so the length check and the indexes stop repeating \
+            each other",
+};
+
+/// A long function scanning bytes by index.
+///
+/// MEASURED on `code::expected_calls`: 75 lines and 11 byte indexes became
+/// four named helpers over slices, and 24 `indexing_slicing` warnings went
+/// with them. A helper that takes a slice has a BOUNDARY to state; a loop
+/// carries its bounds in the author's head.
+const NAMED_BOUNDARY: FixShape = FixShape {
+    rule: "byte-scanner",
+    shape: "cut it into helpers that each take a slice and answer one \
+            question -- `get` and `saturating_*` become natural where `b[i]` \
+            was, and the indexing goes with the length",
+};
+
+/// A subprocess whose EXIT STATUS is never read.
+///
+/// MEASURED: `Command::output()` returns `Ok` for a process that RAN and
+/// FAILED, so `let Ok(out) = .. else` catches only "the binary is not on
+/// PATH". `review::added_in_commit` read `out.stdout` and nothing else, and
+/// `git show <unknown rev>` therefore looked like an empty diff and printed a
+/// clean bill (`V7`, `B5`). The same shape is `.:B18` and `.:B20` on the
+/// ratchets: a count taken from a tool that did not run.
+const READ_THE_STATUS: FixShape = FixShape {
+    rule: "status-unread",
+    shape: "read `out.status.success()` before `out.stdout` -- `Ok` means \
+            the process RAN, not that it worked, and a failed run's empty \
+            output reads exactly like a clean one",
+};
+
+/// Transforms worth naming in what a commit ADDED.
+///
+/// Reports the SHAPE, never the edit. `cargo clippy --fix` already applies
+/// every rewrite that is machine-applicable, and measured against this tree
+/// it changes nothing: all 252 warnings we carry are the ones upstream marks
+/// as needing judgement (`.:B24`).
+#[must_use]
+pub fn fix_shapes(crate_src: &str, new_fns: &[String]) -> Vec<Finding> {
+    let mut out = Vec::new();
+    for f in new_fns {
+        let Some(body) = fn_body(crate_src, f) else {
+            continue;
+        };
+        if let Some(bind) = repeated_index(body) {
+            out.push(shape_finding(f, &SLICE_PATTERN, &format!("`{bind}`")));
+        }
+        if body.contains(".output()") && !body.contains("status") {
+            out.push(shape_finding(f, &READ_THE_STATUS, "a subprocess"));
+        }
+        let scans = body.matches("b[").count();
+        if body.lines().count() > 15 && scans >= 3 {
+            out.push(shape_finding(
+                f,
+                &NAMED_BOUNDARY,
+                &format!(
+                    "{scans} byte indexes over {} lines",
+                    body.lines().count()
+                ),
+            ));
+        }
+    }
+    out
+}
+
+fn shape_finding(f: &str, s: &FixShape, what: &str) -> Finding {
+    Finding {
+        rule: s.rule,
+        detail: format!("`{f}`: {what}. Try: {}", s.shape),
+    }
+}
+
+/// A binding indexed by a literal twice or more, whose length is ALSO
+/// checked -- both halves, so a single `xs[0]` after a `match` that already
+/// proved the arity is not a finding.
+fn repeated_index(body: &str) -> Option<String> {
+    crate::code::literal_indexes(body)
+        .into_iter()
+        .find(|(n, c)| *c >= 2 && body.contains(&format!("{n}.len()")))
+        .map(|(n, _)| n)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -437,18 +545,85 @@ mod tests {
         assert!(duplication(src, &["fresh".to_string()]).is_empty());
     }
 
+    /// The three FIX SHAPES, each on the historical example it was mined
+    /// from. Named, never applied (`V3`): `cargo clippy --fix` changes
+    /// nothing on this tree, because all 252 warnings we carry are the ones
+    /// upstream marks as needing judgement (`.:B24`).
+    #[test]
+    fn a_length_check_beside_positional_indexes_names_the_slice_pattern() {
+        // `fed::parses_rows_and_stops_at_next_section` before the rewrite.
+        let src = "fn t() {\n    let e = edges(F);\n    \
+                   assert_eq!(e.len(), 2);\n    assert_eq!(e[0].dir, \"src\");\n    \
+                   assert_eq!(e[1].tokens, None);\n}\n";
+        let f = fix_shapes(src, &["t".to_string()]);
+        assert_eq!(
+            f.first().map(|x| x.rule),
+            Some("positional-index"),
+            "{f:?}"
+        );
+        assert!(
+            f.first().is_some_and(|x| x.detail.contains("as_slice()")),
+            "the finding names the shape to write: {f:?}"
+        );
+    }
+
+    /// One index with no length check is not the shape -- a `match` arm that
+    /// already proved the arity indexes safely.
+    #[test]
+    fn a_single_index_without_a_length_check_is_not_the_shape() {
+        let src = "fn t() {\n    let v = go();\n    use_it(v[0]);\n}\n";
+        assert!(fix_shapes(src, &["t".to_string()]).is_empty());
+    }
+
+    /// `code::expected_calls` before the split: 75 lines, 11 byte indexes.
+    #[test]
+    fn a_long_byte_scanner_names_the_named_boundary_shape() {
+        let mut src =
+            String::from("fn t(s: &str) {\n    let b = s.as_bytes();\n");
+        for _ in 0..16 {
+            src.push_str("    if b[i] == b'x' { i += 1; }\n");
+        }
+        src.push_str("}\n");
+        let f = fix_shapes(&src, &["t".to_string()]);
+        assert!(f.iter().any(|x| x.rule == "byte-scanner"), "{f:?}");
+    }
+
+    /// `review::added_in_commit` before `V7`: `Ok` means the process RAN, and
+    /// `git show <unknown rev>` then looked like an empty diff.
+    #[test]
+    fn a_subprocess_whose_status_is_never_read_is_named() {
+        let src = "fn t() {\n    let out = Command::new(\"git\").output();\n    \
+                   let Ok(out) = out else { return };\n    \
+                   let diff = String::from_utf8_lossy(&out.stdout);\n}\n";
+        let f = fix_shapes(src, &["t".to_string()]);
+        assert!(f.iter().any(|x| x.rule == "status-unread"), "{f:?}");
+        // And reading the status clears it.
+        let ok = src.replace(
+            "let Ok(out) = out",
+            "let Ok(out) = out.filter(|o| o.status.success())",
+        );
+        assert!(
+            !fix_shapes(&ok, &["t".to_string()])
+                .iter()
+                .any(|x| x.rule == "status-unread")
+        );
+    }
+
     /// `V5`: the report names every rule that ran. The list drifted once --
     /// `undocumented` shipped and the report never mentioned it -- so this
     /// asserts the count rather than trusting a format string two files away.
     #[test]
     fn every_rule_that_runs_is_named_in_the_report() {
-        assert_eq!(RULES.len(), 5);
+        assert_eq!(RULES.len(), 8);
         for r in [
             "unwired",
             "negative-only",
             "ignored-input",
             "undocumented",
             "duplication",
+            "positional-index",
+            "byte-scanner",
+            "status-unread",
         ] {
             assert!(RULES.contains(&r), "{r} is not named");
         }
