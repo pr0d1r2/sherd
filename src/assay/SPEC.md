@@ -2,6 +2,8 @@
 
 ## §G GOAL
 
+FROZEN until rung `0.7` (`.:V117`) — it works, & no further development lands here before the mechanical surface ships.
+
 a corpus, & a way to grade a model against it. an assay tests a sample against what it is CLAIMED to be & reports when the claim is FALSE.
 
 ## §C CONSTRAINTS

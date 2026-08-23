@@ -2,6 +2,8 @@
 
 ## §G GOAL
 
+FROZEN until rung `0.7` (`.:V117`) — it works, & no further development lands here before the mechanical surface ships.
+
 Local inference endpoint. Sole call site for `ureq` + `serde_json`.
 
 ## §C CONSTRAINTS

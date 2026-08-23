@@ -19,16 +19,27 @@ rendering, because a consumer arriving from crates.io never opens our spec.
 | version | parity | what you can rely on | status |
 |---|---|---|---|
 | `0.1` | odd | the deterministic core runs on any repository — `budget`, `lens`, `fed`, `graph`, `check`, `slice`, `review`, `plan` — gated on three platforms and built with its tests in a sandbox | reached |
-| `0.2` | even | `§I` is what ships: `init` scaffolds a `SPEC.md`, and a runner closes the interface-vs-binary drift in both directions | next |
-| `0.3` | odd | the DAG answers questions — `route` resolves a query to a node, `validate` self-checks the federation | planned |
-| `0.4` | even | the federation is maintainable rather than only readable — `split` proposes a split, `sync` regenerates `§N` | planned |
-| `0.5` | odd | **first public artifact.** The loop's verdict means what the gate means, measured over more than one attempt, on a repository that is neither `itok` nor this one | planned |
-| `0.6` | even | the surface settles: what the first users found, and `§F`/`§N` upstreamed rather than forked | planned |
+| `0.2` | even | `§I` is what ships: `init` scaffolds a `SPEC.md`, and a runner closes the interface-vs-binary drift in both directions | reached |
+| `0.3` | odd | the DAG answers questions — `route` resolves a query to a node, `validate` gives one verdict over the federation | reached |
+| `0.4` | even | the federation is maintainable rather than only readable — `split` proposes a split, `sync` regenerates `§N` | next |
+| `0.5` | odd | **first public artifact.** Every verb that never calls a model is correct and reusable as a library, exercised on a repository that is neither `itok` nor this one | planned |
+| `0.6` | even | that surface settles: what the first users found, and `§F`/`§N` upstreamed rather than forked | planned |
+| `0.7` | odd | the model half resumes — `ask`, `tdd`, `oneshot`, and the loop's verdict meaning what the gate's verdict means, measured over more than one attempt | planned |
 | `1.0` | — | the contract freezes; every minor after is stable by definition, and the parity retires | planned |
 
 `0.1` through `0.4` are rungs **reached but not published**. They are listed
 rather than omitted, because a ladder that hides its unpublished rungs makes
 the first release look like a first version instead of a fifth.
+
+**The model half is frozen until `0.7`.** `ask`, `tdd` and `oneshot` work
+today and are not going away, but no further development lands in
+`src/ollama`, `src/tdd` or `src/assay` before the mechanical surface is
+correct and published. The reason is that they answer different kinds of
+question: whether a directory DAG can be parsed, budgeted and validated is
+settled by tests, while whether a 20B can write code that survives review is
+a research result that may take months to arrive. Tying a release to the
+second would hold the first hostage, and the first is the half a consumer
+can reuse.
 
 Pre-`1.0` SemVer permits a minor to break, and here each rung *is* a
 behaviour change, so that permission is used honestly rather than worked
