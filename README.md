@@ -330,6 +330,32 @@ back. A 20B model with a 131,072-token window is precisely that: you cannot
 inspect its reasoning, so the only thing you can engineer is what goes in.
 This tool engineers what goes in.
 
+## Commands
+
+Generated from `bbx`'s own usage text by `bbx-dev readme`, and checked
+against the dispatch arms -- a verb that dispatches and appears in no usage
+line fails the gate (`src/cli:V7`, after `src/cli:B2`).
+
+<!-- BEGIN commands -->
+| command | what it does |
+|---|---|
+| `bbx budget [dir]` | token cost of every node, against the working budget |
+| `bbx lens <dir> [--depth rule\|why\|all]` | the context pack for one node |
+| `bbx fed [dir]` | the federation edges declared by a node |
+| `bbx check [dir]` | microlith structural check of every node |
+| `bbx review [rev]` | mechanical checks on what a commit added (default HEAD) |
+| `bbx slice [--check\|--list]` | regenerate distilled slices from their sources |
+| `bbx outcome <node> <kept\|reverted>` | record whether a node's work survived review |
+| `bbx graph [--tree\|--table\|--dot]` | federation DAG, generated from §F |
+| `bbx plan` | next 3 steps, with what would invalidate each |
+| `bbx plan --triage` | unmanaged rows, with a proposed home for each |
+| `bbx apply [--land]` | execute step 1 only, commit it to a run branch, stop |
+| `bbx land [--push]` | fast-forward main to this run branch, if it earned it |
+| `bbx ask <dir> <q>` | ask the endpoint from a node's lens pack |
+| `bbx tdd <dir> <Vn> <task>` | red -> judge -> green -> gate -> repair |
+| `bbx oneshot <dir> <Vn> <task>` | the monolith arm: one call, whole repo |
+<!-- END commands -->
+
 ## Reading the specs
 
 `SPEC.md` files are caveman-encoded — symbols are load-bearing. The key is in

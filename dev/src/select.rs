@@ -50,6 +50,13 @@ pub const BLOCKS: &[Generated] = &[
         name: "graph-table",
         inputs: &["**/SPEC.md", "dev/src/**"],
     },
+    // The Commands table renders from `bbx::cli::USAGE`, and the same file
+    // carries the dispatch arms `undocumented` compares it against, so one
+    // input covers both halves of `src/cli:V7`.
+    Generated {
+        name: "commands",
+        inputs: &["src/cli/mod.rs", "dev/src/**"],
+    },
 ];
 
 /// Does one changed path match one declared input?

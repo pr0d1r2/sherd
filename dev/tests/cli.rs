@@ -27,7 +27,7 @@ const END: &str = "<!-- END badges -->";
 /// Every block `bbx-dev readme` generates. A fixture missing one is reported
 /// as NOT OPTED IN rather than stale, so the tests that assert staleness
 /// have to carry all four.
-const GRAPH_MARKERS: &str = "\n<!-- BEGIN graph-tree -->\n<!-- END graph-tree -->\n<!-- BEGIN graph-mermaid -->\n<!-- END graph-mermaid -->\n<!-- BEGIN graph-table -->\n<!-- END graph-table -->\n";
+const GRAPH_MARKERS: &str = "\n<!-- BEGIN graph-tree -->\n<!-- END graph-tree -->\n<!-- BEGIN graph-mermaid -->\n<!-- END graph-mermaid -->\n<!-- BEGIN graph-table -->\n<!-- END graph-table -->\n<!-- BEGIN commands -->\n<!-- END commands -->\n";
 
 /// A repository-shaped directory: the files `bbx-dev badges` reads, and
 /// nothing else.
@@ -52,6 +52,17 @@ fn fixture(name: &str) -> PathBuf {
     );
     write("flake.lock", "\"nixpkgs\": {\n  \"rev\": \"a687c14aaaa\"\n");
     write(".github/workflows/ci.yml", "        os: [macos-latest]\n");
+    // The V7 runner reads the dispatch source, and the Commands table is
+    // rendered from the usage const beside it, so a fixture repository needs
+    // both to exist.
+    fs::create_dir_all(dir.join("src").join("cli")).expect("cli dir");
+    write(
+        "src/cli/mod.rs",
+        "match args.first().map(String::as_str) {
+        Some(\"budget\") => budget(),
+    }
+",
+    );
     dir
 }
 
