@@ -294,7 +294,7 @@ T83|x|VARIABLE 2 — TEST AUTHORSHIP. hidden tests written first vs the model au
 T84|x|VARIABLE 3 — SIGNATURE given vs invented. R44 handed the writer a signature; `bbx tdd` makes it invent one, & `src/tdd:B12` is a test calling a name the impl never defined|V108,V106
 T85|x|adopt `clippy.toml` + `[lints.clippy]` (microlith's text, reasoning restated locally). MEASURE the violation count FIRST — the count decides ratchet vs pay-down, ⊥ a strategy picked blind. ⊥ `warn`: a check that cannot fail is B6|V82,V109,R47
 T86|.|build the FILE-ceiling runner V50 never had into `bbx check`, wire it like `budget`. §I already claims `check` does it (B11)|V50,V104,B11
-T87|.|`hk util` hygiene steps the siblings run & we ⊥: merge-conflict · private-key · large-files · BOM · case-conflict · symlinks · trailing-ws · final-newline · line-endings. ⊥ new deps|V26
+T87|x|`hk util` hygiene steps the siblings run & we ⊥: merge-conflict · private-key · large-files · BOM · case-conflict · symlinks · trailing-ws · final-newline · line-endings. ⊥ new deps|V26
 T88|.|`no-commit-to-branch --branch main` in the PRE-COMMIT set only — ⊥ `all`, or CI on `main` fails itself (microlith's note). AGENTS.md claims it & nothing enforces it (B12)|V74,B12
 T89|.|pub-fn ↔ test PAIRING via `bbx review` — reuse `public_fns`/`expected_calls`, ⊥ reimpl. catches what a % hides: a fn w/ NO test, carried by its neighbours|V72,V16
 T90|x|coverage floor, RATCHETED ⊥ set: start AT the measured 64.76% (R50), rises only w/ the tests that earn it, `.coverage` holds the number like `.lint-debt` holds the other. 98% is the DESTINATION in §C, ⊥ a gate that goes red tomorrow — the clippy adoption already showed a cliff is unpayable & a ratchet catches real defects (3 so far)|V16,R50,B6

@@ -18,6 +18,13 @@ rather than implied by the version number.
 
 ### Added
 
+- **Nine hygiene steps in the gate** (`T87`): merge conflicts, private keys,
+  oversized files, byte-order marks, case conflicts, broken symlinks,
+  trailing whitespace, missing final newlines and mixed line endings. All
+  run through `hk util`, so the set costs no new dependency. Each was run
+  against a planted violation before landing, because zero findings and no
+  possible finding read the same in a log -- and one of the nine only
+  rejects a real merge marker when passed `--assume-in-merge`.
 - **CI runs the gate, on three platforms.** `.github/workflows/ci.yml` enters
   the dev shell and runs `hk check --all --check` -- the same op set the
   hooks run locally, from the same pinned toolchain, so there is no second
