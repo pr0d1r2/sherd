@@ -63,7 +63,7 @@ pub fn run_args(mut args: Vec<String>) -> ExitCode {
         args.remove(i);
         crate::ollama::set_verbose(true);
     }
-    let root = repo_root();
+    let root = root_for(&args);
     #[cfg(feature = "ollama")]
     crate::ollama::load_pace();
     match args.first().map(String::as_str) {
@@ -217,6 +217,25 @@ pub fn run_args(mut args: Vec<String>) -> ExitCode {
 /// `sherd` is a shim over `cargo run`, so CWD is wherever you typed it. Using
 /// CWD federated from a SUBDIRECTORY silently -- fewer nodes, a truncated
 /// chain, and no error to say so. Walk up to the git root instead.
+/// The repo root a run is ABOUT, which is not always the one it was launched
+/// from.
+///
+/// Every `[dir]` verb takes a path that may live in ANOTHER repository, and
+/// resolving the root from the CWD then silently answers about the wrong
+/// tree: `sherd check ../their-project` reported this crate's own nodes and
+/// exited 0 (`src/cli:B5`). When the first argument names an existing directory, the
+/// root is the one ABOVE IT.
+///
+/// A non-directory first argument -- `HEAD` for `review`, `--check` for
+/// `sync` -- leaves the CWD walk alone, and an in-repo path resolves to the
+/// same root it always did.
+fn root_for(args: &[String]) -> PathBuf {
+    args.get(1)
+        .map(PathBuf::from)
+        .filter(|p| p.is_dir())
+        .map_or_else(repo_root, |p| repo_root_from(&p))
+}
+
 fn repo_root() -> PathBuf {
     let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     repo_root_from(&cwd)
@@ -1663,6 +1682,29 @@ mod tests {
         r.write("src/tiny.rs", "pub fn f() -> u8 { 1 }\n")?;
         r.commit("one small file")?;
         assert!(file_ceilings(r.path()).is_empty());
+        Ok(())
+    }
+
+    /// `B5`: a `[dir]` in ANOTHER repository resolved its root from the CWD,
+    /// so `sherd check ../their-project` reported THIS crate's nodes and
+    /// exited 0 -- confidently, about the wrong tree. Found by pointing the
+    /// tool at a fourth foreign repo, not by any test.
+    #[test]
+    fn a_dir_in_another_repo_resolves_that_repo_s_root() -> Result<(), String> {
+        let theirs = crate::testrepo::TestRepo::new("cli-foreign")?;
+        theirs.write("SPEC.md", "# SPEC\n\n## \u{a7}G GOAL\n\ntheirs\n")?;
+        theirs.commit("a repo that is not ours")?;
+        let arg = theirs.path().display().to_string();
+        assert_eq!(
+            root_for(&["check".into(), arg]),
+            theirs.path().to_path_buf(),
+            "the root is the one ABOVE the given dir"
+        );
+        // A non-directory first argument leaves the CWD walk alone: `HEAD`
+        // for `review`, `--check` for `sync`.
+        let here = root_for(&["review".into(), "HEAD".into()]);
+        assert_eq!(here, repo_root(), "a rev is not a dir");
+        assert_eq!(root_for(&["check".into()]), repo_root(), "no arg at all");
         Ok(())
     }
 
