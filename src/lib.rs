@@ -9,6 +9,7 @@
 // the loop it serves. Without the feature there is no writer to assay, and
 // `.:B15` is what leaving it ungated cost: a module that reaches into `tdd`
 // while compiling in a configuration `tdd` does not exist in.
+pub mod adopt;
 #[cfg(feature = "ollama")]
 pub mod assay;
 pub mod cli;

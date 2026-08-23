@@ -12,6 +12,7 @@ up|src|code nodes — tokens, spec, fed, lens facades & logic
 self|src/tokens|`itok` facade, counts w/ method label, entry cost, working budget
 sib|src/spec|`microlith` facade, §-section split, structural check, fmt
 sib|src/fed|`§F` parse, edges, chain root→node, `SPEC.md` discovery
+sib|src/adopt|foreign single-file spec → federation: row placement, citation rewrite, conservation
 sib|src/lens|pack assembly, depth `rule`|`why`, budget verdict
 sib|src/ollama|local endpoint client, `num_ctx`, fence extraction
 sib|src/tdd|red→judge→green→gate→repair loop, source region edits
@@ -47,3 +48,4 @@ T3|.|needs `tdd::split_module` — cross-node, name it before driving|`.:V50`
 T4|.|apply a tighter ceiling to `mod.rs`/`lib.rs`|`.:V51`
 T6|.|needs `sherd.toml` and a TOML parser — neither exists|V2
 T7|.|needs a compile-fail test, ⊥ a function|`.:V72`
+T8|.|entry cost BEFORE & AFTER an adoption — root+chain vs the single file it replaced — ∵ `§N`+`§F` are always-on RESIDUE & the saving can be NEGATIVE on a small tree. this number is what says a migration PAID|`src/adopt:V1`

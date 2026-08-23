@@ -642,3 +642,204 @@ mod upsert_tests {
         assert_eq!(upsert_section(doc, "N NAV", "x", "F"), doc);
     }
 }
+
+/// One addressable row of a spec: the section it sits in, its id, the whole
+/// line, and where that line is.
+///
+/// Adoption has to NAME a row before it can move one, and the text is carried
+/// verbatim because a row is MOVED, never retyped (`src/adopt:V1`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Row {
+    /// The section letter: `V`, `T`, `B` or `R`.
+    pub section: char,
+    /// The id as written, e.g. `V9`.
+    pub id: String,
+    /// The whole line, byte for byte.
+    pub text: String,
+    /// 1-indexed line in the source document.
+    pub line: usize,
+}
+
+/// Every addressable row of a spec, in document order.
+///
+/// One parser (V1): `declares` already fixed what a row LOOKS like -- an id
+/// opening the line, followed by `|` in a table or `:` in a statement -- and
+/// a second reading of that shape is the drift this node exists to prevent.
+#[must_use]
+pub fn rows(spec: &str) -> Vec<Row> {
+    let mut out = Vec::new();
+    let mut section = ' ';
+    for (n, line) in spec.lines().enumerate() {
+        if let Some(s) = section_letter(line) {
+            section = s;
+        } else if let Some(id) = row_id(line) {
+            out.push(Row {
+                section,
+                id,
+                text: line.to_string(),
+                line: n.saturating_add(1),
+            });
+        }
+    }
+    out
+}
+
+/// The letter of a `## §X NAME` heading, or `None` for any other line.
+fn section_letter(line: &str) -> Option<char> {
+    line.strip_prefix("## \u{a7}")?.chars().next()
+}
+
+/// The id a line OPENS with, by `declares`' rule.
+fn row_id(line: &str) -> Option<String> {
+    let kind = line.chars().next().filter(|k| "VBTR".contains(*k))?;
+    let digits: String = line
+        .chars()
+        .skip(1)
+        .take_while(char::is_ascii_digit)
+        .collect();
+    let id = format!("{kind}{digits}");
+    let rest = line.get(id.len()..).filter(|_| !digits.is_empty())?;
+    (rest.starts_with('|') || rest.starts_with(':')).then_some(id)
+}
+
+/// Rewrite the bare ids in one row so they still resolve after it MOVES.
+///
+/// A bare `V9` means "this file". Split the rows across nodes and that stops
+/// being true, so a citation whose target landed elsewhere gains that node's
+/// path (V7). The NUMBER never changes: every citation already names it, and
+/// renumbering would break each one (`src/adopt:V4`).
+///
+/// Three things are deliberately left alone, and each is a way to get this
+/// wrong:
+///
+/// - the row's OWN id, which opens the line and is a declaration, not a link
+/// - an already-namespaced `owner:V9`, which names its node already
+/// - the foreign slash form `microlith/V14`, which names another repository
+///   this tree cannot resolve and must never rewrite
+#[must_use]
+pub fn requalify(
+    line: &str,
+    here: &str,
+    homes: &std::collections::BTreeMap<String, String>,
+) -> String {
+    let mut out = String::new();
+    let mut token = String::new();
+    let mut prev = '\0';
+    for c in line.chars() {
+        if c.is_ascii_alphanumeric() {
+            token.push(c);
+            continue;
+        }
+        out.push_str(&qualified(&token, prev, here, homes));
+        token.clear();
+        prev = c;
+        out.push(c);
+    }
+    out.push_str(&qualified(&token, prev, here, homes));
+    out
+}
+
+/// One token, rewritten if it is a citation that has to travel.
+///
+/// `prev` is the character immediately before the token, and it carries the
+/// whole decision about whether this is a citation at all: `\0` is the start
+/// of the line (the row's own id), `:` means already namespaced, `/` means
+/// foreign. A backtick means the caller already wrote the quotes, so the
+/// replacement goes inside them rather than growing a second pair.
+fn qualified(
+    token: &str,
+    prev: char,
+    here: &str,
+    homes: &std::collections::BTreeMap<String, String>,
+) -> String {
+    if matches!(prev, '\0' | ':' | '/')
+        || row_id(&format!("{token}:")).is_none()
+    {
+        return token.to_string();
+    }
+    match homes.get(token) {
+        Some(home) if home != here && prev == '`' => format!("{home}:{token}"),
+        Some(home) if home != here => format!("`{home}:{token}`"),
+        _ => token.to_string(),
+    }
+}
+
+#[cfg(test)]
+mod row_tests {
+    use super::*;
+    use std::collections::BTreeMap;
+
+    const DOC: &str = "# SPEC\n\n## \u{a7}V INVARIANTS\n\nV1: a ! b\nV2: see V1\n\n## \u{a7}T TASKS\n\nid|status|task|cites\nT3|.|do it|V1\n";
+
+    #[test]
+    fn a_row_carries_its_section_and_its_line() {
+        let r = rows(DOC);
+        assert_eq!(r.len(), 3, "V1, V2, T3 -- and not the header row: {r:?}");
+        let [v1, _, t3] = r.as_slice() else {
+            unreachable!("three rows, and the pattern says so")
+        };
+        assert_eq!((v1.section, v1.id.as_str(), v1.line), ('V', "V1", 5));
+        assert_eq!((t3.section, t3.id.as_str(), t3.line), ('T', "T3", 11));
+        assert_eq!(t3.text, "T3|.|do it|V1", "the row is carried verbatim");
+    }
+
+    /// The header row of a `§T` table opens with `id`, and prose opens with
+    /// anything. Neither is a row, and reading one as a row would move it.
+    #[test]
+    fn only_a_line_an_id_opens_is_a_row() {
+        for line in ["id|status|task|cites", "V without a number: x", "Vx|.|y"]
+        {
+            assert!(rows(line).is_empty(), "not a row: {line}");
+        }
+    }
+
+    fn homes() -> BTreeMap<String, String> {
+        BTreeMap::from([
+            ("V1".to_string(), "src/fed".to_string()),
+            ("V2".to_string(), "src/spec".to_string()),
+        ])
+    }
+
+    /// The number survives the move; the owner is what gets added.
+    #[test]
+    fn a_citation_whose_target_moved_gains_that_node() {
+        assert_eq!(
+            requalify("V9: see V1 and V2", "src/spec", &homes()),
+            "V9: see `src/fed:V1` and V2",
+            "V2 stayed here, so its bare form still resolves"
+        );
+    }
+
+    /// Backticks already around the id are the canonical form, so the owner
+    /// goes INSIDE them. Writing a second pair produces ``src/fed:V1``, which
+    /// microlith reads as prose and `check` then calls a dead link.
+    #[test]
+    fn an_already_quoted_id_keeps_one_pair_of_backticks() {
+        assert_eq!(
+            requalify("T1|.|do it|`V1`", "src/spec", &homes()),
+            "T1|.|do it|`src/fed:V1`"
+        );
+    }
+
+    /// Three non-citations, and each is a distinct way to corrupt a spec: the
+    /// row's own id is a declaration, a namespaced id already has an owner,
+    /// and a slash form names another repository.
+    #[test]
+    fn a_declaration_a_namespaced_id_and_a_foreign_rule_are_untouched() {
+        for line in ["V1: a ! b", "x `src/tdd:V1` y", "z/V1"] {
+            assert_eq!(
+                requalify(line, "src/spec", &homes()),
+                line,
+                "must not rewrite: {line}"
+            );
+        }
+    }
+
+    /// A row that does not move needs no rewrite at all, and running the
+    /// rewrite twice must not stack owners (`src/adopt:V6`).
+    #[test]
+    fn requalifying_twice_changes_nothing_the_second_time() {
+        let once = requalify("V9: see V1", "src/spec", &homes());
+        assert_eq!(requalify(&once, "src/spec", &homes()), once);
+    }
+}

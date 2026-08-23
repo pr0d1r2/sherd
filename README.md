@@ -11,7 +11,7 @@
 [![gate steps 27](https://img.shields.io/badge/gate_steps-27-6E4AFF)](hk.pkl)
 [![coverage floor 92.2%](https://img.shields.io/badge/coverage_floor-%E2%89%A592.2%25-brightgreen)](.coverage)
 [![lint debt 14.7/KLoC](https://img.shields.io/badge/lint_debt-%E2%89%A414.7%2FKLoC-orange)](.lint-debt)
-[![federated nodes 18](https://img.shields.io/badge/federated_nodes-18-6E4AFF)](SPEC.md)
+[![federated nodes 19](https://img.shields.io/badge/federated_nodes-19-6E4AFF)](SPEC.md)
 
 [![nix flake](https://img.shields.io/badge/nix-flake-5277C3?logo=nixos&logoColor=white)](flake.nix)
 [![nixpkgs 26.05 (2026-08-20 - 5880666)](https://img.shields.io/badge/nixpkgs-26.05_(2026--08--20_--_5880666)-5277C3?logo=nixos&logoColor=white)](flake.lock)
@@ -87,6 +87,7 @@ nodes it was missing while this sentence claimed otherwise.
 |   |-- tokens
 |   |-- spec
 |   |-- fed
+|   |-- adopt
 |   |-- lens
 |   |-- ollama
 |   |-- tdd
@@ -114,6 +115,7 @@ graph TD
     src_tokens[tokens]
     src_spec[spec]
     src_fed[fed]
+    src_adopt[adopt]
     src_lens[lens]
     src_ollama[ollama]
     src_tdd[tdd]
@@ -131,6 +133,7 @@ graph TD
     src --> src_tokens
     src --> src_spec
     src --> src_fed
+    src --> src_adopt
     src --> src_lens
     src --> src_ollama
     src --> src_tdd
@@ -157,6 +160,7 @@ knows when to stop looking. Also generated, by `sherd graph --table`:
 | `src/tokens` | `itok` facade, counts w/ method label, entry cost, working budget | spec structure, federation edges |
 | `src/spec` | `microlith` facade, §-section split, structural check, fmt | token counts, `§F`/`§N` |
 | `src/fed` | `§F` parse, edges, chain root→node, `SPEC.md` discovery | counting, rendering |
+| `src/adopt` | foreign single-file spec → federation: row placement, citation rewrite, conservation | structure discovery (`fed`), parsing (`spec`), counting (`tokens`) |
 | `src/lens` | pack assembly, depth `rule`\|`why`, budget verdict | parsing, counting internals |
 | `src/ollama` | local endpoint client, `num_ctx`, fence extraction | prompt construction, loop control |
 | `src/tdd` | red→judge→green→gate→repair loop, source region edits | HTTP, token counting |
@@ -397,6 +401,7 @@ line fails the gate (`src/cli:V7`, after `src/cli:B2`).
 | `sherd coverage [--check\|--record]` | coverage floor vs .coverage |
 | `sherd validate` | DAG + ids + ceilings + slice drift, one verdict |
 | `sherd split [dir]` | propose a federation split. writes nothing |
+| `sherd adopt <dir> [--map FILE] [--check]` | migrate a single-file SPEC.md onto a federation |
 | `sherd sync [dir] [--check]` | regenerate §N from §F. exit 1 if it wrote |
 | `sherd route <query>` | which node owns a question. 0 hit · 2 miss · 3 ambiguous |
 | `sherd review [rev]` | mechanical checks on what a commit added (default HEAD) |

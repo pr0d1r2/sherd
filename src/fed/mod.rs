@@ -958,3 +958,100 @@ mod nav_tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
+
+/// One node the federation DECLARES, with the lens that declares it.
+///
+/// The path is relative to the repository root -- `src/fed`, or `.` for the
+/// root itself -- which is the form a citation uses (`src/spec:V7`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Home {
+    /// Path from the root, `.` for the root node.
+    pub node: String,
+    /// What the declaring `§F` row says this node owns.
+    pub owns: String,
+    /// What it says the node does NOT own.
+    pub not_owns: String,
+}
+
+/// Every node the `§F` tables declare, root first.
+///
+/// This is the set a row may be placed ONTO (`src/adopt:V3`). It is read from
+/// the TABLES rather than from the directory tree, and the difference is the
+/// point: a dir carrying a `SPEC.md` that no parent `§F` row names is an
+/// orphan (T8), and placing a row there would hide it from every reader who
+/// descends the federation. V11 and V12 make the declared set exhaustive and
+/// disjoint, so it is also the only set worth proposing from.
+///
+/// The root is always a home, because a row nobody claims stays there and is
+/// NAMED there rather than left quietly (`src/adopt:V2`).
+#[must_use]
+pub fn declared(root: &Path) -> Vec<Home> {
+    let mut out = vec![Home {
+        node: ".".to_string(),
+        owns: String::new(),
+        not_owns: String::new(),
+    }];
+    for node in discover(root) {
+        let Ok(text) = std::fs::read_to_string(node.join("SPEC.md")) else {
+            continue;
+        };
+        let rel = node.strip_prefix(root).unwrap_or(&node);
+        out.extend(edges(&text).into_iter().map(|e| Home {
+            node: join_rel(rel, &e.dir),
+            owns: e.owns,
+            not_owns: e.not_owns,
+        }));
+    }
+    out.sort_by(|a, b| a.node.cmp(&b.node));
+    out.dedup_by(|a, b| a.node == b.node);
+    out
+}
+
+/// A child's path from the root: the parent's own relative path, then the
+/// `§F` cell. The root's relative path is empty, and joining onto it would
+/// produce a leading separator that no citation uses.
+fn join_rel(parent: &Path, child: &str) -> String {
+    let p = parent.to_string_lossy();
+    if p.is_empty() {
+        child.to_string()
+    } else {
+        format!("{p}/{child}")
+    }
+}
+
+#[cfg(test)]
+mod declared_tests {
+    use super::*;
+
+    /// The declared set is read from the `§F` TABLES, and this repository is
+    /// its own fixture: `src` is declared by root, `src/fed` by `src`, and
+    /// the root itself is always present as the home for an unclaimed row.
+    #[test]
+    fn the_declared_set_is_what_the_tables_name() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let homes = declared(root);
+        let names: Vec<&str> = homes.iter().map(|h| h.node.as_str()).collect();
+        assert!(names.contains(&"."), "root is always a home: {names:?}");
+        assert!(names.contains(&"src"), "{names:?}");
+        assert!(names.contains(&"src/fed"), "{names:?}");
+        assert!(
+            homes
+                .iter()
+                .any(|h| h.node == "src/fed" && !h.owns.is_empty()),
+            "a home carries the lens that declared it"
+        );
+    }
+
+    /// V12 says two rows must not name one dir, and `discover` walks a tree
+    /// where a node can be reached twice. The set is deduped so a row cannot
+    /// be offered two identical homes and called ambiguous.
+    #[test]
+    fn each_node_appears_once() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let mut names: Vec<String> =
+            declared(root).into_iter().map(|h| h.node).collect();
+        let before = names.len();
+        names.dedup();
+        assert_eq!(before, names.len(), "duplicate home: {names:?}");
+    }
+}
