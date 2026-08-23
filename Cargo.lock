@@ -40,6 +40,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "bbx-dev"
+version = "0.1.0"
+dependencies = [
+ "bbx-cli",
+]
+
+[[package]]
 name = "bit-set"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"

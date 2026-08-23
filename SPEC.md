@@ -12,6 +12,7 @@ TARGET: most modules BUILDABLE on the 20B (V106) — ⊥ merely readable by it. 
 
 dir|owns|⊥owns|tokens
 src|code nodes — tokens, spec, fed, lens facades & logic|inference harness, endpoint config|-
+dev|repo-maintaining tooling, `publish = false` — README generation|anything a consumer installs|-
 
 ## §C CONSTRAINTS
 
@@ -305,6 +306,8 @@ T94|x|promote `src/assay` — SIBLING @ depth 2 (V110). owns the corpora + the g
 T95|x|split METHOD from FINDINGS w/ T94. RESOLVED as: `.:V103`/`.:V108` STAY @ root & the `src/assay` dupes deleted — the checker cannot express a cross-node cite in the CITES column, so an invariant cited by a root `§T` row ! live @ root. the harness cluster (`.:tdd:V27`→`assay:V1`, T17/T18→T5/T6, B25→B1) moved whole. root T74-T84 STAY: moving them renumbers & dangles every `.:T82`-style cite, for a saving V110 measures @ ~1 tok/chain/row|V110,B14
 T96|x|move the `#[ignore]`d titrations from `src/assay` inline tests to `tests/` — an ignored body counts in the coverage denominator & never runs, so every experiment LOWERS the number & a better instrument reads worse (`.coverage` records 75.50→75.11). integration-level anyway|V16,R50
 T97|x|build the AMBIGUITY DETECTOR (V112): ∀ `§V` row ask for a test & an impl BLIND, compile them against each other, flag DISAGREEMENT as an underspecified row. a REPORT ⊥ a gate. it grades the spec, ⊥ the model|V112,R54
+T98|.|`bbx-dev docs` — generate the README Commands section from the binary. README names 5 unbuilt verbs & omits 7 built ones ∴ the prose is already behind the code|`dev:V1`
+T99|.|move `gate_with`/`cargo_bin` tdd → `src/land` (owner, & the only non-tdd caller) ∴ `--no-default-features` builds, + gate it in `hk.pkl` (B15)|V74,B15
 
 ## §B BUGS
 
@@ -322,3 +325,4 @@ B11|2026-08-19|V50 declared a `.rs` file code ceiling from the first commit & `c
 B12|2026-08-19|`AGENTS.md` says "Branch only. Never commit to `main`" & nothing enforces it ∴ ~20 commits landed on `main` in one session, mine, unchallenged & unremarked until a reader asked about something else. the rule was READ by the agent it governs & still lost to convenience|V74 again — a rule w/ no runner is a comment. T88 gates it in the PRE-COMMIT set only (⊥ `all`: CI runs `check --all` on `main` & would fail itself)
 B13|2026-08-19|TWO readings of "parse Rust source" shipped across nodes: `src/tdd` has `signatures` (declarations + shapes) · `expected_calls` (call sites) · `split_module` (test boundary), `src/review` has `public_fns` (declarations) · `unwired` (declarations vs calls). both line-oriented heuristics over the same text, both already w/ §B rows for reading it wrong (`src/tdd:B13`, `src/tdd:B18`, `src/review:B2`) ∴ the founding defect §C names, in the repo that exists to end it. unseen until the T85 density map crossed a node boundary — no per-file gate can see a duplication that spans two files|T93 promotes `src/code` as the ONE owner. `split_module`'s own doc already says "two readings of one rule is the defect this project exists to end"
 B14|2026-08-19|writing `src/assay/SPEC.md` in T94 I RESTATED 3 invariants that already existed — `V1`≡`.:tdd:V27`, `V3`≡`.:V103`, `V4`≡`.:V108` — instead of moving them ∴ two readings of one rule, the founding defect §C names, introduced ONE COMMIT after B13 recorded it & inside a node created to END a duplication. a new node's spec is written from the concern, ⊥ from the rows the concern already had, & nothing checks that|V74. T95 deleted the dupes. GENERALLY: promoting a node ! START by listing the rows that already own the concern — authoring fresh guarantees a second reading
+B15|2026-08-23|`cargo build --no-default-features` FAILS — 4 errors, `src/assay` & `src/land` reach `crate::tdd` which is `ollama`-gated ∴ the featureless build has been broken since the feature split, while `Cargo.toml` DOCUMENTS it as "the deterministic, networkless core that §C demands". a claim in a manifest w/ no runner, unseen ∵ nothing ever built that configuration|T99 moves `gate_with`/`cargo_bin` to `src/land`, their owner & only non-tdd caller, then gates the build in `hk.pkl` so it cannot regress. V74 again — & found by writing `default-features = false` in `dev/Cargo.toml`, ⊥ by any check

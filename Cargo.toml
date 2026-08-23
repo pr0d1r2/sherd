@@ -1,3 +1,13 @@
+# One PUBLISHED crate, and one member that is never published. §C says "one
+# crate" and this is the amendment to it: `dev/` holds tooling that maintains
+# THIS repository -- it reads our files and writes our docs, and a consumer of
+# `bbx-cli` has no use for any of it. A second `[[bin]]` here would have
+# shipped in the tarball and landed on their PATH. A workspace member with
+# `publish = false` cannot, and needs no `cfg` gate or `exclude` entry kept in
+# sync to stay out.
+[workspace]
+members = ["dev"]
+
 [package]
 name = "bbx-cli"
 version = "0.1.0"
