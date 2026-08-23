@@ -14,6 +14,12 @@ dir|owns|⊥owns|tokens
 src|code nodes — tokens, spec, fed, lens facades & logic|inference harness, endpoint config|-
 dev|repo-maintaining tooling, `publish = false` — README generation|anything a consumer installs|-
 
+## §N NAV
+
+rel|path|lens
+up|-|-
+self|.|-
+
 ## §C CONSTRAINTS
 
 - lang: Rust **edition 2024**. stable. MSRV **1.95** = the FLEET PIN (`nixpkgs-lock` → nixos-26.05). ⊥ a number copied from a sibling: `itok`/`microlith` declare 1.96 & MEASURED compile clean on 1.95 ∴ their floor is a mirror of an old pin, ⊥ a minimum.
@@ -45,7 +51,7 @@ dev|repo-maintaining tooling, `publish = false` — README generation|anything a
 - cmd: `sherd route "<query>"` → dir + the words that matched. RANKED: the node matching MORE of the query wins, a tie is ambiguous, & ROOT is never an answer. 0 hit / 2 miss / 3 ambiguous
 - cmd: `sherd check [dir]` → drift spec↔code + file ceilings. 0 clean / 1 violation / 2 usage
 - cmd: `sherd split <path>` → propose split of over-ceiling file|node. ⊥ write w/o `--apply` (0.4)
-- cmd: `sherd sync [dir]` → regen `§N` from parent `§F`. exit 1 if wrote (0.4)
+- cmd: `sherd sync [dir] [--check]` → regen `§N` from the `§F` above it. exit 1 IF IT WROTE, ∵ a generated section that had to change means the committed tree was STALE. `--check` reports & writes ⊥
 - cmd: `sherd graph [--dot|--json|--mermaid]` → federation DAG. `--mermaid` = the generated architecture diagram
 - cmd: `sherd lens <dir> [--facet set|setting|human|all]` → default `set`
 - cmd: `sherd budget [dir]` → node/chain/lens/file token table. exit 1 over

@@ -337,3 +337,110 @@ mod scaffold_tests {
         assert!(out.contains("lens|WHAT IT OWNS|WHAT IT DOES \u{22a5} OWN"));
     }
 }
+
+/// Replace a `§`-section's body, or insert the section after `after`.
+///
+/// GENERATED sections need one writer, and this is it: `sync` must be able to
+/// rewrite `§N` without touching a byte of anything else, including on a file
+/// that has no `§N` yet. Insertion goes after the named section rather than
+/// at the end, because FORMAT fixes the order and a section appended below
+/// `§B` is in the wrong place the moment it is written.
+///
+/// Rebuilt from the SECTION LIST rather than by splicing strings, and the
+/// reason is `.:cli:B4`: the splice version appended one newline per run, so
+/// `sync` was never idempotent and every commit grew the file. Rendering
+/// every section with exactly one blank line between them makes a second run
+/// a no-op BY CONSTRUCTION rather than by careful string handling.
+///
+/// Returns the text unchanged when `after` is absent, since a document
+/// without the anchor has not opted in and guessing a position would be an
+/// edit nobody asked for.
+#[must_use]
+pub fn upsert_section(
+    text: &str,
+    name: &str,
+    body: &str,
+    after: &str,
+) -> String {
+    let head = format!("## \u{a7}{name}");
+    let anchor = format!("## \u{a7}{after}");
+    let preamble: String = text
+        .lines()
+        .take_while(|l| !l.starts_with("## \u{a7}"))
+        .map(|l| format!("{l}\n"))
+        .collect();
+
+    // REPLACE wins over insert, and the order matters: the anchor sits
+    // BEFORE the section in a well-formed document, so an insert-first loop
+    // adds a second copy every run rather than rewriting the first.
+    let exists = sections(text).iter().any(|(h, _)| h.starts_with(&head));
+    let mut kept: Vec<String> = Vec::new();
+    let mut placed = false;
+    for (heading, sec_body) in sections(text) {
+        if exists && heading.starts_with(&head) {
+            kept.push(body.trim_end().to_string());
+            placed = true;
+            continue;
+        }
+        kept.push(format!("{heading}\n{}", sec_body.trim_end()));
+        if !exists && heading.starts_with(&anchor) {
+            kept.push(body.trim_end().to_string());
+            placed = true;
+        }
+    }
+    if !placed {
+        return text.to_string();
+    }
+    format!("{}{}\n", preamble.trim_end_matches('\n'), {
+        let joined = kept.join("\n\n");
+        format!("\n\n{joined}")
+    })
+}
+
+#[cfg(test)]
+mod upsert_tests {
+    use super::*;
+
+    const DOC: &str = "# SPEC\n\n## \u{a7}G GOAL\n\ng\n\n## \u{a7}F FEDERATION\n\nf\n\n## \u{a7}V INVARIANTS\n\nv\n";
+
+    #[test]
+    fn an_absent_section_is_inserted_after_its_anchor() {
+        let out = upsert_section(DOC, "N NAV", "## \u{a7}N NAV\n\nn\n", "F");
+        assert!(out.contains("## \u{a7}N NAV"));
+        let n = out.find("\u{a7}N").unwrap_or(0);
+        let f = out.find("\u{a7}F").unwrap_or(0);
+        let v = out.find("\u{a7}V").unwrap_or(0);
+        assert!(f < n && n < v, "§N sits between §F and §V:\n{out}");
+    }
+
+    #[test]
+    fn an_existing_section_is_replaced_and_nothing_else_moves() {
+        let once = upsert_section(DOC, "N NAV", "## \u{a7}N NAV\n\nold\n", "F");
+        let twice =
+            upsert_section(&once, "N NAV", "## \u{a7}N NAV\n\nnew\n", "F");
+        assert!(twice.contains("new"));
+        assert!(!twice.contains("old"));
+        assert_eq!(twice.matches("\u{a7}N NAV").count(), 1, "one section only");
+        assert!(twice.contains("## \u{a7}G GOAL\n\ng\n"), "§G untouched");
+        assert!(
+            twice.contains("## \u{a7}V INVARIANTS\n\nv\n"),
+            "§V untouched"
+        );
+    }
+
+    /// Writing twice changes nothing the second time, which is what lets
+    /// `sync` report "wrote" honestly.
+    #[test]
+    fn upserting_the_same_body_is_idempotent() {
+        let once = upsert_section(DOC, "N NAV", "## \u{a7}N NAV\n\nn\n", "F");
+        let twice =
+            upsert_section(&once, "N NAV", "## \u{a7}N NAV\n\nn\n", "F");
+        assert_eq!(once, twice);
+    }
+
+    #[test]
+    fn a_document_without_the_anchor_is_returned_unchanged() {
+        let doc = "# SPEC\n\n## \u{a7}G GOAL\n\ng\n";
+        assert_eq!(upsert_section(doc, "N NAV", "x", "F"), doc);
+    }
+}

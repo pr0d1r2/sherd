@@ -4,6 +4,13 @@
 
 Tooling that maintains THIS repository & ships to nobody. `sherd-dev`, a `publish = false` workspace member.
 
+## §N NAV
+
+rel|path|lens
+up|.|-
+self|dev|repo-maintaining tooling, `publish = false` — README generation
+sib|src|code nodes — tokens, spec, fed, lens facades & logic
+
 ## §C CONSTRAINTS
 
 - ⊥ published. a consumer of `sherd` ! ever receive these verbs.

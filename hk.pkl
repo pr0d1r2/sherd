@@ -103,6 +103,15 @@ local fast = new Mapping<String, Step> {
     check = "cargo run -q --bin sherd -- slice --check || { echo 'hk: a distilled slice has drifted from its source. Run `sherd slice` to regenerate, then `git add` the result. Never hand-edit a generated slice -- that IS the drift.' >&2; exit 1; }"
     fix = "cargo run -q --bin sherd -- slice"
   }
+  // `§F` is authoritative and `§N` is generated (`.:V36`), so a hand-edited
+  // or simply stale `§N` is drift the same way a distilled slice is. CHECK
+  // mode reports; the fix half rewrites.
+  ["nav"] {
+    glob = List("**/SPEC.md")
+    depends = List("test")
+    check = "cargo run -q --bin sherd -- sync --check || { echo 'hk: a §N table no longer matches the §F above it. Run `sherd sync` to regenerate, then `git add` the result -- §N is generated and never hand-edited (.:V36).' >&2; exit 1; }"
+    fix = "cargo run -q --bin sherd -- sync"
+  }
   ["check"] {
     glob = List("**/*.rs", "**/SPEC.md", ".spec-records")
     depends = List("slice")

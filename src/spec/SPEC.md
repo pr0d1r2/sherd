@@ -4,6 +4,26 @@
 
 `SPEC.md` structure. Sole call site for `microlith`.
 
+## §N NAV
+
+rel|path|lens
+up|.|-
+up|src|code nodes — tokens, spec, fed, lens facades & logic
+self|src/spec|`microlith` facade, §-section split, structural check, fmt
+sib|src/tokens|`itok` facade, counts w/ method label, entry cost, working budget
+sib|src/fed|`§F` parse, edges, chain root→node, `SPEC.md` discovery
+sib|src/lens|pack assembly, depth `rule`|`why`, budget verdict
+sib|src/ollama|local endpoint client, `num_ctx`, fence extraction
+sib|src/tdd|red→judge→green→gate→repair loop, source region edits
+sib|src/plan|open `§T` rows, horizon, confidence, `apply` one step
+sib|src/review|mechanical checks on what `apply` committed
+sib|src/state|one idempotent cached store — pace, telemetry, applied rows
+sib|src/slice|distil a document to the part needed to ACT, generated
+sib|src/land|run branch → `main` when believability earns it
+sib|src/cli|arg dispatch, usage, exit codes
+sib|src/code|read Rust source as text — split, public fns, call detection, signatures
+sib|src/assay|a corpus + a compiler grader — measure WHETHER the model can, ⊥ make it
+
 ## §C CONSTRAINTS
 
 - ⊥ reimpl parse, fmt, id, citation check — `microlith` owns them, zero-dep pure fn (R3).
@@ -34,3 +54,4 @@ T7|x|V5 runner — `microlith` reached only through its root, in every `src/` fi
 id|date|cause|fix
 B1|2026-08-05|facade re-exported through the dep's INNER path — `microlith::violation::{Violation, NAMESPACE}` — & `check` recomposed `{NAMESPACE}/{rule}: {msg}`, which `Violation: Display` already prints. the dep trimmed its lib to root verbs ∴ E0603 & a HEAD that ⊥ compile (`.:B5`). the recomposition was a 2nd reading of an id the dep owns — V1 applied to output, ⊥ only to logic|import `microlith::Violation`; print `{v}` w/ the caller's coords prefixed. V5, runner @ T7
 T8|x|`scaffold(dir, children)` — the `SPEC.md` skeleton: 4 sections, `§F` rows from child dirs, ZERO ids & no inference. its test is `check` on its own output, ⊥ a string compare|V6
+T9|x|`upsert_section` — the ONE writer for a generated section: replaces in place or inserts after an anchor, ⊥ appends. FORMAT fixes the order ∴ a section appended below `§B` is in the wrong place the moment it is written|V6

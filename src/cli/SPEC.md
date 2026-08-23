@@ -4,6 +4,26 @@
 
 Arg dispatch and exit codes. `main.rs` is a shim over `run`.
 
+## §N NAV
+
+rel|path|lens
+up|.|-
+up|src|code nodes — tokens, spec, fed, lens facades & logic
+self|src/cli|arg dispatch, usage, exit codes
+sib|src/tokens|`itok` facade, counts w/ method label, entry cost, working budget
+sib|src/spec|`microlith` facade, §-section split, structural check, fmt
+sib|src/fed|`§F` parse, edges, chain root→node, `SPEC.md` discovery
+sib|src/lens|pack assembly, depth `rule`|`why`, budget verdict
+sib|src/ollama|local endpoint client, `num_ctx`, fence extraction
+sib|src/tdd|red→judge→green→gate→repair loop, source region edits
+sib|src/plan|open `§T` rows, horizon, confidence, `apply` one step
+sib|src/review|mechanical checks on what `apply` committed
+sib|src/state|one idempotent cached store — pace, telemetry, applied rows
+sib|src/slice|distil a document to the part needed to ACT, generated
+sib|src/land|run branch → `main` when believability earns it
+sib|src/code|read Rust source as text — split, public fns, call detection, signatures
+sib|src/assay|a corpus + a compiler grader — measure WHETHER the model can, ⊥ make it
+
 ## §C CONSTRAINTS
 
 - dispatch only. logic lives in the node that owns it (`.:V41`).
@@ -19,6 +39,7 @@ V5: repo root = the dir holding `.git` AND `SPEC.md`, ⊥ CWD. `sherd` is a shim
 V6: a test reaches only the repo it was HANDED. V5 walks up ∴ a test naming no fixture finds whatever tree the runner sits in, & the crate root IS one — green about its LOCATION, ⊥ the code (B1)
 V7: usage names EVERY verb that dispatches, ⊥ merely only verbs that exist (V3's converse, B2). a reachable verb missing from usage is undiscoverable @ the one place a user looks
 V12: ABSENCE is ⊥ a finding. a check over an OPTIONAL artefact reports "none required" & counts 0 when it is missing, & fails only when it exists & cannot be read. B3 is the 2 halves conflated: a fresh `init` tree failed `validate` ∵ it had no slice registry to drift from
+V13: a GENERATOR is tested by running it TWICE. once proves it writes; the 2nd run is what proves it wrote the SAME thing, & `sync`·`slice`·`sherd-dev readme` are all gates whose `--check` half is meaningless if the fix half is ⊥ a fixed point (B4)
 
 ## §T TASKS
 
@@ -41,3 +62,4 @@ B2|2026-08-23|`oneshot` DISPATCHES & is absent from usage. V3 binds one directio
 T10|x|`sherd validate` — 1 verdict over structural + edges + ceilings + slice drift, COMPOSED from the owners (`.:V72`), & REPORTS what it examined ⊥ only what failed|V1,`.:V48`
 T11|x|`sherd route <query>` — exit codes ARE the answer: 0 one node · 2 none · 3 several. rounding ambiguous to its 1st match makes the interesting case identical to the certain one|V1,`.:plan:V15`
 B3|2026-08-23|`validate` counted a MISSING `.sherd-slices` as 1 drift ∴ a repo `sherd init` had just scaffolded FAILED `sherd validate` — the 2 verbs of rung 0.2 & 0.3 contradicting each other on a fresh tree. absence is LEGAL & was read as a finding; the error path counted 1 w/o asking WHICH error|V12. a registry that cannot be READ stays a failure; one that does ⊥ exist reports "none required" & counts 0. GENERALLY: an error branch that counts a failure ! distinguish "could ⊥ look" from "⊥ there"
+B4|2026-08-23|`sync` was ⊥ IDEMPOTENT: `upsert_section` spliced strings & appended 1 newline per run ∴ every §N grew by a blank line & `sync` reported "rewritten" forever. a 2nd defect underneath: the anchor (`§F`) precedes the section (`§N`) in a well-formed doc ∴ the insert branch fired BEFORE the replace branch & a 2nd `§N` was appended each run. caught by a test asserting the 2nd run is a no-op, ⊥ by running it once|V13. rebuilt on the SECTION LIST — parse, replace-or-insert, re-render w/ exactly 1 blank line between sections ∴ idempotence holds BY CONSTRUCTION. replace is checked BEFORE insert. GENERALLY: a generator ! be tested by running it TWICE; once proves only that it writes

@@ -22,6 +22,7 @@ sherd -- federated SPEC.md for small-context local models
   sherd fed [dir]        the federation edges declared by a node
   sherd check [dir]      microlith structural check of every node
   sherd validate         DAG + ids + ceilings + slice drift, one verdict
+  sherd sync [dir] [--check]  regenerate §N from §F. exit 1 if it wrote
   sherd route <query>    which node owns a question. 0 hit · 2 miss · 3 ambiguous
   sherd review [rev]     mechanical checks on what a commit added (default HEAD)
   sherd slice [--check|--list]  regenerate distilled slices from their sources
@@ -88,6 +89,11 @@ pub fn run_args(mut args: Vec<String>) -> ExitCode {
         }
         Some("check") => check(&root),
         Some("validate") => validate(&root),
+        Some("sync") => {
+            let check = args.iter().any(|a| a == "--check");
+            let dir = args.get(1).filter(|a| !a.starts_with("--"));
+            sync_cmd(&root, dir.map(|d| root.join(d)).as_ref(), check)
+        }
         Some("route") => match args.get(1) {
             Some(q) => route_cmd(&root, q),
             None => usage("route needs a query"),
@@ -298,6 +304,95 @@ fn init_dir(root: &Path, args: &[String]) -> PathBuf {
         .skip(1)
         .find(|a| !a.starts_with("--"))
         .map_or_else(|| root.to_path_buf(), |d| root.join(d))
+}
+
+/// `sherd sync [dir]` -- regenerate `§N` from the `§F` tables above it.
+///
+/// Exit 1 IF IT WROTE, which reads backwards until you see it from CI: a
+/// generated section that had to change means the committed tree was stale,
+/// and a run that silently fixed it would let the staleness ship. Exit 0 is
+/// "already correct". `.:V36` makes `§F` authoritative, so this never reads
+/// an existing `§N` to decide anything -- it computes what one must say.
+fn sync_cmd(root: &Path, dir: Option<&PathBuf>, check: bool) -> ExitCode {
+    let targets = dir.map_or_else(|| fed::discover(root), |d| vec![d.clone()]);
+    let Ok(wrote) = sync_all(root, &targets, check) else {
+        return ExitCode::from(1);
+    };
+    println!(
+        "\n  {} nodes examined · {wrote} {}",
+        targets.len(),
+        if check { "stale" } else { "rewritten" }
+    );
+    if wrote == 0 {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::from(1)
+    }
+}
+
+/// Every node, and how many needed a rewrite. `Err` when one could not be
+/// read or written -- an unreadable node is not "already correct", and
+/// counting it as clean is the vacuous pass `.:V48` forbids.
+fn sync_all(
+    root: &Path,
+    targets: &[PathBuf],
+    check: bool,
+) -> Result<usize, ()> {
+    let mut wrote = 0usize;
+    for node in targets {
+        match sync_node(root, node, check) {
+            Ok(true) => {
+                sync_report(node, check);
+                wrote = wrote.saturating_add(1);
+            }
+            Ok(false) => {}
+            Err(e) => {
+                eprintln!("sherd: {e}");
+                return Err(());
+            }
+        }
+    }
+    Ok(wrote)
+}
+
+/// What a changed node is called depends on which half ran: `--check` found
+/// it STALE, the fix half REWROTE it.
+fn sync_report(node: &Path, check: bool) {
+    let verb = if check { "STALE" } else { "rewritten" };
+    println!("{}: §N {verb}", node.display());
+}
+
+/// Where `§N` goes in a document that has none yet.
+///
+/// Beside `§F` where there is one. A LEAF has no `§F` at all -- that is what
+/// makes it a leaf -- and `.:V34` still requires its `§N`, so the anchor
+/// falls back to `§G`, the one section every spec has.
+fn nav_anchor(text: &str) -> &'static str {
+    if text.contains("## \u{a7}F") {
+        "F FEDERATION"
+    } else {
+        "G GOAL"
+    }
+}
+
+/// One node's `§N`. `Ok(true)` when the file changed.
+fn sync_node(root: &Path, node: &Path, check: bool) -> Result<bool, String> {
+    let path = node.join("SPEC.md");
+    let text = std::fs::read_to_string(&path)
+        .map_err(|e| format!("{}: {e}", path.display()))?;
+    let body = fed::nav_section(&fed::nav(root, node));
+    let next = spec::upsert_section(&text, "N NAV", &body, nav_anchor(&text));
+    if next == text {
+        return Ok(false);
+    }
+    // `--check` REPORTS. CI runs the checker, and a checker that repairs what
+    // it finds is a green tick over a diff nobody has seen.
+    if check {
+        return Ok(true);
+    }
+    std::fs::write(&path, next)
+        .map_err(|e| format!("{}: {e}", path.display()))?;
+    Ok(true)
 }
 
 /// A verb this build does not carry, named as such.
@@ -1484,6 +1579,47 @@ mod tests {
         assert_eq!(route_cmd(root, "sprockets"), ExitCode::SUCCESS);
         assert_eq!(route_cmd(root, "wombat"), ExitCode::from(2));
         assert_eq!(route_cmd(root, "widgets gizmos"), ExitCode::from(3));
+    }
+
+    /// `sync` is idempotent, `--check` never writes, and a stale `§N` is
+    /// reported by both. The exit code inverts on purpose: writing means the
+    /// committed tree WAS stale, which CI has to hear about.
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "the assertions are a SEQUENCE -- stale, then check writes \
+                  nothing, then the fix writes, then it is a no-op -- and \
+                  splitting them into separate tests loses the ordering, \
+                  which is the property under test"
+    )]
+    fn sync_writes_once_then_reports_clean() {
+        let repo = routing_fixture("cli-sync");
+        let root = repo.path();
+        write_spec(
+            root,
+            "alpha",
+            "widgets\n\n## \u{a7}F FEDERATION\n\ndir|owns|\u{22a5}owns|tokens\ndeep|the deep bit|the rest|-",
+        );
+        let Ok(()) = std::fs::create_dir_all(root.join("alpha").join("deep"))
+        else {
+            unreachable!("a nested dir is creatable")
+        };
+
+        assert_eq!(sync_cmd(root, None, true), ExitCode::from(1), "stale");
+        let before = std::fs::read_to_string(root.join("SPEC.md")).ok();
+        assert_eq!(
+            std::fs::read_to_string(root.join("SPEC.md")).ok(),
+            before,
+            "--check wrote to the tree"
+        );
+
+        assert_eq!(sync_cmd(root, None, false), ExitCode::from(1), "wrote");
+        assert_eq!(
+            sync_cmd(root, None, false),
+            ExitCode::SUCCESS,
+            "idempotent"
+        );
+        assert_eq!(sync_cmd(root, None, true), ExitCode::SUCCESS, "clean");
     }
 
     /// The edge half. A `§F` row naming a grandchild skips a level, which is

@@ -1437,6 +1437,12 @@ mod route_tests {
     /// alone satisfies "has words", and it did while `goal_words` silently
     /// returned nothing for every node.
     #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "the count and the CONTENT are one property here: a \
+                  vocabulary of the right size built from directory names \
+                  alone is exactly the defect this asserts against"
+    )]
     fn a_vocabulary_is_derived_for_every_node_the_walk_finds() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
         let vocab = vocabulary(root);

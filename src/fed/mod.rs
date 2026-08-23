@@ -699,3 +699,182 @@ mod tests {
         );
     }
 }
+
+/// One `§N NAV` row: where a node sits, and the one-line lens of what it
+/// finds there.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Nav {
+    /// `up` an ancestor · `self` this node · `sib` a co-child.
+    pub rel: String,
+    pub path: String,
+    pub lens: String,
+}
+
+/// The `§N` table a node should carry, DERIVED from its ancestors' `§F`.
+///
+/// `§F` is authoritative and `§N` is generated (`.:V36`), so this never reads
+/// an existing `§N` -- it computes what one must say. The lens of each row is
+/// a verbatim copy of that directory's `§F` row `owns` cell (`.:V38`): one
+/// source, and a nav table that cannot describe a node differently from the
+/// table that declares it.
+///
+/// Root gets `up = -` and `self = .` with no siblings (`.:V35`); every other
+/// node gets one `up` per ancestor, exactly one `self`, and one `sib` per
+/// co-child (`.:V34`).
+#[must_use]
+fn nav_root() -> Vec<Nav> {
+    vec![
+        Nav {
+            rel: "up".into(),
+            path: "-".into(),
+            lens: "-".into(),
+        },
+        Nav {
+            rel: "self".into(),
+            path: ".".into(),
+            lens: "-".into(),
+        },
+    ]
+}
+
+#[must_use]
+pub fn nav(root: &Path, node: &Path) -> Vec<Nav> {
+    let rel = node.strip_prefix(root).unwrap_or(node);
+    if rel.as_os_str().is_empty() {
+        return nav_root();
+    }
+    let mut rows = Vec::new();
+    let mut cur = root.to_path_buf();
+    rows.push(Nav {
+        rel: "up".into(),
+        path: ".".into(),
+        lens: "-".into(),
+    });
+    for part in rel.components() {
+        let parent = cur.clone();
+        cur = cur.join(part);
+        let name = part.as_os_str().to_string_lossy().to_string();
+        let lens = lens_of(&parent, &name);
+        let path = cur
+            .strip_prefix(root)
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_else(|_| name.clone());
+        if cur == node {
+            rows.push(Nav {
+                rel: "self".into(),
+                path,
+                lens,
+            });
+            rows.extend(siblings(&parent, root, &name));
+        } else {
+            rows.push(Nav {
+                rel: "up".into(),
+                path,
+                lens,
+            });
+        }
+    }
+    rows
+}
+
+/// The `owns` cell a parent's `§F` gives one child, or `-` when the parent
+/// declares no row for it. `-` is honest: the child exists and its parent
+/// has not said what it owns.
+fn lens_of(parent: &Path, child: &str) -> String {
+    let Ok(text) = std::fs::read_to_string(parent.join("SPEC.md")) else {
+        return "-".into();
+    };
+    edges(&text)
+        .into_iter()
+        .find(|e| e.dir == child)
+        .map_or_else(|| "-".into(), |e| e.owns)
+}
+
+/// Every co-child of `name` under `parent`, as `sib` rows.
+fn siblings(parent: &Path, root: &Path, name: &str) -> Vec<Nav> {
+    let Ok(text) = std::fs::read_to_string(parent.join("SPEC.md")) else {
+        return Vec::new();
+    };
+    let base = parent.strip_prefix(root).unwrap_or(parent);
+    edges(&text)
+        .into_iter()
+        .filter(|e| e.dir != name)
+        .map(|e| Nav {
+            rel: "sib".into(),
+            path: base.join(&e.dir).to_string_lossy().to_string(),
+            lens: e.owns,
+        })
+        .collect()
+}
+
+/// The `§N` section as text, header row included.
+#[must_use]
+pub fn nav_section(rows: &[Nav]) -> String {
+    let mut s = String::from("## \u{a7}N NAV\n\nrel|path|lens\n");
+    for r in rows {
+        s.push_str(&format!("{}|{}|{}\n", r.rel, r.path, r.lens));
+    }
+    s
+}
+
+#[cfg(test)]
+mod nav_tests {
+    use super::*;
+
+    #[test]
+    fn the_root_has_no_up_and_no_siblings() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let rows = nav(root, root);
+        assert_eq!(rows.len(), 2, "{rows:?}");
+        let shape: Vec<(&str, &str)> = rows
+            .iter()
+            .map(|r| (r.rel.as_str(), r.path.as_str()))
+            .collect();
+        assert_eq!(shape, vec![("up", "-"), ("self", ".")]);
+    }
+
+    /// V34: one `self`, an `up` per ancestor, a `sib` per co-child. The lens
+    /// is the parent's own words about that child (V38), never re-described.
+    #[test]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one nav table, four properties -- one self, an up per \
+                  ancestor, no self among the siblings, and a sibling \
+                  carrying its parent's lens. Split, each half would rebuild \
+                  the same table to assert one of them"
+    )]
+    fn a_leaf_names_its_ancestors_itself_and_its_co_children() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let rows = nav(root, &root.join("src").join("fed"));
+
+        let self_rows: Vec<&Nav> =
+            rows.iter().filter(|r| r.rel == "self").collect();
+        assert_eq!(self_rows.len(), 1, "exactly one self: {rows:?}");
+        assert_eq!(self_rows.first().map(|r| r.path.as_str()), Some("src/fed"));
+
+        let ups = rows.iter().filter(|r| r.rel == "up").count();
+        assert_eq!(ups, 2, "root and src: {rows:?}");
+
+        let sibs: Vec<&Nav> = rows.iter().filter(|r| r.rel == "sib").collect();
+        assert!(!sibs.is_empty(), "src has other children");
+        assert!(sibs.iter().all(|s| s.path != "src/fed"), "no self as sib");
+        assert!(
+            sibs.iter()
+                .any(|s| s.path == "src/lens" && !s.lens.is_empty()),
+            "a sibling carries its parent's lens: {sibs:?}"
+        );
+    }
+
+    #[test]
+    fn a_section_renders_with_its_header() {
+        let rows = vec![Nav {
+            rel: "self".into(),
+            path: ".".into(),
+            lens: "-".into(),
+        }];
+        assert_eq!(
+            nav_section(&rows),
+            "## \u{a7}N NAV\n\nrel|path|lens\nself|.|-\n"
+        );
+    }
+}
