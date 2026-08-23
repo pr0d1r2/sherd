@@ -38,4 +38,24 @@
 # what `.:B6` warns against.
 #
 # It comes back down with `.:T92`.
-total 271
+#
+# RAISED 271 -> 273 on 2026-08-23, for `split`, and the two causes are the
+# same shape as the one above.
+#
+# `plan::candidates` is 19 lines: read the spec, list the modules beside this
+# node, weigh each by the rows naming it, sort. That is one thought as a
+# pipeline, and the pieces worth naming were already extracted --
+# `module_entry`, `merge_layouts`, `naming_rows`, `names_word`. What is left
+# is the pipeline itself.
+#
+# `cli::run_args` reaches cognitive 15 because `split` adds a dispatch arm.
+# It is a TABLE, not a branchy function: every verb this tool gains costs one
+# more, and the limit measures the wrong thing for a match over a fixed verb
+# set. `.:T103`'s remaining rungs each add one.
+#
+# One more arrived with `split`'s own tests, same shape.
+#
+# Both come down with `.:T92`, and the second stops mattering the day
+# dispatch becomes a registry the loop iterates -- which is what
+# `dev/src/commands.rs` already wants for a different reason.
+total 274

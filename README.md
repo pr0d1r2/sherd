@@ -9,8 +9,8 @@
 
 [![gate hk](https://img.shields.io/badge/gate-hk-6E4AFF)](hk.pkl)
 [![gate steps 27](https://img.shields.io/badge/gate_steps-27-6E4AFF)](hk.pkl)
-[![coverage floor 91.4%](https://img.shields.io/badge/coverage_floor-%E2%89%A591.4%25-brightgreen)](.coverage)
-[![lint debt 271](https://img.shields.io/badge/lint_debt-%E2%89%A4271-orange)](.lint-debt)
+[![coverage floor 91.3%](https://img.shields.io/badge/coverage_floor-%E2%89%A591.3%25-brightgreen)](.coverage)
+[![lint debt 274](https://img.shields.io/badge/lint_debt-%E2%89%A4274-orange)](.lint-debt)
 [![federated nodes 17](https://img.shields.io/badge/federated_nodes-17-6E4AFF)](SPEC.md)
 
 [![nix flake](https://img.shields.io/badge/nix-flake-5277C3?logo=nixos&logoColor=white)](flake.nix)
@@ -390,6 +390,7 @@ line fails the gate (`src/cli:V7`, after `src/cli:B2`).
 | `sherd fed [dir]` | the federation edges declared by a node |
 | `sherd check [dir]` | microlith structural check of every node |
 | `sherd validate` | DAG + ids + ceilings + slice drift, one verdict |
+| `sherd split [dir]` | propose a federation split. writes nothing |
 | `sherd sync [dir] [--check]` | regenerate §N from §F. exit 1 if it wrote |
 | `sherd route <query>` | which node owns a question. 0 hit · 2 miss · 3 ambiguous |
 | `sherd review [rev]` | mechanical checks on what a commit added (default HEAD) |
