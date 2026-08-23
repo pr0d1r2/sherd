@@ -95,9 +95,15 @@ rather than implied by the version number.
 - `hk.pkl` and `pkl/` are excluded from the published crate. They gate this
   working tree and mean nothing in a tarball.
 
-## [0.1.0] - 2026-08-07
+## [0.1.0] - unreleased
 
-First public release. Early, and honest about it.
+The first version, and it has not been published yet. The date this section
+carried -- 2026-08-07 -- was the day the version number was chosen, and the
+heading called it a "first public release" before any release existed: no
+tag, no crates.io entry, no repository a reader could reach. It becomes a
+date when `v0.1.0` is tagged.
+
+Early, and honest about it.
 
 `sherd` splits a repository so that no single model call has to hold all
 of it — a directory DAG where every directory may carry its own `SPEC.md`,
