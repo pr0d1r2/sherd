@@ -899,22 +899,18 @@ pub(crate) fn fmt_ok(root: &Path, cargo: &str) -> (bool, String) {
     )
 }
 
-/// Tenths as the number a reader sees: `170` is `17.0`.
-fn per_kloc(tenths: usize) -> String {
-    format!("{}.{}", tenths / 10, tenths % 10)
-}
-
 /// THE RATCHET, as `hk` runs it: the DENSITY may fall, never rise.
 ///
-/// `.lint-debt` carries warnings per thousand lines. Without this the loop
-/// called code MERGEABLE that raised the debt 271 -> 276, which `hk` then
-/// refuses -- so the loop's verdict did not predict the commit (B30). It has
-/// to compare the number the gate compares, which is now a ratio (`.:B22`).
+/// The rule itself lives in `src/debt`, which owns what the gate reads; this
+/// is the loop's use of it. Without it the loop called code MERGEABLE that
+/// raised the debt, which `hk` then refused, so its verdict did not predict
+/// the commit (B30) -- and when it re-derived the inputs itself it diverged
+/// on all three at once (`.:B25`).
 pub(crate) fn lint_debt_ok(root: &Path, cargo: &str) -> (bool, String) {
-    let Some(was) = recorded_debt(root) else {
+    let Some(was) = crate::debt::recorded(root) else {
         return (true, String::new());
     };
-    let Some(now) = clippy_density(root, cargo) else {
+    let Some(now) = crate::debt::density(root, cargo) else {
         return (true, String::new());
     };
     let ok = now <= was;
@@ -923,109 +919,10 @@ pub(crate) fn lint_debt_ok(root: &Path, cargo: &str) -> (bool, String) {
         ok,
         format!(
             "=== lint density: {word} === {} per KLoC (ceiling {})\n",
-            per_kloc(now),
-            per_kloc(was)
+            crate::debt::per_kloc(now),
+            crate::debt::per_kloc(was)
         ),
     )
-}
-
-/// The gate's own clippy invocation. A different build is a different number
-/// (`.:B20`).
-const GATE_ARGS: [&str; 5] = [
-    "clippy",
-    "--workspace",
-    "--all-targets",
-    "--all-features",
-    "--message-format=short",
-];
-
-/// Did the build fail? Then there is nothing to count (`.:B18`).
-fn build_failed(line: &str) -> bool {
-    line.starts_with("error[") || line.starts_with("error:")
-}
-
-/// Clippy's warning count for this tree, per thousand lines, in TENTHS.
-///
-/// EVERY input here is the gate's, because a loop that predicts the gate must
-/// measure what the gate measures (`src/tdd:B30`). It diverged on all three
-/// at once and reported 10.8 where `hk` computed 14.6 (`.:B25`):
-///
-///   the FLAGS -- `--workspace --all-features`, or a different build is
-///   scored (`.:B20`);
-///   the FILE SET -- `src` AND `dev`, or a warning in `dev/` is invisible;
-///   the DENOMINATOR -- the same two directories, or the ratio is over a
-///   tree nobody builds.
-///
-/// Integer tenths because every comparison in the loop is `usize` and a float
-/// has no business next to a gate.
-///
-/// `None` when clippy could not run or there is no Rust to divide by: the
-/// ratchet was read first, so there is simply nothing to compare, and
-/// refusing would block every candidate on a bench problem. The TEST step is
-/// what fails a broken toolchain (V26).
-fn clippy_density(root: &Path, cargo: &str) -> Option<usize> {
-    let o = Command::new(cargo)
-        .args(GATE_ARGS)
-        .current_dir(root)
-        .output()
-        .ok()?;
-    let out = String::from_utf8_lossy(&o.stderr);
-    // A count from a build that FAILED is not a measurement: clippy emits no
-    // warnings for a target that does not compile, and the ratchet would read
-    // that as debt paid (`.:B18`).
-    if out.lines().any(build_failed) {
-        return None;
-    }
-    let n = out.lines().filter(|l| gate_counts(l)).count();
-    let loc: usize = MEASURED.iter().map(|d| rust_lines(&root.join(d))).sum();
-    (loc > 0).then(|| n.saturating_mul(10_000) / loc)
-}
-
-/// The directories the gate measures. One list, so the numerator and the
-/// denominator cannot drift apart.
-const MEASURED: [&str; 2] = ["src", "dev"];
-
-/// Does `hk` count this line? `^(src|dev)/.*: warning`.
-pub(crate) fn gate_counts(line: &str) -> bool {
-    MEASURED.iter().any(|d| line.starts_with(&format!("{d}/")))
-        && line.contains(": warning")
-}
-
-/// Lines of Rust under a directory, counted the way the gate counts them.
-fn rust_lines(dir: &Path) -> usize {
-    let Ok(entries) = std::fs::read_dir(dir) else {
-        return 0;
-    };
-    entries
-        .filter_map(Result::ok)
-        .map(|e| {
-            let p = e.path();
-            if p.is_dir() {
-                rust_lines(&p)
-            } else if p.extension().is_some_and(|x| x == "rs") {
-                std::fs::read_to_string(&p)
-                    .map(|t| t.lines().count())
-                    .unwrap_or(0)
-            } else {
-                0
-            }
-        })
-        .sum()
-}
-
-/// The `density` ceiling from `.lint-debt`, in TENTHS, if the file is there.
-pub(crate) fn recorded_debt(root: &Path) -> Option<usize> {
-    let text = std::fs::read_to_string(root.join(".lint-debt")).ok()?;
-    text.lines().find_map(|l| {
-        let v = l.strip_prefix("density ")?.trim();
-        let (whole, frac) = v.split_once('.').unwrap_or((v, "0"));
-        let tenth = frac.chars().next()?.to_digit(10)? as usize;
-        whole
-            .parse::<usize>()
-            .ok()?
-            .checked_mul(10)?
-            .checked_add(tenth)
-    })
 }
 
 pub(crate) fn tail(s: &str, n: usize) -> &str {

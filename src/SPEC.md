@@ -20,6 +20,7 @@ slice|distil a document to the part needed to ACT, generated|judging what the sl
 land|run branch → `main` when believability earns it|writing code, judging it, reading the diff|-
 cli|arg dispatch, usage, exit codes|every verb's logic|-
 code|read Rust source as text — split, public fns, call detection, signatures|judging what it reads, `SPEC.md` structure|-
+debt|a ratchet — measure, compare to a recorded floor, refuse the wrong way|deciding WHAT to measure, running the gate|-
 assay|a corpus + a compiler grader — measure WHETHER the model can, ⊥ make it|writing code with a model, judging a diff|-
 
 ## §N NAV

@@ -969,8 +969,8 @@ fn file_ceilings(root: &Path) -> Vec<String> {
         let (impl_r, tests_r) = crate::code::split_module(&src);
         let rel = f.strip_prefix(root).unwrap_or(&f).display().to_string();
         for (half, text, ceiling) in [
-            ("code", impl_r, tokens::CEILING_FILE),
-            ("tests", tests_r, tokens::CEILING_TEST),
+            ("code", impl_r, crate::debt::CEILING_FILE),
+            ("tests", tests_r, crate::debt::CEILING_TEST),
         ] {
             let n = tokens::count(text).tokens;
             if n > ceiling {

@@ -112,6 +112,7 @@ src            12300
 src/assay      13600
 src/cli        13200
 src/code       13200
+src/debt       13700
 src/fed        13300
 src/land       13400
 src/lens       12800
@@ -123,3 +124,14 @@ src/spec       13200
 src/state      12500
 src/tdd        15100
 src/tokens     12800
+#
+# `src/debt` added 2026-08-24 at 13,700, ~22% over its measured 11,262 --
+# the same slack every other row carries. It inherited `src` by longest
+# prefix, which IS checked (V104), and that left it 8% where the header asks
+# for 15-30%.
+#
+# NOTE, because it corrects a claim made when the node was proposed: moving
+# six §B rows down did NOT relieve any chain. Rule depth loads §G §C §I §V §T
+# and NOT §B or §R, so a bug row has never cost a chain a single token. Root
+# went 10,348 -> 10,350. What the promotion bought is one reading of the
+# gate's inputs and history filed where it happened -- not budget.
