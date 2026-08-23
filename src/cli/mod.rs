@@ -143,6 +143,14 @@ pub fn run_args(mut args: Vec<String>) -> ExitCode {
             }
         },
         Some("land") => land_verb(&root, args.iter().any(|a| a == "--push")),
+        // The model verbs exist in `USAGE` whatever this build carries, so a
+        // consumer reading `--help` sees the whole tool. Without the feature
+        // they are not "unknown" -- they are NOT COMPILED IN, and saying so
+        // is the difference between a typo and a build choice.
+        #[cfg(not(feature = "ollama"))]
+        Some(verb @ ("apply" | "ask" | "oneshot" | "tdd")) => {
+            needs_ollama(verb)
+        }
         #[cfg(feature = "ollama")]
         Some("ask") => match (args.get(1), args.get(2)) {
             (Some(_), Some(q)) => ask(&root, &arg_dir(&args, &root), q),
@@ -290,6 +298,21 @@ fn init_dir(root: &Path, args: &[String]) -> PathBuf {
         .skip(1)
         .find(|a| !a.starts_with("--"))
         .map_or_else(|| root.to_path_buf(), |d| root.join(d))
+}
+
+/// A verb this build does not carry, named as such.
+///
+/// Exit 2, the USAGE code: nothing is wrong with the repository or the
+/// request, the binary simply was not built with it. `.:V117` freezes the
+/// model half until `0.7`, and `default = []` means the published crate is
+/// the deterministic core -- so this is the common path, not an edge.
+#[cfg(not(feature = "ollama"))]
+fn needs_ollama(verb: &str) -> ExitCode {
+    eprintln!(
+        "sherd: `{verb}` needs the `ollama` feature, which this build does not \
+         carry. Install it with `cargo install sherd --features ollama`."
+    );
+    ExitCode::from(2)
 }
 
 /// The refusal, and there is no `--force` to bypass it.

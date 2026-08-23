@@ -20,7 +20,7 @@ dev|repo-maintaining tooling, `publish = false` — README generation|anything a
 - nixpkgs rev FOLLOWED from `nixpkgs-lock`, ⊥ spelled here. one rev, ~80 repos.
 - target model: `gpt-oss:20b`, 131,072 ctx, local. ⊥ cloud fallback.
 - inference: local HTTP (Ollama) only. ⊥ network otherwise.
-- deterministic core: parse/DAG/budget/ceiling = pure Rust, ⊥ model. model ? prose gen & drift judgement only.
+- deterministic core: parse/DAG/budget/ceiling = pure Rust, ⊥ model. model ? prose gen & drift judgement only. DEFAULT features are EMPTY ∴ the installed binary carries ⊥ HTTP client, ⊥ TLS, ⊥ network code; `ollama` is 1 flag away & named when a verb needs it.
 - separator = **directory**. dir tree ! source of truth. ⊥ manifest, ⊥ name-encoded grouping (`core-parse` ⊥ imply parent).
 - federation edge = parent dir → child dir, depth **+1 exactly**. ⊥ skip.
 - graph ! DAG. cycle ⊥. re-parent (2+ parents) OK.

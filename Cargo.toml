@@ -59,10 +59,21 @@ name = "sherd"
 path = "src/lib.rs"
 
 [features]
-# Default ON because `tdd` is the point of installing; `--no-default-features`
-# still yields the deterministic, networkless core that §C demands (parse,
-# DAG, budget, ceiling -- none of which may call a model).
-default = ["ollama"]
+# EMPTY by default, so `cargo install sherd` builds the deterministic core and
+# nothing else: no HTTP client, no TLS stack, no network code at all in the
+# binary a consumer gets.
+#
+# It was `["ollama"]`, on the reasoning that `tdd` is the point of installing.
+# The ladder says otherwise now (V117): the mechanical surface ships at `0.5`
+# and the model half resumes at `0.7`, so the default has to be the half that
+# is being published. A default carrying an endpoint client into every install
+# would make the featureless build the corner case and the network build the
+# norm -- exactly backwards for a tool whose §C says the core may never call a
+# model.
+#
+# `ollama` is one flag away, and `sherd` says so when a verb needs it rather
+# than reporting an unknown command.
+default = []
 ollama = ["dep:ureq", "dep:serde_json"]
 
 [dependencies]

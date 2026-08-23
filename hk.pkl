@@ -49,7 +49,7 @@ local fast = new Mapping<String, Step> {
   ["clippy"] {
     glob = List("**/*.rs")
     depends = List("fmt")
-    check = "cargo clippy --workspace --all-targets -- -D warnings -A clippy::too_many_lines -A clippy::cognitive_complexity -A clippy::excessive_nesting -A clippy::fn_params_excessive_bools -A clippy::struct_excessive_bools -A clippy::unwrap_used -A clippy::expect_used -A clippy::panic -A clippy::indexing_slicing -A clippy::arithmetic_side_effects -A clippy::todo -A clippy::unimplemented -A clippy::dbg_macro -A clippy::too_many_arguments -A clippy::type_complexity"
+    check = "cargo clippy --workspace --all-targets --all-features -- -D warnings -A clippy::too_many_lines -A clippy::cognitive_complexity -A clippy::excessive_nesting -A clippy::fn_params_excessive_bools -A clippy::struct_excessive_bools -A clippy::unwrap_used -A clippy::expect_used -A clippy::panic -A clippy::indexing_slicing -A clippy::arithmetic_side_effects -A clippy::todo -A clippy::unimplemented -A clippy::dbg_macro -A clippy::too_many_arguments -A clippy::type_complexity"
   }
   // THE RATCHET. The count may fall, never rise. `.lint-debt` carries the
   // number and the reasoning; `clippy.toml` carries the thresholds.
@@ -57,7 +57,7 @@ local fast = new Mapping<String, Step> {
     glob = List("**/*.rs", "clippy.toml", ".lint-debt")
     depends = List("clippy")
     check = """
-      out=$(cargo clippy --workspace --all-targets --message-format=short 2>&1)
+      out=$(cargo clippy --workspace --all-targets --all-features --message-format=short 2>&1)
       printf '%s' "$out" | grep -qE '^error(\[|:)' && { echo "hk: clippy did not COMPILE, so its warning count is not a measurement -- a target that fails to build emits no warnings at all, and the ratchet would read that as an improvement (.:B18)." >&2; printf '%s\n' "$out" | grep -E '^error' | head -3 >&2; exit 1; }
       now=$(printf '%s' "$out" | grep -cE '^(src|dev)/.*: warning')
       was=$(awk '/^total /{print $2}' .lint-debt)
@@ -73,7 +73,7 @@ local fast = new Mapping<String, Step> {
     // `hk check --all` refused, and this step then rewrote 274 to 275 behind
     // the commit.
     fix = """
-      out=$(cargo clippy --workspace --all-targets --message-format=short 2>&1)
+      out=$(cargo clippy --workspace --all-targets --all-features --message-format=short 2>&1)
       printf '%s' "$out" | grep -qE '^error(\[|:)' && { echo "hk: clippy did not COMPILE -- refusing to RECORD a count taken from a broken build (.:B18). A target that fails to build emits no warnings, so this would write down an improvement nobody made." >&2; exit 1; }
       now=$(printf '%s' "$out" | grep -cE '^(src|dev)/.*: warning')
       was=$(awk '/^total /{print $2}' .lint-debt)
@@ -90,7 +90,7 @@ local fast = new Mapping<String, Step> {
     // is the spec.
     glob = List("**/*.rs", "**/SPEC.md", "Cargo.toml", ".context-limits")
     depends = List("clippy")
-    check = "cargo test --workspace"
+    check = "cargo test --workspace --all-features"
   }
   // THE DOGFOOD. sherd checks its own federated spec with the binary being
   // built, so a rule this repo cannot pass is a rule it cannot ship.
@@ -299,7 +299,12 @@ local all = (fast) {
     fix = "cargo run -q -p sherd-dev -- readme"
   }
 
-  // The FEATURELESS build, which §C claims and nothing checked. `.:B15`:
+  // The FEATURELESS build -- which is now the DEFAULT, so this step checks
+  // that the published shape still compiles while the gate above tests
+  // everything with `--all-features` (V117: the model half is frozen, not
+  // abandoned, so it stays exercised).
+  //
+  // Originally: the featureless build, which §C claims and nothing checked. `.:B15`:
   // `src/assay` and `src/land` both reached into the `ollama`-gated `tdd`,
   // so `--no-default-features` had not compiled since the feature split
   // while `Cargo.toml` documented that configuration as the deterministic,
@@ -323,7 +328,7 @@ local all = (fast) {
     glob = List("**/*.rs", ".coverage")
     depends = List("budget")
     check = """
-      out=$(cargo llvm-cov --workspace --summary-only 2>&1) || { echo "$out" >&2; exit 1; }
+      out=$(cargo llvm-cov --workspace --all-features --summary-only 2>&1) || { echo "$out" >&2; exit 1; }
       now=$(printf '%s' "$out" | awk '/^TOTAL/{gsub("%","",$10); print $10}')
       was=$(awk '/^lines /{print $2}' .coverage)
       [ -n "$now" ] || { echo 'hk: could not read a coverage total -- that is an ERROR, not a floor breach (.:tdd:V26)' >&2; exit 1; }
@@ -333,7 +338,7 @@ local all = (fast) {
       """
     // Same rule as `lint-debt`, mirrored: this one may only RAISE.
     fix = """
-      out=$(cargo llvm-cov --workspace --summary-only 2>&1) || { echo "$out" >&2; exit 1; }
+      out=$(cargo llvm-cov --workspace --all-features --summary-only 2>&1) || { echo "$out" >&2; exit 1; }
       now=$(printf '%s' "$out" | awk '/^TOTAL/{gsub("%","",$10); print $10}')
       was=$(awk '/^lines /{print $2}' .coverage)
       [ -n "$now" ] || exit 1

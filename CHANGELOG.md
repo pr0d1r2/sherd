@@ -51,6 +51,14 @@ select by default.
 
 ### Changed
 
+- **Default features are empty.** `cargo install sherd` now builds the
+  deterministic core and nothing else -- no HTTP client, no TLS stack, no
+  network code in the binary. `ollama` adds `ask`, `tdd` and `oneshot`, and
+  the binary names the missing feature rather than reporting an unknown
+  command. The default was `["ollama"]` on the reasoning that the loop is the
+  point of installing; the ladder says otherwise now, and a default that
+  carried an endpoint client into every install made the featureless build
+  the corner case for a tool whose §C says the core may never call a model.
 - **The project is `sherd`.** One name for the package, the binary and the
   repository — `cargo install sherd` installs `sherd`. The crate was
   `bbx-cli` with a `bbx` binary because both `bbx` and `blackbox` are taken
