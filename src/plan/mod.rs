@@ -1465,114 +1465,6 @@ mod route_tests {
 
 // ---- split: what would come off this node's chain? ----
 
-/// One promotable module, and what promoting it would move.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Candidate {
-    /// `ledger` for `src/ledger.rs` or `src/ledger/`.
-    pub name: String,
-    /// Both `<name>.rs` AND `<name>/` exist -- the 2018 layout `.:§C`
-    /// forbids, which puts the facade outside the directory it fronts. Named
-    /// rather than silently deduped: a reader has to merge them by hand
-    /// before either can carry a `SPEC.md`.
-    pub split_layout: bool,
-    /// Spec lines that NAME it -- the rows a child node would take.
-    pub rows: usize,
-    /// What those rows cost, in the tier `tokens` reports.
-    pub tokens: u64,
-    /// Whether it is already a directory. A flat `.rs` has to move to
-    /// `<name>/mod.rs` before it can carry a `SPEC.md` (`.:§C`).
-    pub is_dir: bool,
-}
-
-/// Promotable children of `dir`, ranked by the spec weight they would take.
-///
-/// A CANDIDATE is a module: a subdirectory with no `SPEC.md` of its own, or a
-/// flat `<name>.rs` beside `mod.rs`. `lib.rs`, `main.rs` and `mod.rs` are the
-/// crate and module entry points rather than modules, so they are never
-/// candidates.
-///
-/// The WEIGHT is the spec rows that name it. That is a heuristic and it says
-/// so -- but it is grounded rather than invented: measured on `rekall`, whose
-/// flat spec names `check`, `trigger` and `corpus` on seventeen lines each,
-/// `ledger` and `scan` on nine. A row naming exactly one module is a row that
-/// module's own spec should carry.
-#[must_use]
-pub fn candidates(root: &Path, dir: &Path) -> Vec<Candidate> {
-    let spec = std::fs::read_to_string(dir.join("SPEC.md")).unwrap_or_default();
-    let names = module_names(root, dir);
-    let mut out: Vec<Candidate> = merge_layouts(names)
-        .into_iter()
-        .map(|(name, is_dir, split_layout)| {
-            let rows = naming_rows(&spec, &name);
-            let text = rows.join("\n");
-            Candidate {
-                name,
-                split_layout,
-                rows: rows.len(),
-                tokens: crate::tokens::count(&text).tokens,
-                is_dir,
-            }
-        })
-        .filter(|c| c.rows > 0)
-        .collect();
-    out.sort_by(|a, b| b.tokens.cmp(&a.tokens).then(a.name.cmp(&b.name)));
-    out
-}
-
-/// One entry per module name. A name appearing as BOTH `<name>.rs` and
-/// `<name>/` is one module in the wrong layout, not two candidates -- the
-/// first run against a foreign repository listed `cli` twice for exactly
-/// that reason.
-fn merge_layouts(names: Vec<(String, bool)>) -> Vec<(String, bool, bool)> {
-    let mut out: Vec<(String, bool, bool)> = Vec::new();
-    for (name, is_dir) in names {
-        if let Some(seen) = out.iter_mut().find(|(n, _, _)| n == &name) {
-            seen.1 = true;
-            seen.2 = true;
-            continue;
-        }
-        out.push((name, is_dir, false));
-    }
-    out
-}
-
-/// Every module beside this node: `<name>.rs` files and subdirectories that
-/// are not already nodes.
-fn module_names(root: &Path, dir: &Path) -> Vec<(String, bool)> {
-    let source = if dir.join("src").is_dir() && dir == root {
-        dir.join("src")
-    } else {
-        dir.to_path_buf()
-    };
-    let Ok(entries) = std::fs::read_dir(&source) else {
-        return Vec::new();
-    };
-    let mut out: Vec<(String, bool)> = entries
-        .flatten()
-        .filter_map(|e| module_entry(&e.path()))
-        .collect();
-    out.sort();
-    out.dedup();
-    out
-}
-
-/// One directory entry as a module, or `None` when it is neither.
-///
-/// `lib.rs`, `main.rs` and `mod.rs` are the crate and module ENTRY POINTS
-/// rather than modules: promoting `lib` would be the crate promoting itself.
-fn module_entry(p: &Path) -> Option<(String, bool)> {
-    let name = p.file_stem().and_then(|s| s.to_str())?;
-    if matches!(name, "lib" | "main" | "mod") {
-        return None;
-    }
-    if p.is_dir() && !p.join("SPEC.md").is_file() {
-        return Some((name.to_string(), true));
-    }
-    p.extension()
-        .is_some_and(|x| x == "rs")
-        .then(|| (name.to_string(), false))
-}
-
 /// Spec lines naming one module, whole-word.
 fn naming_rows(spec: &str, name: &str) -> Vec<String> {
     spec.lines()
@@ -1613,45 +1505,66 @@ mod split_tests {
         assert!(!names_word("no mention here", "ledger"));
     }
 
-    /// `<name>.rs` AND `<name>/` is ONE module in the layout `.:§C` forbids,
-    /// not two candidates. The first foreign run listed `cli` twice.
+    /// The layout `.:§C` forbids, detected where the node is proposed: both
+    /// `<name>.rs` and `<name>/` exist, so neither half can carry a spec
+    /// until they are merged. `rekall` has it for `cli`.
     #[test]
-    fn a_file_and_a_directory_of_one_name_merge_into_one_candidate() {
-        let merged = merge_layouts(vec![
-            ("cli".to_string(), false),
-            ("cli".to_string(), true),
-            ("ledger".to_string(), false),
-        ]);
-        assert_eq!(
-            merged,
-            vec![
-                ("cli".to_string(), true, true),
-                ("ledger".to_string(), false, false),
-            ]
+    fn a_module_that_is_both_a_file_and_a_directory_is_flagged() {
+        let dir = std::env::temp_dir().join(format!(
+            "sherd-layout-{}-{}",
+            std::process::id(),
+            line!()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        let src = dir.join("src");
+        let Ok(()) = std::fs::create_dir_all(src.join("both")) else {
+            unreachable!("a src dir is creatable")
+        };
+        let Ok(()) =
+            std::fs::write(src.join("lib.rs"), "mod both;\nmod solo;\n")
+        else {
+            unreachable!("a lib.rs is writable")
+        };
+        let Ok(()) = std::fs::write(src.join("both.rs"), "") else {
+            unreachable!("a module file is writable")
+        };
+        let Ok(()) = std::fs::write(src.join("solo.rs"), "") else {
+            unreachable!("a module file is writable")
+        };
+
+        let found = structure(&dir);
+        let flagged = |n: &str| {
+            found
+                .iter()
+                .find(|p| p.name == n)
+                .is_some_and(|p| p.split_layout)
+        };
+        assert!(flagged("both"), "both.rs and both/ exist: {found:?}");
+        assert!(!flagged("solo"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A FEDERATED tree proposes the nodes it already has, graded
+    /// `directory`, and each still carries whatever weight the parent spec
+    /// gives it. `B14` is what the opposite assumption cost: excluding
+    /// already-nodes left the weight column reading zero for every one of
+    /// them, in the only kind of repository where the question matters.
+    #[test]
+    fn a_federated_tree_proposes_and_weighs_its_existing_nodes() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let found = structure(root);
+        assert!(
+            found.iter().all(|p| p.evidence == Evidence::Drawn),
+            "every module here is a directory: {found:?}"
         );
-    }
-
-    /// Entry points are not modules, so they are never candidates -- a
-    /// `lib.rs` promoted to a node would be the crate promoting itself.
-    #[test]
-    fn entry_points_are_not_modules() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let names = module_names(root, root);
-        assert!(!names.iter().any(|(n, _)| n == "lib" || n == "main"));
-    }
-
-    /// This repository is federated, so every child of `src` already carries
-    /// a `SPEC.md` and nothing is left to promote. A tool that proposed
-    /// splits for an already-split tree would be noise.
-    #[test]
-    fn a_federated_node_has_nothing_left_to_promote() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let dirs: Vec<String> = module_names(root, root)
-            .into_iter()
-            .filter(|(_, is_dir)| *is_dir)
-            .map(|(n, _)| n)
-            .collect();
-        assert!(dirs.is_empty(), "already-node dirs proposed: {dirs:?}");
+        let Ok(spec) = std::fs::read_to_string(root.join("SPEC.md")) else {
+            unreachable!("this repository has a root spec")
+        };
+        let weighed = found
+            .iter()
+            .filter(|p| row_weight(&spec, &p.name).0 > 0)
+            .count();
+        assert!(weighed > 1, "root names its nodes on real rows");
     }
 }
 
@@ -1692,6 +1605,11 @@ impl Evidence {
 pub struct Proposed {
     pub name: String,
     pub evidence: Evidence,
+    /// Both `<name>.rs` AND `<name>/` exist -- the 2018 layout `.:§C`
+    /// forbids, which puts the facade outside the directory it fronts.
+    /// `rekall` has it for `cli`, and it has to be merged by hand before
+    /// either half can carry a `SPEC.md`.
+    pub split_layout: bool,
     /// Members, when a naming family stands in for several files.
     pub members: Vec<String>,
     /// Crate modules every member reaches for -- the hub a family shares.
@@ -1740,6 +1658,8 @@ pub fn structure(dir: &Path) -> Vec<Proposed> {
             Evidence::Declared
         };
         out.push(Proposed {
+            split_layout: src.join(&d.name).is_dir()
+                && src.join(format!("{}.rs", d.name)).is_file(),
             name: d.name.clone(),
             evidence,
             members: vec![d.name.clone()],
@@ -1788,6 +1708,8 @@ fn proposed_family(src: &Path, members: Vec<String>) -> Proposed {
         evidence: Evidence::Cohesion,
         members,
         shared,
+        // A family is a set of files; the layout question is per-module.
+        split_layout: false,
     }
 }
 
@@ -1880,5 +1802,45 @@ mod structure_tests {
         assert!(families(&pair).is_empty());
         let three = [decl("acmd"), decl("bcmd"), decl("ccmd")];
         assert_eq!(families(&three).len(), 1);
+    }
+}
+
+/// What one node's name costs the spec it is named in: rows and tokens.
+///
+/// Computed for a node whatever its state, which is the half `candidates`
+/// could not do: that function lists modules to PROMOTE, so it excludes
+/// directories that are already nodes -- and in a federated repository that
+/// is every one of them, leaving the weight column reading zero for the only
+/// tree where the question matters (`B14`).
+///
+/// The question here is the other one: given a node that EXISTS, how much of
+/// its parent's spec is about it? Those rows are what a chain pays on every
+/// descent and what moving them down would relieve.
+#[must_use]
+pub fn row_weight(spec: &str, name: &str) -> (usize, u64) {
+    let rows = naming_rows(spec, name);
+    let tokens = crate::tokens::count(&rows.join("\n")).tokens;
+    (rows.len(), tokens)
+}
+
+#[cfg(test)]
+mod weight_tests {
+    use super::*;
+
+    /// The defect `B14` names: this repository's root spec talks about `tdd`
+    /// on dozens of rows, and the promotable-candidate path reported zero
+    /// because `src/tdd` is already a node.
+    #[test]
+    fn an_existing_node_still_has_a_weight_in_its_parent() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let Ok(spec) = std::fs::read_to_string(root.join("SPEC.md")) else {
+            unreachable!("this repository has a root spec")
+        };
+        let (rows, tokens) = row_weight(&spec, "tdd");
+        assert!(rows > 0, "root names `tdd` on real rows");
+        assert!(tokens > 0);
+
+        // And a name nothing mentions weighs nothing.
+        assert_eq!(row_weight(&spec, "wombat"), (0, 0));
     }
 }
