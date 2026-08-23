@@ -19,4 +19,23 @@
 #
 # Lowering this belongs to `.:T92` (split src/tdd) and the pay-down tasks, and
 # a drop should arrive WITH the refactor that earned it.
-total 270
+#
+# RAISED 270 -> 271 on 2026-08-23, deliberately, and this is the reason the
+# rule asks for.
+#
+# `fed::nav` is 18 lines against a 15-line limit: it walks the path from root
+# to a node and emits one row per step, with the step that reaches the node
+# emitting `self` plus every sibling. Splitting the step out produced
+# `nav_step(root, node, parent, cur, name)` -- five parameters against a
+# four-parameter limit, so the split traded one warning for another AND made
+# the function harder to read, since every value the loop already had has to
+# be threaded back in.
+#
+# That is the limit misfiring on a walk rather than catching complexity, and
+# `clippy.toml`'s own header says these thresholds are the shape the target
+# model handles, not a law. A raise recorded with its cause is what this file
+# is for; a contortion that satisfies the counter and worsens the code is
+# what `.:B6` warns against.
+#
+# It comes back down with `.:T92`.
+total 271

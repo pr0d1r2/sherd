@@ -4,6 +4,26 @@
 
 Mechanical pre-review of what `apply` committed. Narrows what a reader ! catch.
 
+## §N NAV
+
+rel|path|lens
+up|.|-
+up|src|code nodes — tokens, spec, fed, lens facades & logic
+self|src/review|mechanical checks on what `apply` committed
+sib|src/tokens|`itok` facade, counts w/ method label, entry cost, working budget
+sib|src/spec|`microlith` facade, §-section split, structural check, fmt
+sib|src/fed|`§F` parse, edges, chain root→node, `SPEC.md` discovery
+sib|src/lens|pack assembly, depth `rule`|`why`, budget verdict
+sib|src/ollama|local endpoint client, `num_ctx`, fence extraction
+sib|src/tdd|red→judge→green→gate→repair loop, source region edits
+sib|src/plan|open `§T` rows, horizon, confidence, `apply` one step
+sib|src/state|one idempotent cached store — pace, telemetry, applied rows
+sib|src/slice|distil a document to the part needed to ACT, generated
+sib|src/land|run branch → `main` when believability earns it
+sib|src/cli|arg dispatch, usage, exit codes
+sib|src/code|read Rust source as text — split, public fns, call detection, signatures
+sib|src/assay|a corpus + a compiler grader — measure WHETHER the model can, ⊥ make it
+
 ## §C CONSTRAINTS
 
 - ⊥ a substitute for reading the diff. it cannot tell whether code satisfies an INVARIANT — the failure that matters.
@@ -19,7 +39,6 @@ V5: ⊥ claim clean. report what was CHECKED — 3 mechanical rules of ~6 review
 V6: a test FIXTURE ! be unique per INSTANCE, ⊥ per process. `std::process::id()` is the SAME for every test in one binary ∴ two tests sharing a tag get one directory & the first `Drop` deletes the other's repo. green ALONE, red in the SUITE — & a test that passes in isolation is the one nobody debugs (B4)
 V7: a subprocess's EXIT STATUS ! be read, ⊥ only its spawn result. `Command::output()` returns `Ok` for a process that RAN & FAILED ∴ `let Ok(out) = ..` catches only "git ⊥ on PATH", & `git show <unknown rev>` yields Ok w/ EMPTY stdout — the diff then reads as "nothing changed" & the review reports no findings (B5). an empty result & a failed command ! be distinguishable, which is V5 one level down in the plumbing
 V8: `undocumented` — a NEW `pub fn` w/ no doc comment. NEW only
-
 
 ## §T TASKS
 

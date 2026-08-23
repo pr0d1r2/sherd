@@ -4,6 +4,26 @@
 
 What to attempt next, and why it might ⊥ survive contact.
 
+## §N NAV
+
+rel|path|lens
+up|.|-
+up|src|code nodes — tokens, spec, fed, lens facades & logic
+self|src/plan|open `§T` rows, horizon, confidence, `apply` one step
+sib|src/tokens|`itok` facade, counts w/ method label, entry cost, working budget
+sib|src/spec|`microlith` facade, §-section split, structural check, fmt
+sib|src/fed|`§F` parse, edges, chain root→node, `SPEC.md` discovery
+sib|src/lens|pack assembly, depth `rule`|`why`, budget verdict
+sib|src/ollama|local endpoint client, `num_ctx`, fence extraction
+sib|src/tdd|red→judge→green→gate→repair loop, source region edits
+sib|src/review|mechanical checks on what `apply` committed
+sib|src/state|one idempotent cached store — pace, telemetry, applied rows
+sib|src/slice|distil a document to the part needed to ACT, generated
+sib|src/land|run branch → `main` when believability earns it
+sib|src/cli|arg dispatch, usage, exit codes
+sib|src/code|read Rust source as text — split, public fns, call detection, signatures
+sib|src/assay|a corpus + a compiler grader — measure WHETHER the model can, ⊥ make it
+
 ## §C CONSTRAINTS
 
 - horizon 3. beyond that is fiction — applying a task edits the SPEC that plans the next one.

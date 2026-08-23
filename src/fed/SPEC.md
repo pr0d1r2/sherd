@@ -4,6 +4,26 @@
 
 Federation edges. `§F` table, parent→child, chain to a node.
 
+## §N NAV
+
+rel|path|lens
+up|.|-
+up|src|code nodes — tokens, spec, fed, lens facades & logic
+self|src/fed|`§F` parse, edges, chain root→node, `SPEC.md` discovery
+sib|src/tokens|`itok` facade, counts w/ method label, entry cost, working budget
+sib|src/spec|`microlith` facade, §-section split, structural check, fmt
+sib|src/lens|pack assembly, depth `rule`|`why`, budget verdict
+sib|src/ollama|local endpoint client, `num_ctx`, fence extraction
+sib|src/tdd|red→judge→green→gate→repair loop, source region edits
+sib|src/plan|open `§T` rows, horizon, confidence, `apply` one step
+sib|src/review|mechanical checks on what `apply` committed
+sib|src/state|one idempotent cached store — pace, telemetry, applied rows
+sib|src/slice|distil a document to the part needed to ACT, generated
+sib|src/land|run branch → `main` when believability earns it
+sib|src/cli|arg dispatch, usage, exit codes
+sib|src/code|read Rust source as text — split, public fns, call detection, signatures
+sib|src/assay|a corpus + a compiler grader — measure WHETHER the model can, ⊥ make it
+
 ## §V INVARIANTS
 
 V1: `§F` row = `dir|owns|⊥owns|tokens`. 4 cells or ⊥ a row
@@ -28,7 +48,7 @@ T2|x|`chain` root→node|V2
 T3|x|`discover` walk w/ ignores, via `is_ignored_dir` (LLM-authored)|V8
 T4|~|cycle detection over the federation DAG|V2
 T5|x|`find_exhaustive_violations` — dirs named twice, and child dirs w/ no row|V11
-T6|.|`§N` derive from parent `§F`|V3
+T6|x|`§N` derive from parent `§F` — `nav()` + `nav_section()`, lens copied VERBATIM from the parent row (`.:V38`)|V3
 T7|x|wire `find_exhaustive_violations` into `sherd check`|V11
 T8|.|orphan check — a `SPEC.md` no parent `§F` row points at|`.:V3`
 T9|.|needs a query→child match rule before it has a signature|`.:V19`

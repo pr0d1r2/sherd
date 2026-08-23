@@ -22,6 +22,13 @@ cli|arg dispatch, usage, exit codes|every verb's logic|-
 code|read Rust source as text — split, public fns, call detection, signatures|judging what it reads, `SPEC.md` structure|-
 assay|a corpus + a compiler grader — measure WHETHER the model can, ⊥ make it|writing code with a model, judging a diff|-
 
+## §N NAV
+
+rel|path|lens
+up|.|-
+self|src|code nodes — tokens, spec, fed, lens facades & logic
+sib|dev|repo-maintaining tooling, `publish = false` — README generation
+
 ## §C CONSTRAINTS
 
 - module = dir + `mod.rs`. `mod.rs` composes, ⊥ implements (`.:V51`).
