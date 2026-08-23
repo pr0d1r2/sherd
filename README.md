@@ -203,13 +203,16 @@ day it is. Until then:
 
 ```sh
 nix develop            # the pinned toolchain, hk, and sherd on PATH
-cargo build --release  # or build it yourself; every dep is from crates.io
+cargo build --release  # the deterministic core -- no network code at all
+cargo build --release --features ollama   # adds `ask`, `tdd`, `oneshot`
 ```
 
-`sherd` needs no endpoint for the deterministic verbs — `budget`, `lens`,
-`fed`, `graph`, `check`, `review`, `slice`, `plan` are pure functions of your
-tree and never call a model. Only `ask`, `tdd` and `oneshot` do, and they
-need an Ollama-compatible endpoint you point at yourself.
+DEFAULT FEATURES ARE EMPTY, so the binary you get carries no HTTP client, no
+TLS stack and no network code -- `init`, `budget`, `lens`, `fed`, `graph`,
+`check`, `validate`, `route`, `review`, `slice`, `plan` are pure functions of
+your tree. `ask`, `tdd` and `oneshot` need `--features ollama` and an
+Ollama-compatible endpoint you point at yourself; without it `sherd` says
+which feature is missing rather than reporting an unknown command.
 
 ## Use
 
