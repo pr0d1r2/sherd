@@ -321,28 +321,18 @@ local all = (fast) {
   // Ratcheted like `.lint-debt`, and for the same reason. Measured 64.76% at
   // adoption against a 98% destination, so a hard floor would gate every
   // commit red for weeks -- `.:B6` is what happens to a gate nobody can pay.
+  // THE FLOOR, mirrored from `lint-debt`: this one may only RISE.
+  //
+  // CALLS `sherd coverage` rather than restating the rule. It was written
+  // twice here -- check and fix, a copy-paste of each other -- and the
+  // recording path was a hand edit, which is how a floor got LOWERED to
+  // match a drop today (`sherd/debt:B7`). `--record` refuses that; a `perl
+  // -pi -e` does not.
   ["coverage"] {
     glob = List("**/*.rs", ".coverage")
     depends = List("budget")
-    check = """
-      out=$(cargo llvm-cov --workspace --all-features --summary-only 2>&1) || { echo "$out" >&2; exit 1; }
-      now=$(printf '%s' "$out" | awk '/^TOTAL/{gsub("%","",$10); print $10}')
-      was=$(awk '/^lines /{print $2}' .coverage)
-      [ -n "$now" ] || { echo 'hk: could not read a coverage total -- that is an ERROR, not a floor breach (.:tdd:V26)' >&2; exit 1; }
-      awk -v n="$now" -v w="$was" 'BEGIN{exit !(n+0 < w+0)}' && { echo "hk: coverage FELL, $was% -> $now%. A line that stopped being covered is a test that stopped asserting. Cover it, or say why in .coverage with the drop." >&2; exit 1; }
-      awk -v n="$now" -v w="$was" 'BEGIN{exit !(n+0 > w+0)}' && echo "hk: coverage rose $was% -> $now%. Run: hk run fix"
-      printf 'coverage %s%% (floor %s%%)\\n' "$now" "$was"
-      """
-    // Same rule as `lint-debt`, mirrored: this one may only RAISE.
-    fix = """
-      out=$(cargo llvm-cov --workspace --all-features --summary-only 2>&1) || { echo "$out" >&2; exit 1; }
-      now=$(printf '%s' "$out" | awk '/^TOTAL/{gsub("%","",$10); print $10}')
-      was=$(awk '/^lines /{print $2}' .coverage)
-      [ -n "$now" ] || exit 1
-      awk -v n="$now" -v w="$was" 'BEGIN{exit !(n+0 < w+0)}' && { echo "hk: refusing to RECORD a drop, $was% -> $now%. Cover the gap, or edit .coverage by hand with the reason." >&2; exit 1; }
-      awk -v n="$now" '/^lines /{print "lines " n; next} {print}' .coverage > .coverage.new
-      mv .coverage.new .coverage
-      """
+    check = "cargo run -q --bin sherd -- coverage --check"
+    fix = "cargo run -q --bin sherd -- coverage --record"
   }
 }
 

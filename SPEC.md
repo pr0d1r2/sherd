@@ -49,6 +49,7 @@ self|.|-
 - cmd: `sherd lens <dir> [--depth rule|why|all]` → context pack. default `rule`
 - cmd: `sherd lens <dir> --json` → `{chain:[],body:{},children:[],tokens:{},examined:{}}` (0.3)
 - cmd: `sherd route "<query>"` → dir + the words that matched. RANKED: the node matching MORE of the query wins, a tie is ambiguous, & ROOT is never an answer. 0 hit / 2 miss / 3 ambiguous
+- cmd: `sherd coverage [--check|--record]` → the coverage floor vs `.coverage`. 0 held / 1 fell / 2 unmeasurable
 - cmd: `sherd debt [--check|--record]` → the lint ratchet: density & shape vs `.lint-debt`. 0 held / 1 rose / 2 unmeasurable
 - cmd: `sherd check [dir]` → drift spec↔code + file ceilings. 0 clean / 1 violation / 2 usage
 - cmd: `sherd split [dir]` → PROPOSE a federation from the CODE'S structure: dirs · `pub mod` · naming families w/ their shared hub. spec rows attach as EVIDENCE about a node, ⊥ as the reason for it. writes ⊥ ever; `--apply` refuses, ∵ which module owns which rule is a JUDGEMENT

@@ -22,6 +22,7 @@ sherd -- federated SPEC.md for small-context local models
   sherd fed [dir]        the federation edges declared by a node
   sherd check [dir]      microlith structural check of every node
   sherd debt [--check|--record]  lint ratchet: density & shape vs .lint-debt
+  sherd coverage [--check|--record]  coverage floor vs .coverage
   sherd validate         DAG + ids + ceilings + slice drift, one verdict
   sherd split [dir]      propose a federation split. writes nothing
   sherd sync [dir] [--check]  regenerate §N from §F. exit 1 if it wrote
@@ -69,6 +70,11 @@ pub fn run_args(mut args: Vec<String>) -> ExitCode {
     match args.first().map(String::as_str) {
         Some("budget") => budget(&root, arg_dir(&args, &root)),
         Some("debt") => debt_cmd(
+            &root,
+            args.get(1).map(String::as_str),
+            &crate::land::cargo_bin(),
+        ),
+        Some("coverage") => coverage_cmd(
             &root,
             args.get(1).map(String::as_str),
             &crate::land::cargo_bin(),
@@ -705,6 +711,46 @@ fn record_debt(root: &Path, now: crate::debt::Measured) -> ExitCode {
             ExitCode::from(1)
         }
     }
+}
+
+/// `sherd coverage [--check|--record]` -- the floor, as `hk` runs it.
+///
+/// The MIRROR of `debt`: this ratchet may only RISE. Same reason for
+/// existing -- the rule was stated twice in `hk.pkl` and the recording path
+/// was a hand edit, which is how a floor got lowered to match a drop today
+/// (`src/debt:B7`).
+fn coverage_cmd(root: &Path, mode: Option<&str>, cargo: &str) -> ExitCode {
+    let Some(now) = crate::debt::coverage(root, cargo) else {
+        eprintln!(
+            "sherd: could not read a coverage total -- that is an ERROR, \
+             not a floor breach (sherd/tdd:V26)"
+        );
+        return ExitCode::from(2);
+    };
+    let Some(was) = crate::debt::recorded_floor(root) else {
+        let path = root.join(".coverage");
+        eprintln!("sherd: {}: no `lines` row to read", path.display());
+        return ExitCode::from(2);
+    };
+    if mode == Some("--record") {
+        return match crate::debt::record_coverage(root, now) {
+            Ok(msg) => {
+                println!("{msg}");
+                ExitCode::SUCCESS
+            }
+            Err(e) => {
+                eprintln!("sherd: {e}");
+                ExitCode::from(1)
+            }
+        };
+    }
+    let (ok, report) = crate::debt::coverage_verdict(now, was);
+    if ok {
+        println!("{report}");
+        return ExitCode::SUCCESS;
+    }
+    eprintln!("{report}");
+    ExitCode::from(1)
 }
 
 /// `sherd debt [--check|--record]` -- the ratchet, as `hk` runs it.
@@ -1973,6 +2019,60 @@ mod tests {
         r.write(".lint-debt", "# a comment and nothing else\n")?;
         assert_eq!(
             debt_cmd(r.path(), Some("--check"), "true"),
+            ExitCode::from(2)
+        );
+        Ok(())
+    }
+
+    /// `sherd coverage` end to end over a scripted toolchain, the same way
+    /// `debt` is tested: the toolchain is a PARAMETER, so the verb the gate
+    /// runs on every push is reachable from a test.
+    #[test]
+    fn the_coverage_verb_checks_records_and_refuses() -> Result<(), String> {
+        let r = crate::testrepo::TestRepo::new("cli-cov")?;
+        r.write("SPEC.md", "# SPEC\n\n## \u{a7}G GOAL\n\ncov\n")?;
+        r.write(".coverage", "# the reason\nlines 90.00\n")?;
+        r.commit("a tree with a floor")?;
+        let fake = r.path().join("fake-cargo");
+        std::fs::write(
+            &fake,
+            "#!/bin/sh\necho 'TOTAL 1 2 3.00% 4 5 6.00% 7 8 92.50% 0 0 -'\nexit 0\n",
+        )
+        .map_err(|e| e.to_string())?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(
+                &fake,
+                std::fs::Permissions::from_mode(0o755),
+            )
+            .map_err(|e| e.to_string())?;
+        }
+        let fake = fake.display().to_string();
+
+        // 92.50 is above the recorded 90.00.
+        assert_eq!(
+            coverage_cmd(r.path(), Some("--check"), &fake),
+            ExitCode::SUCCESS
+        );
+        assert_eq!(
+            coverage_cmd(r.path(), Some("--record"), &fake),
+            ExitCode::SUCCESS
+        );
+        let after = std::fs::read_to_string(r.path().join(".coverage"))
+            .unwrap_or_default();
+        assert!(after.contains("lines 92.50"), "{after}");
+        assert!(after.contains("# the reason"), "the reason survives");
+
+        // A toolchain that cannot run is an ERROR, not a breach (V26).
+        assert_eq!(
+            coverage_cmd(r.path(), Some("--check"), "definitely-not-a-cargo"),
+            ExitCode::from(2)
+        );
+        // And a tree with no floor is a usage error, not a clean bill.
+        let _ = std::fs::remove_file(r.path().join(".coverage"));
+        assert_eq!(
+            coverage_cmd(r.path(), Some("--check"), &fake),
             ExitCode::from(2)
         );
         Ok(())

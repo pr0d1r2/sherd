@@ -276,6 +276,122 @@ fn tenths(v: &str) -> Option<usize> {
         .checked_add(tenth)
 }
 
+/// The coverage floor, in HUNDREDTHS. `9227` is `92.27%`.
+///
+/// Hundredths, where the lint ratios are tenths: `.coverage` has always
+/// carried two decimals and rounding it to one would move the floor by up to
+/// five hundredths, which is more than most of today's real changes.
+pub const COVERAGE_SCALE: usize = 100;
+
+/// `cargo llvm-cov`'s TOTAL line percentage, in hundredths.
+///
+/// The MIRROR of `density`: this one may only RISE. Everything else is the
+/// same shape, which is why it lives here (`T2`).
+///
+/// `None` when the tool could not run or printed no TOTAL -- a gate that did
+/// not EXECUTE is an ERROR, not a floor breach (`src/tdd:V26`).
+#[must_use]
+pub fn coverage(root: &Path, cargo: &str) -> Option<usize> {
+    let o = Command::new(cargo)
+        .args([
+            "llvm-cov",
+            "--workspace",
+            "--all-features",
+            "--summary-only",
+        ])
+        .current_dir(root)
+        .output()
+        .ok()?;
+    if !o.status.success() {
+        return None;
+    }
+    let text = String::from_utf8_lossy(&o.stdout);
+    let total = text.lines().find(|l| l.starts_with("TOTAL"))?;
+    // itok's format: the tenth field is the line percentage.
+    hundredths(total.split_whitespace().nth(9)?.trim_end_matches('%'))
+}
+
+/// The floor `.coverage` records, in hundredths.
+#[must_use]
+pub fn recorded_floor(root: &Path) -> Option<usize> {
+    let text = std::fs::read_to_string(root.join(".coverage")).ok()?;
+    text.lines()
+        .find_map(|l| hundredths(l.strip_prefix("lines ")?))
+}
+
+/// `"92.27"` as `9227`. One decimal or none still parses.
+fn hundredths(v: &str) -> Option<usize> {
+    let v = v.trim();
+    let (whole, frac) = v.split_once('.').unwrap_or((v, "0"));
+    let mut d = frac.chars().filter(char::is_ascii_digit);
+    let tens = d.next()?.to_digit(10)? as usize;
+    let ones = d.next().and_then(|c| c.to_digit(10)).unwrap_or(0) as usize;
+    whole
+        .parse::<usize>()
+        .ok()?
+        .checked_mul(COVERAGE_SCALE)?
+        .checked_add(tens.saturating_mul(10).saturating_add(ones))
+}
+
+/// Hundredths as the number a reader sees: `9227` is `92.27`.
+#[must_use]
+pub fn percent(h: usize) -> String {
+    format!("{}.{:02}", h / COVERAGE_SCALE, h % COVERAGE_SCALE)
+}
+
+/// Did coverage FALL? The report, and whether it refuses.
+#[must_use]
+pub fn coverage_verdict(now: usize, was: usize) -> (bool, String) {
+    if now < was {
+        return (
+            false,
+            format!(
+                "sherd/debt:V9: coverage FELL, {}% -> {}%. A line that \
+                 stopped being covered is a test that stopped asserting. \
+                 Cover it, or say why in .coverage with the drop.",
+                percent(was),
+                percent(now)
+            ),
+        );
+    }
+    // `.:V48`: state what was examined either way.
+    (
+        true,
+        format!("  coverage {}% (floor {}%)", percent(now), percent(was)),
+    )
+}
+
+/// Rewrite `.coverage`'s number, refusing a DROP.
+///
+/// # Errors
+/// The file could not be read or written, or coverage fell -- recording a
+/// drop is filing down the ratchet's own teeth.
+pub fn record_coverage(root: &Path, now: usize) -> Result<String, String> {
+    let path = root.join(".coverage");
+    let text = std::fs::read_to_string(&path).map_err(|e| format!("{e}"))?;
+    let was = recorded_floor(root)
+        .ok_or_else(|| "no `lines` row to record into".to_string())?;
+    if !coverage_verdict(now, was).0 {
+        return Err(format!(
+            "refusing to RECORD a drop, {}% -> {}%. Cover the gap, or edit \
+             .coverage by hand with the reason.",
+            percent(was),
+            percent(now)
+        ));
+    }
+    let out: String = text.lines().fold(String::new(), |mut acc, l| {
+        if l.starts_with("lines ") {
+            acc.push_str(&format!("lines {}", percent(now)));
+        } else {
+            acc.push_str(l);
+        }
+        acc.push('\n');
+        acc
+    });
+    std::fs::write(&path, &out).map_err(|e| format!("{e}"))?;
+    Ok(format!("recorded coverage {}%", percent(now)))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -334,6 +450,85 @@ mod tests {
         assert_eq!(tenths("14.6"), Some(146));
         assert_eq!(tenths("9"), Some(90));
         assert_eq!(per_kloc(146), "14.6");
+    }
+
+    /// Coverage is the MIRROR: a floor that may only RISE, where the lint
+    /// ratios are ceilings that may only fall.
+    #[test]
+    fn a_floor_refuses_a_fall_and_states_what_it_saw() {
+        let (ok, r) = coverage_verdict(9227, 9227);
+        assert!(ok, "holding is not a fall");
+        assert!(r.contains("92.27% (floor 92.27%)"), "{r}");
+        let (rose, rr) = coverage_verdict(9300, 9227);
+        assert!(rose, "rising is not a fall");
+        assert!(rr.contains("93.00%"), "{rr}");
+        let (fell, fr) = coverage_verdict(9226, 9227);
+        assert!(!fell, "one hundredth down is a fall");
+        assert!(fr.contains("coverage FELL, 92.27% -> 92.26%"), "{fr}");
+    }
+
+    /// HUNDREDTHS, where the lint ratios are tenths: `.coverage` has always
+    /// carried two decimals and rounding to one would move the floor by up
+    /// to five hundredths -- more than most of today's real changes.
+    #[test]
+    fn a_percentage_keeps_both_decimals() {
+        assert_eq!(hundredths("92.27"), Some(9227));
+        assert_eq!(hundredths("92.2"), Some(9220), "one decimal still parses");
+        assert_eq!(hundredths("92"), Some(9200), "none does too");
+        assert_eq!(hundredths("92.27%"), Some(9227), "a trailing sign is fine");
+        assert_eq!(percent(9227), "92.27");
+        assert_eq!(percent(9200), "92.00", "the zeroes are kept");
+        assert_eq!(percent(9205), "92.05", "and so is the leading one");
+    }
+
+    /// `V6`'s mirror: the FIX half may only RAISE. Recording a drop is
+    /// filing down the ratchet's own teeth -- which is how a floor got
+    /// lowered by hand today (`B7`).
+    #[test]
+    fn recording_raises_and_refuses_to_lower() {
+        let dir = std::env::temp_dir()
+            .join(format!("sherd-cov-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let _ = std::fs::create_dir_all(&dir);
+        let read = || {
+            std::fs::read_to_string(dir.join(".coverage")).unwrap_or_default()
+        };
+        let _ = std::fs::write(
+            dir.join(".coverage"),
+            "# why it is 90.00\nlines 90.00\n",
+        );
+        assert!(record_coverage(&dir, 9250).is_ok());
+        assert!(read().contains("lines 92.50"), "{}", read());
+        assert!(read().contains("# why it is 90.00"), "the reason survives");
+
+        let before = read();
+        assert!(
+            record_coverage(&dir, 8000).is_err_and(|e| e.contains("drop")),
+            "a fall is refused"
+        );
+        assert_eq!(read(), before, "and the file is untouched");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A tree with no `.coverage` is an ERROR, never a floor of zero.
+    #[test]
+    fn recording_into_a_tree_with_no_floor_is_an_error() {
+        assert!(
+            record_coverage(Path::new("/definitely-not-a-repo"), 1).is_err()
+        );
+    }
+
+    /// `src/tdd:V26`: a gate that did not EXECUTE is an ERROR, not a floor
+    /// breach. A missing toolchain returning "0%" is indistinguishable from
+    /// a suite that covers nothing.
+    #[test]
+    fn a_toolchain_that_did_not_run_yields_no_measurement() {
+        let dir = std::env::temp_dir()
+            .join(format!("sherd-cov-none-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        assert_eq!(coverage(&dir, "definitely-not-a-cargo"), None);
+        assert_eq!(recorded_floor(&dir), None, "no file is not a floor of 0");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// The denominator is the gate's, and it is not zero on this tree.
@@ -488,10 +683,18 @@ mod tests {
             "a raise is refused"
         );
         assert_eq!(read(), before, "and the file is untouched");
-
-        // A tree with no `.lint-debt` is an error, never a silent success.
-        assert!(record(Path::new("/definitely-not-a-repo"), better).is_err());
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A tree with no `.lint-debt` is an error, never a silent success.
+    #[test]
+    fn recording_debt_with_no_ratchet_is_an_error() {
+        let m = Measured {
+            count: 1,
+            excess: 1,
+            loc: 100,
+        };
+        assert!(record(Path::new("/definitely-not-a-repo"), m).is_err());
     }
 
     /// A scripted `cargo` in `dir`, printing `out` on stderr.

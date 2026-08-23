@@ -299,8 +299,21 @@
 # became `check_node` + `check_federation`. That trade -- one warning for
 # twenty-five excess lines -- is `src/debt:B3` from the other side, and it is
 # why the two ratchets are separate numbers.
-density 14.6
-shape 9.3
-count 269
-excess 1726
-loc 18369
+#
+# RAISED 14.6 -> 14.7 and 9.3 -> 9.5 on 2026-08-24 for `src/debt:T2` -- the
+# coverage floor joins this node and `hk.pkl` calls `sherd coverage` instead
+# of restating the rule. 23 lines of shell became 5.
+#
+# The same trade as `T1`, and the same arithmetic: shell is not counted and
+# Rust is, so moving a rule between them raises the ratio while removing a
+# reading. `.coverage`'s rule was written twice here -- check and fix, a
+# copy-paste of each other.
+#
+# Paid rather than recorded where it was honest: two `record` tests were
+# doing two jobs each and the no-ratchet case earned its own name in both.
+# The rest is a whole ratchet's production code plus its tests.
+density 14.7
+shape 9.5
+count 276
+excess 1789
+loc 18672
