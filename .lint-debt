@@ -155,4 +155,24 @@
 # allowed to rise, would be strictly stronger than one -- not done here
 # because changing what a ratchet measures is not a thing to do in the same
 # commit that moves it.
+#
+# SECOND NUMBER, 2026-08-23. `shape` is the sum of lines OVER the limit
+# across every function that exceeds it. `total` is unchanged. NEITHER may
+# rise, so this is strictly stronger than one number, not a relaxation.
+#
+# Why (`.:B21`): counting warnings punishes the split it exists to force.
+# `tdd::drive_run` is 269 lines and ONE warning; five 50-line pieces would
+# be FIVE, so the honest refactor of the worst function in the tree fails
+# the gate. Under excess lines the same split reads 254 -> 175.
+#
+# A count also weighs "one line over" the same as 269. Measured today: 76
+# functions over the limit, 2,822 lines in them, 1,682 excess, and 17 of
+# the 76 are 16-19 lines.
+#
+# Found by looping paydown until nothing paid and asking why. Three rounds
+# refused their own stopping rule -- arithmetic is 45 index expressions and
+# 14 accumulators, test asserts get LONGER as whole-value comparisons, and
+# `RECORDED[0]` in a `const` cannot panic. The instrument was the reason,
+# not the code.
 total 271
+shape 1682

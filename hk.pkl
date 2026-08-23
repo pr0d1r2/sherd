@@ -59,10 +59,15 @@ local fast = new Mapping<String, Step> {
     check = """
       out=$(cargo clippy --workspace --all-targets --all-features --message-format=short 2>&1)
       printf '%s' "$out" | grep -qE '^error(\[|:)' && { echo "hk: clippy did not COMPILE, so its warning count is not a measurement -- a target that fails to build emits no warnings at all, and the ratchet would read that as an improvement (.:B18)." >&2; printf '%s\n' "$out" | grep -E '^error' | head -3 >&2; exit 1; }
-      now=$(printf '%s' "$out" | grep -cE '^(src|dev)/.*: warning')
+      hits=$(printf '%s' "$out" | grep -E '^(src|dev)/.*: warning')
+      now=$(printf '%s' "$hits" | grep -c .)
       was=$(awk '/^total /{print $2}' .lint-debt)
       [ "$now" -le "$was" ] || { echo "hk: lint debt ROSE, $was -> $now. The limits in clippy.toml are the shape the target model handles (.:R44); adding to the debt walks away from the §G TARGET. Fix the new sites, or record WHY in .lint-debt with the raise." >&2; exit 1; }
       [ "$now" -eq "$was" ] || echo "hk: lint debt fell $was -> $now. Run: hk run fix"
+      shape=$(printf '%s' "$hits" | grep -oE 'too many lines \([0-9]+/15\)' | grep -oE '[0-9]+/' | tr -d '/' | awk '{s+=$1-15} END{print s+0}')
+      swas=$(awk '/^shape /{print $2}' .lint-debt)
+      [ "$shape" -le "$swas" ] || { echo "hk: SHAPE debt ROSE, $swas -> $shape excess lines. Counting long functions PUNISHES splitting one: 269 lines is one warning, five 50-line pieces are five (.:B21). This counts lines OVER the limit, so a split reads as the progress it is." >&2; exit 1; }
+      [ "$shape" -eq "$swas" ] || echo "hk: shape debt fell $swas -> $shape excess lines. Run: hk run fix"
       """
     // `fix` may only LOWER. `pre-commit` runs the fast set in fix mode, so a
     // fix that recorded whatever it measured would file down the ratchet's
@@ -75,10 +80,14 @@ local fast = new Mapping<String, Step> {
     fix = """
       out=$(cargo clippy --workspace --all-targets --all-features --message-format=short 2>&1)
       printf '%s' "$out" | grep -qE '^error(\[|:)' && { echo "hk: clippy did not COMPILE -- refusing to RECORD a count taken from a broken build (.:B18). A target that fails to build emits no warnings, so this would write down an improvement nobody made." >&2; exit 1; }
-      now=$(printf '%s' "$out" | grep -cE '^(src|dev)/.*: warning')
+      hits=$(printf '%s' "$out" | grep -E '^(src|dev)/.*: warning')
+      now=$(printf '%s' "$hits" | grep -c .)
       was=$(awk '/^total /{print $2}' .lint-debt)
       [ "$now" -le "$was" ] || { echo "hk: refusing to RECORD a raise, $was -> $now. A ratchet that writes down whatever it measures is not a ratchet. Fix the new sites, or edit .lint-debt by hand with the reason." >&2; exit 1; }
-      awk -v n="$now" '/^total /{print "total " n; next} {print}' .lint-debt > .lint-debt.new
+      shape=$(printf '%s' "$hits" | grep -oE 'too many lines \([0-9]+/15\)' | grep -oE '[0-9]+/' | tr -d '/' | awk '{s+=$1-15} END{print s+0}')
+      swas=$(awk '/^shape /{print $2}' .lint-debt)
+      [ "$shape" -le "$swas" ] || { echo "hk: refusing to RECORD a shape raise, $swas -> $shape excess lines (.:B21)." >&2; exit 1; }
+      awk -v n="$now" -v s="$shape" '/^total /{print "total " n; next} /^shape /{print "shape " s; next} {print}' .lint-debt > .lint-debt.new
       mv .lint-debt.new .lint-debt
       """
   }
