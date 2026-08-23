@@ -805,6 +805,18 @@ fn budget(root: &Path, dir: PathBuf) -> ExitCode {
         eprintln!("sherd: {} matched no node", dir.display());
         return ExitCode::from(2);
     }
+    // A COLD START is not a breach. With no `.context-limits` at all the
+    // default is a suggestion nobody wrote, and failing a stranger against
+    // it is a claim about a rule that does not exist (`B8`). An unlisted
+    // PATH inside an existing file still takes the default -- `.:V6`.
+    if tokens::Ceilings::load(root).is_ok_and(|c| c.is_cold()) {
+        println!(
+            "  no .context-limits: ceilings are the {} tok default, and \
+             over is advisory until you set them",
+            tokens::DEFAULT_NODE
+        );
+        return ExitCode::SUCCESS;
+    }
     // T10/V104: the number exists to be COMPARED. Printing it and exiting 0
     // is what let the chains drift over unseen (B7).
     if over > 0 {
@@ -1001,7 +1013,19 @@ fn validate_edges(root: &Path) -> usize {
 
 /// Every chain against the ceiling it inherits.
 fn validate_ceilings(root: &Path, nodes: &[PathBuf]) -> usize {
-    nodes.iter().filter(|node| over_ceiling(root, node)).count()
+    let over = nodes.iter().filter(|node| over_ceiling(root, node)).count();
+    // A COLD START is not a breach: with no `.context-limits` the default is
+    // a suggestion nobody wrote, and one verdict that fails on it is a claim
+    // about a rule that does not exist (`B8`). Still REPORTED -- `.:V48` --
+    // just not counted against the verdict.
+    if over > 0 && tokens::Ceilings::load(root).is_ok_and(|c| c.is_cold()) {
+        println!(
+            "  ({over} over the {} tok default; set .context-limits to gate it)",
+            tokens::DEFAULT_NODE
+        );
+        return 0;
+    }
+    over
 }
 
 /// One chain against the ceiling it inherits. A node whose pack or ceiling
@@ -1795,6 +1819,46 @@ mod tests {
             root_for(&["sync".to_string(), "--check".into()]),
             repo_root()
         );
+        Ok(())
+    }
+
+    /// `B8`: a COLD START is not a breach. With no `.context-limits` at all
+    /// the default is a suggestion nobody wrote, and failing a stranger
+    /// against it is a claim about a rule that does not exist.
+    ///
+    /// An unlisted PATH inside an EXISTING file is a different thing and
+    /// still takes the default -- `.:V6` requires that, or a row silently
+    /// skipped gates nothing.
+    #[test]
+    fn a_default_ceiling_nobody_set_is_advisory() -> Result<(), String> {
+        let r = crate::testrepo::TestRepo::new("cli-cold")?;
+        let big = "V1: a rule long enough to blow past two thousand tokens. "
+            .repeat(400);
+        r.write(
+            "SPEC.md",
+            &format!("# SPEC\n\n## \u{a7}V INVARIANTS\n\n{big}\n"),
+        )?;
+        r.commit("a chain over the default, with no ceilings file")?;
+
+        // Cold: reported, not failed.
+        assert_eq!(budget(r.path(), r.path().to_path_buf()), ExitCode::SUCCESS);
+
+        // Warm: the SAME tree with a ceilings file fails, because now the
+        // number is one somebody wrote.
+        r.write(".context-limits", "SPEC.md 100\n")?;
+        assert_eq!(budget(r.path(), r.path().to_path_buf()), ExitCode::from(1));
+
+        // And a path unlisted in an existing file still takes the default.
+        r.write(".context-limits", "src/nowhere 999999\n")?;
+        assert_eq!(budget(r.path(), r.path().to_path_buf()), ExitCode::from(1));
+
+        // `validate` gives ONE verdict over the same rule: cold counts zero,
+        // warm counts the breach.
+        let nodes = crate::fed::discover(r.path());
+        assert_eq!(validate_ceilings(r.path(), &nodes), 1, "warm counts it");
+        std::fs::remove_file(r.path().join(".context-limits"))
+            .map_err(|e| e.to_string())?;
+        assert_eq!(validate_ceilings(r.path(), &nodes), 0, "cold does not");
         Ok(())
     }
 

@@ -54,6 +54,8 @@ pub const fn working(window: u64) -> u64 {
 pub struct Ceilings {
     rows: Vec<(String, u64)>,
     default: u64,
+    /// No `.context-limits` existed: the default is a suggestion, not a rule.
+    cold: bool,
 }
 
 /// Node budget when the file names no ceiling for a path.
@@ -95,19 +97,39 @@ impl Ceilings {
         Ok(Self {
             rows,
             default: DEFAULT_NODE,
+            cold: false,
         })
     }
 
-    /// Load from `root`, or defaults when absent. A missing file is a cold
-    /// start; a malformed one is not.
+    /// Load from `root`, or defaults when absent. A missing file is a COLD
+    /// START; a malformed one is not.
+    ///
+    /// The distinction has to reach the CALLER. `budget` treated a cold
+    /// start's default exactly like a declared ceiling and exited 1 on a
+    /// stranger's repo -- failing them against a number they never wrote and
+    /// were never shown (`src/cli:B8`).
     ///
     /// # Errors
     /// Propagates a parse failure.
     pub fn load(root: &std::path::Path) -> Result<Self, String> {
         match std::fs::read_to_string(root.join(".context-limits")) {
             Ok(t) => Self::parse(&t),
-            Err(_) => Ok(Self::default_only()),
+            Err(_) => Ok(Self {
+                cold: true,
+                ..Self::default_only()
+            }),
         }
+    }
+
+    /// Was there no `.context-limits` at all?
+    ///
+    /// An unlisted PATH inside an existing file still takes the default --
+    /// `.:V6` requires that, or a row silently skipped gates nothing. A file
+    /// that does not exist is a different thing: nobody has set a ceiling,
+    /// so the default is a suggestion rather than a rule.
+    #[must_use]
+    pub const fn is_cold(&self) -> bool {
+        self.cold
     }
 
     #[must_use]
@@ -115,6 +137,7 @@ impl Ceilings {
         Self {
             rows: Vec::new(),
             default: DEFAULT_NODE,
+            cold: false,
         }
     }
 
