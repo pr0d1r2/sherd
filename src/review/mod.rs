@@ -310,7 +310,7 @@ mod tests {
             &["helper".into()],
         );
         assert_eq!(f.len(), 1, "is_ignored_dir landed exactly like this");
-        assert_eq!(f[0].rule, "unwired");
+        assert_eq!(f.first().map(|x| x.rule), Some("unwired"));
     }
 
     #[test]
@@ -456,7 +456,7 @@ mod tests {
             1,
             "check_split_hint ignored _budget exactly like this"
         );
-        assert_eq!(f[0].rule, "ignored-input");
+        assert_eq!(f.first().map(|x| x.rule), Some("ignored-input"));
     }
 
     #[test]

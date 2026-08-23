@@ -209,8 +209,15 @@
 # `now / 10` with `now % 10` is arithmetic clippy flags. The formatting was
 # worth extracting -- `per_kloc` is a name for "tenths as a reader sees
 # them" and appears twice -- and the rest is a walker and a division.
-density 17.2
+#
+# 17.2 -> 17.1 the same day. Covering the walker's recursion and its
+# empty-denominator path cost two warnings, and rather than record a raise
+# in the session that set the number, two were paid back: the last two
+# `f[0].rule` assertions in `src/review` became `f.first().map(..)`, which
+# is the whole-value comparison that failed the length rule for `Edge` and
+# fits in one line for a single field.
+density 17.1
 shape 10.6
 count 275
-excess 1693
-loc 15969
+excess 1697
+loc 15990

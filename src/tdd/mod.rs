@@ -1728,6 +1728,21 @@ mod loop_tests {
         );
     }
 
+    /// A tree with no `src/` is not a tree with zero lines of Rust: the
+    /// density has no denominator, so there is nothing to compare and the
+    /// candidate is not refused on a bench problem (V26).
+    #[test]
+    fn a_tree_with_no_rust_yields_no_density() {
+        let dir = std::env::temp_dir().join("sherd-no-rust-at-all");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("mkdir");
+        std::fs::write(dir.join(".lint-debt"), "density 5.0\n").expect("write");
+        let (ok, r) = crate::land::lint_debt_ok(&dir, "false");
+        assert!(ok, "no denominator is not a refusal: {r}");
+        assert!(r.is_empty(), "and it says nothing: {r}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     /// A `cargo` whose clippy step emits `n` warning lines on stderr.
     fn cargo_with_warnings(dir: &Path, n: usize) -> Result<String, String> {
         let script = dir.join("noisy-cargo");
@@ -1750,9 +1765,15 @@ mod loop_tests {
         let (dir, _n) = scratch("ratchet")?;
         // A hundred lines of Rust, so the arithmetic is legible: two warnings
         // over 100 lines is 20.0 per KLoC, three is 30.0.
-        std::fs::create_dir_all(dir.join("src"))
+        std::fs::create_dir_all(dir.join("src/deeper"))
             .map_err(|e| format!("mkdir: {e}"))?;
-        std::fs::write(dir.join("src/x.rs"), "// line\n".repeat(100))
+        std::fs::write(dir.join("src/x.rs"), "// line\n".repeat(60))
+            .map_err(|e| format!("write: {e}"))?;
+        // A nested dir and a non-Rust file, because the walker must descend
+        // and must not count the README beside the code.
+        std::fs::write(dir.join("src/deeper/y.rs"), "// line\n".repeat(40))
+            .map_err(|e| format!("write: {e}"))?;
+        std::fs::write(dir.join("src/notes.md"), "// line\n".repeat(500))
             .map_err(|e| format!("write: {e}"))?;
         std::fs::write(dir.join(".lint-debt"), "density 20.0\n")
             .map_err(|e| format!("write: {e}"))?;
@@ -1767,7 +1788,7 @@ mod loop_tests {
         // And the point of a RATIO: three warnings over 150 lines is 20.0,
         // the same density, so growing the tree with clean code passes where
         // the old absolute count refused it (`.:B22`).
-        std::fs::write(dir.join("src/x.rs"), "// line\n".repeat(150))
+        std::fs::write(dir.join("src/x.rs"), "// line\n".repeat(110))
             .map_err(|e| format!("write: {e}"))?;
         let (grew, gr) =
             crate::land::lint_debt_ok(&dir, &cargo_with_warnings(&dir, 3)?);
