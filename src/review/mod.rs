@@ -8,7 +8,7 @@
 
 // Source reading lives in `crate::code` -- one owner for both this node and
 // `src/tdd` (`.:B13`). `unwired`'s call detection went with it as `is_called`.
-use crate::code::{is_called, split_module};
+use crate::code::{fn_body, fn_names, is_called, markers, split_module};
 use std::path::Path;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -16,6 +16,21 @@ pub struct Finding {
     pub rule: &'static str,
     pub detail: String,
 }
+
+/// The mechanical rules `review` runs, named for the report.
+///
+/// `V5` says report what was CHECKED rather than claim clean, and the list
+/// lived in `src/cli`'s format string, where it went stale: `undocumented`
+/// shipped and the report never mentioned it. Here it sits beside the
+/// functions it names, so adding a rule and forgetting the report is one
+/// edit away rather than two files apart.
+pub const RULES: [&str; 5] = [
+    "unwired",
+    "negative-only",
+    "ignored-input",
+    "undocumented",
+    "duplication",
+];
 
 /// A public fn added but called by nothing outside the tests.
 ///
@@ -218,6 +233,8 @@ pub fn node(path: &Path, added: &[String]) -> std::io::Result<Vec<Finding>> {
     out.extend(negative_only(impl_r, tests_r, added));
     out.extend(ignored_input(impl_r, added));
     out.extend(undocumented(impl_r, added));
+    // Whole-crate like `unwired`: the case worth catching is cross-node.
+    out.extend(duplication(&crate_src, added));
     Ok(out)
 }
 
@@ -298,6 +315,70 @@ pub fn commit(
     Ok(out)
 }
 
+/// A new function that recognises the same markers as an existing one.
+///
+/// `.:B13` is the defect: "parse Rust source" shipped TWICE across nodes --
+/// `src/tdd` held `signatures`, `expected_calls` and `split_module` while
+/// `src/review` held `public_fns` and call-detection. Nothing said so; a
+/// human noticed months later.
+///
+/// The signal is the string literals a body MATCHES ON. Two functions that
+/// recognise `## §T` are two readings of one row format, wherever they live.
+/// Searched over the WHOLE crate like `unwired`, because the case worth
+/// catching is cross-node and a per-file check cannot see it (V1).
+///
+/// TWO shared markers, not one: measured against this crate, a threshold of
+/// one fires on every pair that mentions `SPEC.md`, and two leaves seven
+/// pairs of which three are real. ADVISORY (V3) -- an encode/decode pair
+/// legitimately shares its keys, and only the reader can tell that from a
+/// duplicated parse.
+#[must_use]
+pub fn duplication(crate_src: &str, new_fns: &[String]) -> Vec<Finding> {
+    let mut out = Vec::new();
+    for f in new_fns {
+        let Some(mine) = fn_body(crate_src, f).map(markers) else {
+            continue;
+        };
+        if mine.len() < 2 {
+            continue;
+        }
+        for other in fn_names(crate_src) {
+            if &other == f {
+                continue;
+            }
+            let shared = shared_markers(crate_src, &mine, &other);
+            if shared.len() < 2 || calls(crate_src, f, &other) {
+                continue;
+            }
+            out.push(Finding {
+                rule: "duplication",
+                detail: format!(
+                    "`{f}` recognises {} that `{other}` already does -- \
+                     two readings of one parse (`.:B13`)",
+                    shared.join(", ")
+                ),
+            });
+        }
+    }
+    out
+}
+
+/// Markers `other` recognises that are also in `mine`, quoted for a report.
+fn shared_markers(src: &str, mine: &[String], other: &str) -> Vec<String> {
+    let Some(theirs) = fn_body(src, other).map(markers) else {
+        return Vec::new();
+    };
+    mine.iter()
+        .filter(|m| theirs.contains(m))
+        .map(|m| format!("`{m}`"))
+        .collect()
+}
+
+/// Does `f`'s body call `other`? Then it REUSES rather than re-parses.
+fn calls(src: &str, f: &str, other: &str) -> bool {
+    fn_body(src, f).is_some_and(|b| b.contains(&format!("{other}(")))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -311,6 +392,66 @@ mod tests {
         );
         assert_eq!(f.len(), 1, "is_ignored_dir landed exactly like this");
         assert_eq!(f.first().map(|x| x.rule), Some("unwired"));
+    }
+
+    /// `T3`/`.:B13`: two functions recognising the same markers are two
+    /// readings of one parse. The real case was cross-node -- `src/tdd` and
+    /// `src/review` both read Rust as text -- so this searches the whole
+    /// crate like `unwired` does.
+    #[test]
+    fn a_new_fn_recognising_an_existing_fn_s_markers_is_flagged() {
+        let src = "fn old(s: &str) -> bool {\n    \
+                   s.starts_with(\"## \u{a7}T\") && s.contains(\"status\")\n}\n\
+                   fn fresh(s: &str) -> bool {\n    \
+                   s.contains(\"## \u{a7}T\") || s.contains(\"status\")\n}\n";
+        let f = duplication(src, &["fresh".to_string()]);
+        assert_eq!(f.len(), 1, "{f:?}");
+        assert_eq!(f.first().map(|x| x.rule), Some("duplication"));
+        assert!(
+            f.first().is_some_and(|x| x.detail.contains("`old`")),
+            "the report names what it duplicates: {f:?}"
+        );
+    }
+
+    /// A function that CALLS the other reuses it rather than re-parsing, so
+    /// sharing markers with it is not a finding -- that is the fix, not the
+    /// defect.
+    #[test]
+    fn calling_the_existing_fn_is_reuse_and_not_a_finding() {
+        let src = "fn old(s: &str) -> bool {\n    \
+                   s.starts_with(\"## \u{a7}T\") && s.contains(\"status\")\n}\n\
+                   fn fresh(s: &str) -> bool {\n    \
+                   old(s) && s.contains(\"## \u{a7}T\") && s.contains(\"status\")\n}\n";
+        assert!(duplication(src, &["fresh".to_string()]).is_empty());
+    }
+
+    /// ONE shared marker is not evidence. Measured against this crate a
+    /// threshold of one fires on every pair mentioning `SPEC.md`; two leaves
+    /// seven pairs, of which three are real.
+    #[test]
+    fn one_shared_marker_is_below_the_threshold() {
+        let src = "fn old(s: &str) -> bool {\n    \
+                   s.starts_with(\"## \u{a7}T\") && s.contains(\"other\")\n}\n\
+                   fn fresh(s: &str) -> bool {\n    \
+                   s.contains(\"## \u{a7}T\") && s.contains(\"unrelated\")\n}\n";
+        assert!(duplication(src, &["fresh".to_string()]).is_empty());
+    }
+
+    /// `V5`: the report names every rule that ran. The list drifted once --
+    /// `undocumented` shipped and the report never mentioned it -- so this
+    /// asserts the count rather than trusting a format string two files away.
+    #[test]
+    fn every_rule_that_runs_is_named_in_the_report() {
+        assert_eq!(RULES.len(), 5);
+        for r in [
+            "unwired",
+            "negative-only",
+            "ignored-input",
+            "undocumented",
+            "duplication",
+        ] {
+            assert!(RULES.contains(&r), "{r} is not named");
+        }
     }
 
     #[test]

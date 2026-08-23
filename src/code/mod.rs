@@ -306,6 +306,132 @@ pub fn test_decls(tests_src: &str) -> String {
     out
 }
 
+/// Every function declared in a source, in order.
+///
+/// Here rather than in `src/review`, because `.:B13` is precisely the defect
+/// of two nodes both reading Rust as text: the fix moved `public_fns` and
+/// call-detection here, and a second name scanner over there would undo it.
+#[must_use]
+pub fn fn_names(src: &str) -> Vec<String> {
+    src.lines()
+        .filter_map(|l| {
+            let s = l.trim_start();
+            let r = s
+                .strip_prefix("pub fn ")
+                .or_else(|| s.strip_prefix("pub(crate) fn "))
+                .or_else(|| s.strip_prefix("fn "))?;
+            let name: String = r
+                .chars()
+                .take_while(|c| c.is_alphanumeric() || *c == '_')
+                .collect();
+            (!name.is_empty()).then_some(name)
+        })
+        .collect()
+}
+
+/// The body of one function, brace-matched, or `None` if it is not declared.
+///
+/// Brace-matched rather than indentation-matched: a `match` arm and a closure
+/// both indent, and the end of a function is the only thing a counter can be
+/// sure of.
+///
+/// Braces inside a CHAR or STRING literal do not count. `s.split('{')` is
+/// ordinary code here, and counting its brace made one body swallow every
+/// function after it -- caught by probing the check this exists to feed,
+/// against this crate, before writing a test (`src/review:B3`).
+#[must_use]
+pub fn fn_body<'a>(src: &'a str, name: &str) -> Option<&'a str> {
+    let decl = format!("fn {name}(");
+    let at = src.find(&decl)?;
+    let open = src.get(at..)?.find('{')?.saturating_add(at);
+    let b = src.as_bytes();
+    let (mut depth, mut i) = (0usize, open);
+    while i < b.len() {
+        match b.get(i) {
+            Some(&b'"' | &b'\'') => {
+                i = skip_literal(b, i);
+                continue;
+            }
+            Some(&b'{') => depth = depth.saturating_add(1),
+            Some(&b'}') => {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    return src.get(open..=i);
+                }
+            }
+            _ => {}
+        }
+        i = i.saturating_add(1);
+    }
+    src.get(open..)
+}
+
+/// Index just past the literal opening at `at`, honouring `\` escapes.
+///
+/// A LIFETIME is not a char literal: `<'a>` opens a quote that never closes,
+/// and treating it as one made `fn_body` swallow every function after the
+/// first generic one. A char literal is `'x'` or `'\\n'` -- the quote closes
+/// within three bytes -- and anything else beginning with `'` is a lifetime.
+fn skip_literal(b: &[u8], at: usize) -> usize {
+    let Some(&quote) = b.get(at) else {
+        return at.saturating_add(1);
+    };
+    if quote == b'\'' {
+        let escaped = b.get(at.saturating_add(1)) == Some(&b'\\');
+        let closes = b.get(at.saturating_add(2)) == Some(&b'\'');
+        if !escaped && !closes {
+            return at.saturating_add(1); // a lifetime
+        }
+    }
+    let mut i = at.saturating_add(1);
+    while i < b.len() {
+        match b.get(i) {
+            Some(&b'\\') => i = i.saturating_add(2),
+            Some(c) if *c == quote => return i.saturating_add(1),
+            _ => i = i.saturating_add(1),
+        }
+    }
+    i
+}
+
+/// The string literals a body MATCHES ON -- the markers it recognises.
+///
+/// Two functions that scan for the same markers are two readings of one
+/// parse, which is `.:B13`: `split_module`, `signatures` and `expected_calls`
+/// lived in `src/tdd` while `public_fns` and call-detection lived in
+/// `src/review`, both reading Rust as text.
+///
+/// Literals shorter than three characters are dropped: `" "`, `"("` and `"\n"`
+/// appear in nearly every parser here and carry no signal about WHAT is being
+/// parsed.
+#[must_use]
+pub fn markers(body: &str) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    let mut rest = body;
+    while let Some(i) = rest.find('"') {
+        let Some(tail) = rest.get(i.saturating_add(1)..) else {
+            break;
+        };
+        // A `\"` inside the literal is not its end.
+        let Some(end) = tail
+            .find('"')
+            .filter(|e| !tail.get(..*e).is_some_and(|s| s.ends_with('\\')))
+        else {
+            break;
+        };
+        if let Some(lit) = tail.get(..end)
+            && lit.chars().count() >= 3
+            && !lit.contains("{}")
+            && !out.iter().any(|o| o == lit)
+        {
+            out.push(lit.to_string());
+        }
+        rest = tail.get(end.saturating_add(1)..).unwrap_or_default();
+    }
+    out.sort();
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -366,6 +492,48 @@ mod tests {
         );
         // `fn t(` is the test's own definition, never a call it makes.
         assert!(!opens_call(src, b, at("t()"), at("t()") + 1));
+    }
+
+    /// A brace inside a CHAR LITERAL is not a brace. `s.split('{')` is
+    /// ordinary code here, and counting it made one body swallow every
+    /// function after it -- found by probing the duplication check against
+    /// this crate before writing a test for it.
+    #[test]
+    fn a_brace_in_a_char_literal_does_not_open_a_block() {
+        let src = "fn first(s: &str) -> &str {\n    \
+                   s.split('{').next().unwrap_or(s)\n}\n\
+                   fn second() -> u8 {\n    7\n}\n";
+        let b = fn_body(src, "first").unwrap_or_default();
+        assert!(b.contains("split"), "{b}");
+        assert!(
+            !b.contains("second"),
+            "the body stops at its own brace: {b}"
+        );
+    }
+
+    /// A LIFETIME is not a char literal. `<'a>` opens a quote that never
+    /// closes, and treating it as one made every generic function's body run
+    /// to the end of the file -- 68 false pairs against 7 real ones.
+    #[test]
+    fn a_lifetime_does_not_open_a_literal() {
+        let src = "fn first<'a>(s: &'a str) -> &'a str {\n    s\n}\n\
+                   fn second() -> u8 {\n    7\n}\n";
+        let b = fn_body(src, "first").unwrap_or_default();
+        assert!(!b.contains("second"), "the body stops at its brace: {b}");
+        assert_eq!(fn_body(src, "absent"), None);
+    }
+
+    /// An escaped quote is not the end of a literal, and a marker shorter
+    /// than three characters carries no signal about WHAT is parsed --
+    /// `" "` and `"("` appear in every parser here.
+    #[test]
+    fn markers_are_the_long_literals_a_body_matches_on() {
+        let body = "{ s.contains(\"## \u{a7}T\") && s.contains(\"a\") \
+                    && s.starts_with(\"say \\\"hi\\\"\") }";
+        let m = markers(body);
+        assert!(m.contains(&"## \u{a7}T".to_string()), "{m:?}");
+        assert!(!m.contains(&"a".to_string()), "too short to mean anything");
+        assert!(!m.is_empty());
     }
 
     /// Nested parens are why this cannot be a `find(')')`: the contract is the

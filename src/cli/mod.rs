@@ -1266,7 +1266,8 @@ fn review_cmd(root: &Path, rev: &str) -> ExitCode {
         Ok(fs) if fs.is_empty() => {
             // V4: say what was CHECKED. "clean" on two rules is not "clean".
             println!(
-                "{rev}: no findings (checked: unwired, negative-only, ignored-input)"
+                "{rev}: no findings (checked: {})",
+                crate::review::RULES.join(", ")
             );
             ExitCode::SUCCESS
         }

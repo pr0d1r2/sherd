@@ -43,7 +43,7 @@ V8: `undocumented` — a NEW `pub fn` w/ no doc comment. NEW only
 ## §T TASKS
 
 id|status|task|cites
-T3|.|duplication check — new fn re-parsing what an existing fn parses|V1
+T3|x|duplication check — new fn re-parsing what an existing fn parses|V1
 
 ## §B BUGS
 
