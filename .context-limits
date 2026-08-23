@@ -23,18 +23,41 @@
 #
 # Measured 2026-08-19, `bbx budget`: root 8,401 · src 8,527 · deepest
 # src/tdd 10,649.
-SPEC.md        10500
-src            10700
-src/cli        11200
-src/fed        11700
-src/land       11700
-src/lens       11200
-src/ollama     12100
-src/plan       11700
-src/review     11200
-src/slice      11300
-src/spec       11300
-src/tdd        13300
-src/tokens     11200
-src/code       11300
-src/assay      11800
+#
+# RESET 2026-08-23, and this one is a RESTORATION rather than a raise. The
+# rule three paragraphs up asks for 15-30% slack; measured against the
+# numbers below it, every chain had between 0.0% and 2.5%, and four sat
+# EXACTLY at their ceiling. T75's 25% was consumed by four days of real work
+# -- CI, the hygiene family, six linters, T71 -- so the instrument had
+# quietly become a ratchet on prose: a truthful one-line §C edit put four
+# chains over, and the only way to record a guard was to delete words
+# elsewhere.
+#
+# That is the failure the paragraph above names, arrived at from the other
+# direction. A ceiling with no slack does not force a review; it forces a
+# workaround, and the workaround is the reflex this file exists to prevent.
+#
+# The 20% is measured, not chosen for comfort: the largest chain after this
+# reset is `src/tdd` at 16,000, which is 15.6% of the 102,529 working tokens
+# the target tier leaves -- still inside the ~25% spec share this file's
+# header sets as the budget. The binding constraint stayed where R41 found
+# it, on competence rather than context.
+#
+# Measured 2026-08-23, `bbx budget`: root 10,399 · src 10,525 · deepest
+# src/tdd 13,296.
+SPEC.md        12500
+src            12700
+src/assay      14200
+src/cli        13300
+src/code       13600
+src/fed        14000
+src/land       13800
+src/lens       13200
+src/ollama     14600
+src/plan       13800
+src/review     13500
+src/slice      13300
+src/spec       13300
+src/state      12900
+src/tdd        16000
+src/tokens     13200
