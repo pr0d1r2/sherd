@@ -367,3 +367,125 @@ mod tests {
         assert!(!s.contains("secret()"), "body must not leak: {s}");
     }
 }
+
+/// One `mod` declaration, and whether the author published it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ModDecl {
+    pub name: String,
+    /// `pub mod` -- the author's own statement that this is API, and the
+    /// second-strongest evidence of a federation boundary (`.:plan:V17`).
+    pub is_pub: bool,
+}
+
+/// Every `mod` a file declares.
+///
+/// Line-oriented and deliberately so: this reads Rust AS TEXT, like every
+/// other function here. A `mod foo;` inside a comment or a string would be
+/// counted, and that is the trade the whole node makes -- a parser is a
+/// dependency and a second reading of the language.
+///
+/// `mod foo { .. }` (an inline module) is skipped: it declares no file, so
+/// it can never become a directory node.
+/// A `#[cfg(test)]` module is skipped: it does not ship, so it can never be
+/// a federation node. `testrepo` in this crate is exactly that shape, and it
+/// was proposed as one until this line existed.
+#[must_use]
+pub fn mod_decls(src: &str) -> Vec<ModDecl> {
+    let mut out = Vec::new();
+    let mut test_only = false;
+    for line in src.lines().map(str::trim).filter(|l| !l.is_empty()) {
+        if line.starts_with("#[cfg(test)]") {
+            test_only = true;
+            continue;
+        }
+        if let Some(decl) = one_decl(line)
+            && !test_only
+        {
+            out.push(decl);
+        }
+        test_only = false;
+    }
+    out
+}
+
+/// One `mod foo;` or `pub mod foo;`, or nothing.
+fn one_decl(line: &str) -> Option<ModDecl> {
+    let (is_pub, rest) = line
+        .strip_prefix("pub ")
+        .map_or((false, line), |r| (true, r));
+    let name = rest.strip_prefix("mod ")?.strip_suffix(';')?;
+    (!name.contains(char::is_whitespace)).then(|| ModDecl {
+        name: name.to_string(),
+        is_pub,
+    })
+}
+
+/// The crate-internal modules a file reaches for: `use crate::X`.
+///
+/// COHESION evidence. A module every member of a family reaches for is a hub
+/// the family shares, which is what tells eleven `*cmd` files apart from
+/// eleven independent concerns (`.:plan:V17`).
+#[must_use]
+pub fn crate_uses(src: &str) -> Vec<String> {
+    let mut out: Vec<String> = src
+        .lines()
+        .map(str::trim)
+        .filter_map(|l| {
+            let rest = l.strip_prefix("use crate::")?;
+            let name: String = rest
+                .chars()
+                .take_while(|c| c.is_alphanumeric() || *c == '_')
+                .collect();
+            (!name.is_empty()).then_some(name)
+        })
+        .collect();
+    out.sort();
+    out.dedup();
+    out
+}
+
+#[cfg(test)]
+mod structure_tests {
+    use super::*;
+
+    const SRC: &str = "\
+#[cfg(test)]
+mod testonly;
+mod args;
+pub mod bpe;
+mod capcmd;
+pub mod cli;
+mod inline { fn x() {} }
+use crate::render::Line;
+use crate::units;
+use std::path::Path;
+";
+
+    #[test]
+    fn a_pub_mod_is_distinguished_from_a_private_one() {
+        let mods = mod_decls(SRC);
+        assert_eq!(mods.len(), 4, "{mods:?}");
+        assert!(mods.iter().any(|m| m.name == "bpe" && m.is_pub));
+        assert!(mods.iter().any(|m| m.name == "args" && !m.is_pub));
+    }
+
+    /// An inline `mod foo { .. }` declares no FILE, so it can never become a
+    /// directory node and is not a candidate. A `#[cfg(test)]` module does
+    /// not ship, so it is not one either.
+    #[test]
+    fn an_inline_or_test_only_module_is_not_a_candidate() {
+        let mods = mod_decls(SRC);
+        assert!(!mods.iter().any(|m| m.name == "inline"));
+        assert!(!mods.iter().any(|m| m.name == "testonly"));
+    }
+
+    #[test]
+    fn crate_uses_names_internal_modules_and_ignores_the_rest() {
+        assert_eq!(crate_uses(SRC), vec!["render", "units"]);
+    }
+
+    #[test]
+    fn a_file_reaching_for_nothing_internal_yields_nothing() {
+        assert!(crate_uses("use std::path::Path;\nfn main() {}\n").is_empty());
+    }
+}

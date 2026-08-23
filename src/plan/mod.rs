@@ -1654,3 +1654,224 @@ mod split_tests {
         assert!(dirs.is_empty(), "already-node dirs proposed: {dirs:?}");
     }
 }
+
+// ---- structure: what the code already separated ----
+
+/// Why a module is a federation candidate. Ordered: a stronger grade is a
+/// boundary the author drew more explicitly (`V17`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Evidence {
+    /// A naming family plus shared `use crate::` edges.
+    Cohesion,
+    /// `pub mod` -- the author published it.
+    Published,
+    /// Already a directory -- the author drew it.
+    Drawn,
+}
+
+impl Evidence {
+    #[must_use]
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Drawn => "directory",
+            Self::Published => "pub mod",
+            Self::Cohesion => "family",
+        }
+    }
+}
+
+/// A proposed node: what the code separated, and what it shares.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Proposed {
+    pub name: String,
+    pub evidence: Evidence,
+    /// Members, when a naming family stands in for several files.
+    pub members: Vec<String>,
+    /// Crate modules every member reaches for -- the hub a family shares.
+    pub shared: Vec<String>,
+}
+
+/// Nodes derived from the source, strongest evidence first.
+///
+/// STRUCTURE FIRST (`V17`). Spec rows are attached afterwards by the caller
+/// and are evidence ABOUT a node, never the thing that proposes it -- a
+/// module the code separates and the prose never mentions is still a node,
+/// which a row-count ranking cannot see (`B12`).
+///
+/// Families are reported, never auto-clustered beyond a shared suffix: a
+/// graph clustering is where a proposer starts guessing, and `V16` says this
+/// proposes.
+#[must_use]
+pub fn structure(dir: &Path) -> Vec<Proposed> {
+    let src = if dir.join("src").is_dir() {
+        dir.join("src")
+    } else {
+        dir.to_path_buf()
+    };
+    let entry = ["lib.rs", "main.rs", "mod.rs"]
+        .iter()
+        .map(|f| src.join(f))
+        .find(|p| p.is_file());
+    let decls = entry
+        .and_then(|p| std::fs::read_to_string(p).ok())
+        .map(|t| crate::code::mod_decls(&t))
+        .unwrap_or_default();
+
+    let mut out: Vec<Proposed> = Vec::new();
+    for family in families(&decls) {
+        out.push(proposed_family(&src, family));
+    }
+    for d in &decls {
+        if out.iter().any(|p| p.members.contains(&d.name)) {
+            continue;
+        }
+        let evidence = if src.join(&d.name).is_dir() {
+            Evidence::Drawn
+        } else if d.is_pub {
+            Evidence::Published
+        } else {
+            continue;
+        };
+        out.push(Proposed {
+            name: d.name.clone(),
+            evidence,
+            members: vec![d.name.clone()],
+            shared: Vec::new(),
+        });
+    }
+    out.sort_by(|a, b| b.evidence.cmp(&a.evidence).then(a.name.cmp(&b.name)));
+    out
+}
+
+/// Modules sharing a suffix, when there are enough of them to be a family
+/// rather than a coincidence. Two files ending in `cmd` is a pair; eleven is
+/// a concern the author named.
+fn families(decls: &[crate::code::ModDecl]) -> Vec<Vec<String>> {
+    let mut out = Vec::new();
+    for suffix in ["cmd", "fmt", "args"] {
+        let members: Vec<String> = decls
+            .iter()
+            .map(|d| d.name.clone())
+            .filter(|n| n.len() > suffix.len() && n.ends_with(suffix))
+            .collect();
+        if members.len() >= 3 {
+            out.push(members);
+        }
+    }
+    out
+}
+
+/// A family, and the crate modules EVERY member reaches for.
+fn proposed_family(src: &Path, members: Vec<String>) -> Proposed {
+    let uses: Vec<Vec<String>> = members
+        .iter()
+        .filter_map(|m| {
+            std::fs::read_to_string(src.join(format!("{m}.rs"))).ok()
+        })
+        .map(|t| crate::code::crate_uses(&t))
+        .collect();
+    let shared = shared_across(&uses);
+    let name = members
+        .first()
+        .and_then(|m| m.get(m.len().saturating_sub(3)..))
+        .unwrap_or("group")
+        .to_string();
+    Proposed {
+        name,
+        evidence: Evidence::Cohesion,
+        members,
+        shared,
+    }
+}
+
+/// Names present in EVERY list. A hub is what all members share, not what
+/// any of them happens to use.
+fn shared_across(lists: &[Vec<String>]) -> Vec<String> {
+    let Some(first) = lists.first() else {
+        return Vec::new();
+    };
+    first
+        .iter()
+        .filter(|n| lists.iter().all(|l| l.contains(n)))
+        .cloned()
+        .collect()
+}
+
+#[cfg(test)]
+mod structure_tests {
+    use super::*;
+
+    /// This crate is already federated, so every module `lib.rs` declares is
+    /// a directory: the strongest grade, and nothing left to infer.
+    #[test]
+    fn an_already_federated_crate_proposes_its_directories() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let found = structure(root);
+        assert!(!found.is_empty());
+        assert!(
+            found.iter().all(|p| p.evidence == Evidence::Drawn),
+            "every module of an already-federated crate is a directory: {found:?}"
+        );
+    }
+
+    /// A family with a shared hub: the `use crate::` intersection across all
+    /// members, which is what makes eleven `*cmd` files one node instead of
+    /// eleven (`V17`).
+    #[test]
+    fn a_family_is_proposed_with_the_hub_its_members_share() {
+        let dir = std::env::temp_dir().join(format!(
+            "sherd-family-{}-{}",
+            std::process::id(),
+            line!()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        let src = dir.join("src");
+        let Ok(()) = std::fs::create_dir_all(&src) else {
+            unreachable!("a src dir is creatable")
+        };
+        let write = |name: &str, body: &str| {
+            let Ok(()) = std::fs::write(src.join(name), body) else {
+                unreachable!("a fixture file is writable")
+            };
+        };
+        write("lib.rs", "mod acmd;\nmod bcmd;\nmod ccmd;\n");
+        write("acmd.rs", "use crate::render;\nuse crate::units;\n");
+        write("bcmd.rs", "use crate::render;\n");
+        write("ccmd.rs", "use crate::render;\n");
+
+        let found = structure(&dir);
+        let family = found.iter().find(|p| p.members.len() == 3);
+        let Some(family) = family else {
+            unreachable!("three of a suffix is a family: {found:?}")
+        };
+        assert_eq!(family.evidence, Evidence::Cohesion);
+        assert_eq!(family.shared, vec!["render"], "units is used by one");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A hub is what EVERY member reaches for. `render` is shared; `units`
+    /// is used by one member and is not.
+    #[test]
+    fn a_shared_hub_is_present_in_every_member() {
+        let lists = vec![
+            vec!["cli".to_string(), "render".to_string(), "units".to_string()],
+            vec!["cli".to_string(), "render".to_string()],
+        ];
+        assert_eq!(shared_across(&lists), vec!["cli", "render"]);
+        assert!(shared_across(&[]).is_empty());
+    }
+
+    /// Two of a suffix is a coincidence; three is a family. Without the
+    /// floor, every `*s` plural in a crate becomes a proposed node.
+    #[test]
+    fn a_family_needs_more_than_a_pair() {
+        let decl = |n: &str| crate::code::ModDecl {
+            name: n.to_string(),
+            is_pub: false,
+        };
+        let pair = [decl("acmd"), decl("bcmd")];
+        assert!(families(&pair).is_empty());
+        let three = [decl("acmd"), decl("bcmd"), decl("ccmd")];
+        assert_eq!(families(&three).len(), 1);
+    }
+}

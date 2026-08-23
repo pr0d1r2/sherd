@@ -337,19 +337,15 @@ fn split_cmd(root: &Path, dir: &Path, apply: bool) -> ExitCode {
     let (cost, ceiling) = split_budget(root, dir);
     println!("{}: chain {cost} tok of {ceiling}", node_label(root, dir));
 
-    let found = plan::candidates(root, dir);
-    if found.is_empty() {
-        println!("  nothing to promote -- every module here is already a node");
+    // STRUCTURE FIRST (`.:plan:V17`): what the code already separated, then
+    // the prose weight of each. A module the spec never mentions is still a
+    // node; a ranking by rows cannot see it (`.:plan:B12`).
+    let proposed = plan::structure(dir);
+    if proposed.is_empty() {
+        println!("  no module declarations found -- nothing to propose");
         return ExitCode::SUCCESS;
     }
-    print_candidates(&found);
-    println!(
-        "\n  {} candidate(s). `rows` are the spec lines naming that module, \
-         which its own SPEC.md would carry -- a line naming two modules is \
-         counted for both, so the columns overlap and do not sum to the \
-         chain.",
-        found.len()
-    );
+    print_structure(&proposed, &plan::candidates(root, dir));
     ExitCode::SUCCESS
 }
 
@@ -360,21 +356,45 @@ fn node_label(root: &Path, dir: &Path) -> String {
     if rel.is_empty() { ".".to_string() } else { rel }
 }
 
-/// The proposal table. What a promotion COSTS the reader is the last column:
-/// a flat module has to become a directory first, and a module that is both
-/// a file and a directory has to be merged before either can carry a spec.
-fn print_candidates(found: &[plan::Candidate]) {
-    println!("\n  module         rows   tok  promote with");
-    for c in found {
-        let how = if c.split_layout {
-            format!("MERGE {n}.rs into {n}/mod.rs first", n = c.name)
-        } else if c.is_dir {
-            format!("sherd init {}", c.name)
+/// The proposal: what the code separated, graded, with the prose weight of
+/// each node beside it.
+///
+/// `rows` is EVIDENCE ABOUT a node rather than the reason for it -- a `0`
+/// there means the spec never mentions a module the author already split
+/// out, which is a gap in the spec and not a reason to skip the node.
+fn print_structure(proposed: &[plan::Proposed], weight: &[plan::Candidate]) {
+    println!("\n  node           evidence    rows   tok  members");
+    for p in proposed {
+        let w = weight.iter().find(|c| c.name == p.name);
+        let members = if p.members.len() > 1 {
+            format!("{} ({})", p.members.len(), p.members.join(" "))
         } else {
-            format!("mv {n}.rs {n}/mod.rs && sherd init {n}", n = c.name)
+            String::new()
         };
-        println!("  {:<14} {:>4}  {:>4}  {how}", c.name, c.rows, c.tokens);
+        println!(
+            "  {:<14} {:<10} {:>4}  {:>4}  {members}",
+            p.name,
+            p.evidence.label(),
+            w.map_or(0, |c| c.rows),
+            w.map_or(0, |c| c.tokens),
+        );
+        if !p.shared.is_empty() {
+            println!("  {:<14} shares: {}", "", p.shared.join(", "));
+        }
     }
+    let named: usize = proposed.iter().map(|p| p.members.len()).sum();
+    println!(
+        "\n  {} node(s) read off the crate. `evidence` is how explicitly the \
+         author drew the boundary: a directory, then `pub mod`, then a naming \
+         family. `rows` are spec lines naming that node -- a line naming two \
+         counts for both.",
+        proposed.len()
+    );
+    println!(
+        "  {named} module(s) accounted for. Anything else the crate declares \
+         is PRIVATE with no family: it attaches to one of these or stays at \
+         root, and that is a judgement this does not make."
+    );
 }
 
 /// A node's chain cost and the ceiling it inherits, or zeroes when either
@@ -1703,6 +1723,28 @@ mod tests {
         assert_eq!(split_cmd(root, root, false), ExitCode::SUCCESS);
         // Proposing must not have written anything.
         assert!(!root.join("gamma").exists(), "split created a directory");
+    }
+
+    /// The structure-first proposal on a fixture whose modules the spec
+    /// never names: `.:plan:B12` is that a row ranking sees nothing here,
+    /// while the code plainly declares two nodes.
+    #[test]
+    fn split_proposes_nodes_the_spec_never_mentions() {
+        let repo = routing_fixture("cli-split-structure");
+        let root = repo.path();
+        let Ok(()) = std::fs::create_dir_all(root.join("src")) else {
+            unreachable!("a src dir is creatable")
+        };
+        let Ok(()) = std::fs::write(
+            root.join("src").join("lib.rs"),
+            "pub mod widget;\nmod helper;\n#[cfg(test)]\nmod testonly;\n",
+        ) else {
+            unreachable!("a lib.rs is writable")
+        };
+        let found = plan::structure(root);
+        let names: Vec<&str> = found.iter().map(|p| p.name.as_str()).collect();
+        assert_eq!(names, vec!["widget"], "pub mod only: {found:?}");
+        assert_eq!(split_cmd(root, root, false), ExitCode::SUCCESS);
     }
 
     /// A node with no `SPEC.md` is a usage error, not an empty proposal.
