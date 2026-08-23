@@ -54,11 +54,33 @@ src/fed        14000
 src/land       13800
 src/lens       13200
 src/ollama     14600
-src/plan       13800
+src/plan       17500
 src/review     13500
 src/slice      13300
 src/spec       13300
 src/state      12900
 src/tdd        16000
 src/tokens     13200
-dev            13000
+dev            15500
+
+# RAISE 2026-08-23 (second today), `dev` 13000 -> 15500 and `src/plan` 13800
+# -> 17500. Both are RESTORATIONS of the 15-30% slack this file asks for:
+# measured immediately before the edit that triggered them, `dev` sat at
+# 12,987 of 13,000 (0.1%) and `src/plan` at 13,644 of 13,800 (1.1%). The
+# morning's reset gave every node ~20% and two nodes had spent all of it by
+# evening, which is the same finding as the reset itself, one day compressed
+# into one day.
+#
+# What was added: root V118 (the three layers of idempotence) with B20, and
+# four invariants to `src/plan` -- V18 feedback idempotence, V19 qualified
+# citations, V20 spread-the-numbers-centralize-the-ledger, V21 source
+# anchors as a migration and split signal.
+#
+# `src/plan` at 17,500 becomes the largest ceiling in the file, passing
+# `src/tdd`'s 16,000. That is 17% of the 102,529 working tokens the target
+# tier leaves -- still inside the ~25% spec share the header sets, and still
+# a fact worth reading rather than approving: `src/plan` now owns two
+# subjects, planning steps and proposing federation, and its own new V21
+# ranks `src/plan/mod.rs` second in the tree by distinct foreign anchor
+# owners. The ceiling raise is evidence for `src/plan:T14`, not a
+# substitute for it.
