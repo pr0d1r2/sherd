@@ -28,3 +28,8 @@ T1|x|`sherd-dev badges` — render the block from owning files, `--check` report
 T2|x|`sherd-dev readme` commands block — generate the README's Commands section from the binary, so the verb list cannot go stale. `.:README` claims 5 unbuilt verbs & omits 7 built ones|V1
 T3|.|EXTRACT to a fleet crate once a 2nd repo wants it. ∀ fn here is already a pure fn over `&str` ∴ the move is a move, ⊥ a rewrite. `itok`/`microlith` each carry their own copy of a badge generator TODAY (`.:R20`'s duplication, one rung up)|V1
 T4|x|`sherd-dev --check [<path>…]` — ONE entry point, ∀ check concurrent (`std::thread::scope`, ⊥ a runtime). a hook naming each check by hand grows a 2nd list of what the gate does|V7
+
+## §B BUGS
+
+id|date|cause|fix
+B1|2026-08-23|the nixpkgs badge named `nix-hk`'s rev. `locked_rev` matched any line STARTING `"nixpkgs":` & `nix-hk`'s `inputs` block carries exactly that line (`"nixpkgs": [`) ∴ it entered the wrong node & returned the first `rev` after it. the doc comment above it NAMED this risk — "taking the first rev in the file would badge whichever node happens to sort first" — & the code did ⊥ prevent it: prose describing a guard is ⊥ a guard|V1 restated as the SHAPE: a node HEADER is `"name": {`, an inputs entry is `"name": [`, & the block ends at the next sibling header. fixture is a real-shaped lock w/ `nix-hk` FIRST & carrying the decoy line. GENERALLY: a comment claiming a defect is handled is the least reliable evidence that it is

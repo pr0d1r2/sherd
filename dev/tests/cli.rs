@@ -50,7 +50,13 @@ fn fixture(name: &str) -> PathBuf {
         "hk.pkl",
         "local fast = new Mapping<String, Step> {\n  [\"fmt\"] {\n  }\n}\n",
     );
-    write("flake.lock", "\"nixpkgs\": {\n  \"rev\": \"a687c14aaaa\"\n");
+    // A node HEADER, a timestamp and a branch ref -- the three fields the
+    // badge reads. Shaped like the real lock rather than minimally, because
+    // `dev:B1` was a parser reading the wrong node of a real one.
+    write(
+        "flake.lock",
+        "{\n  \"nodes\": {\n    \"nixpkgs\": {\n      \"locked\": {\n        \"lastModified\": 1786535285,\n        \"rev\": \"9f78f44a87948854445dae0b6bf82b2e87e4efb5\"\n      },\n      \"original\": {\n        \"ref\": \"nixos-26.05\"\n      }\n    }\n  }\n}\n",
+    );
     write(".github/workflows/ci.yml", "        os: [macos-latest]\n");
     // The V7 runner reads the dispatch source, and the Commands table is
     // rendered from the usage const beside it, so a fixture repository needs
