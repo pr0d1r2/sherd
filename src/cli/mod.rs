@@ -226,13 +226,20 @@ pub fn run_args(mut args: Vec<String>) -> ExitCode {
 /// exited 0 (`src/cli:B5`). When the first argument names an existing directory, the
 /// root is the one ABOVE IT.
 ///
-/// A non-directory first argument -- `HEAD` for `review`, `--check` for
-/// `sync` -- leaves the CWD walk alone, and an in-repo path resolves to the
-/// same root it always did.
+/// Any argument may be the directory, not just the first: `plan --triage
+/// <dir>` put a FLAG at position one, so a scan of `args[1]` alone found no
+/// dir and answered about the CWD -- the same bug one flag to the left, and
+/// the fix for it was incomplete until a stranger showed the flag-first form
+/// (`B7`).
+///
+/// A run with no directory argument at all -- `HEAD` for `review`, `--check`
+/// alone for `sync` -- leaves the CWD walk alone, and an in-repo path
+/// resolves to the same root it always did.
 fn root_for(args: &[String]) -> PathBuf {
-    args.get(1)
+    args.iter()
+        .skip(1)
         .map(PathBuf::from)
-        .filter(|p| p.is_dir())
+        .find(|p| p.is_dir())
         .map_or_else(repo_root, |p| repo_root_from(&p))
 }
 
@@ -693,7 +700,21 @@ fn debt_cmd(root: &Path, mode: Option<&str>, cargo: &str) -> ExitCode {
         return ExitCode::from(2);
     };
     let Some(was) = crate::debt::recorded_ceilings(root) else {
-        eprintln!("sherd: .lint-debt has no `density`/`shape` rows to read");
+        // ABSENT and MALFORMED are different mistakes and only one of them
+        // is the reader's fault (`V12`, `B6` again one verb over).
+        let registry = root.join(".lint-debt");
+        if registry.is_file() {
+            eprintln!(
+                "sherd: {}: no `density` and `shape` rows to read",
+                registry.display()
+            );
+        } else {
+            eprintln!(
+                "sherd: {}: no ratchet here. `sherd debt` needs a `.lint-debt` \
+                 carrying `density` and `shape`.",
+                registry.display()
+            );
+        }
         return ExitCode::from(2);
     };
     if mode == Some("--record") {
@@ -1750,6 +1771,33 @@ mod tests {
         Ok(())
     }
 
+    /// `B7`: any argument may be the directory, not just the first. `plan
+    /// --triage <dir>` puts a FLAG at position one, so scanning `args[1]`
+    /// alone found no dir and answered about the CWD -- `B5` one flag to the
+    /// left, and its fix was incomplete until a stranger showed this form.
+    #[test]
+    fn a_flag_before_the_dir_does_not_hide_it() -> Result<(), String> {
+        let theirs = crate::testrepo::TestRepo::new("cli-flag-first")?;
+        theirs.write("SPEC.md", "# SPEC\n\n## \u{a7}G GOAL\n\ntheirs\n")?;
+        theirs.commit("a repo behind a flag")?;
+        let arg = theirs.path().display().to_string();
+        let want = theirs.path().to_path_buf();
+        for args in [
+            vec!["plan".to_string(), "--triage".into(), arg.clone()],
+            vec!["sync".to_string(), "--check".into(), arg.clone()],
+            vec!["split".to_string(), "--apply".into(), arg.clone()],
+            vec!["check".to_string(), arg.clone()],
+        ] {
+            assert_eq!(root_for(&args), want, "{args:?}");
+        }
+        // Still no dir anywhere means the CWD walk, unchanged.
+        assert_eq!(
+            root_for(&["sync".to_string(), "--check".into()]),
+            repo_root()
+        );
+        Ok(())
+    }
+
     /// `sherd debt` end to end, over a scripted toolchain: the toolchain is a
     /// PARAMETER, which is what makes the verb testable at all -- `tdd::Run`
     /// carries `cargo` for the same reason. A verb the gate runs on every
@@ -1813,6 +1861,13 @@ mod tests {
         r.write("SPEC.md", "# SPEC\n\n## \u{a7}G GOAL\n\nnone\n")?;
         r.write("src/a.rs", "fn f() {}\n")?;
         r.commit("no ratchet here")?;
+        assert_eq!(
+            debt_cmd(r.path(), Some("--check"), "true"),
+            ExitCode::from(2)
+        );
+        // A file that EXISTS but carries no ceilings is a different
+        // mistake, and only one of the two is the reader's fault (`B7`).
+        r.write(".lint-debt", "# a comment and nothing else\n")?;
         assert_eq!(
             debt_cmd(r.path(), Some("--check"), "true"),
             ExitCode::from(2)
