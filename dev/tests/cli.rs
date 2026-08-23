@@ -39,7 +39,12 @@ fn fixture(name: &str) -> PathBuf {
     let write = |rel: &str, body: &str| {
         fs::write(dir.join(rel), body).expect("fixture file");
     };
-    write("SPEC.md", "# SPEC\n\n## \u{a7}G GOAL\n\nfixture.\n");
+    // §I has to name what the dispatch fixture dispatches, or the V115
+    // runner reports the fixture rather than the code under test.
+    write(
+        "SPEC.md",
+        "# SPEC\n\n## \u{a7}G GOAL\n\nfixture.\n\n## \u{a7}I INTERFACES\n\n- cmd: `sherd budget [dir]` \u{2192} the table\n",
+    );
     write(
         "Cargo.toml",
         "[package]\nname = \"f\"\nedition = \"2024\"\nrust-version = \"1.95\"\n\n[dependencies]\nx = \"1\"\n",
@@ -213,4 +218,30 @@ fn a_change_touching_no_input_is_clean_even_when_a_block_is_stale() {
         fs::read_to_string(dir.join("README.md")).expect("readme"),
         stale
     );
+}
+
+/// `.:V115` end to end. The unit tests prove the comparison; this proves the
+/// binary runs it, refuses, and says which direction the drift goes -- the
+/// half `.:B17` needed, since §I read fine to every human who opened it.
+#[test]
+fn a_verb_missing_from_the_interface_section_refuses() {
+    let dir = fixture("interface");
+    fs::write(
+        dir.join("README.md"),
+        format!("# f\n\n{BEGIN}\n{END}\n{GRAPH_MARKERS}"),
+    )
+    .expect("readme");
+    // The fixture dispatches `budget`; §I now names something else entirely.
+    fs::write(
+        dir.join("SPEC.md"),
+        "# SPEC\n\n## \u{a7}G GOAL\n\nfixture.\n\n## \u{a7}I INTERFACES\n\n- cmd: `sherd lens <dir>` \u{2192} a pack\n",
+    )
+    .expect("spec");
+
+    let out = run(&dir, &["readme", "--check"]);
+    assert_eq!(out.status.code(), Some(1));
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(err.contains("V115"), "the rule is named: {err}");
+    assert!(err.contains("`budget` dispatches and \u{a7}I does not name it"));
+    assert!(err.contains("`lens` is in \u{a7}I, does not dispatch"));
 }

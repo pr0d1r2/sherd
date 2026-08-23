@@ -182,6 +182,24 @@ fn readme(check_only: bool, paths: &[String]) -> ExitCode {
                 );
                 return ExitCode::from(1);
             }
+            // `.:V115`, the same comparison one layer up. Usage is what the
+            // binary prints; `§I` is what the spec promises, and `.:B17` is
+            // the two drifting apart in opposite directions at once.
+            let spec = match read(&root, "SPEC.md") {
+                Ok(s) => s,
+                Err(e) => {
+                    eprintln!("{e}");
+                    return ExitCode::from(1);
+                }
+            };
+            let drift = commands::interface_drift(&spec, &src);
+            if !drift.is_empty() {
+                eprintln!("sherd-dev: §I and the binary disagree (.:V115):");
+                for line in drift {
+                    eprintln!("  {line}");
+                }
+                return ExitCode::from(1);
+            }
         }
         Err(e) => {
             eprintln!("{e}");

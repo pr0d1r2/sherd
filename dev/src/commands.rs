@@ -195,3 +195,113 @@ exit: 0 clean · 1 violation · 2 usage";
         assert!(!table.contains("--verbose"));
     }
 }
+
+/// A `§I` command line: the verb, and the rung it is promised for.
+///
+/// `- cmd: `sherd route "<query>"` → ... (0.3)` is a promise; the same line
+/// without a rung is a claim that the verb ships today.
+fn specced(spec: &str) -> Vec<(String, Option<String>)> {
+    spec.lines()
+        .filter_map(|l| {
+            let rest = l.trim().strip_prefix("- cmd: `sherd ")?;
+            let verb = rest.split([' ', '`']).next()?;
+            let rung = l
+                .rsplit_once(" (0.")
+                .and_then(|(_, r)| r.strip_suffix(')'))
+                .map(|r| format!("0.{r}"));
+            (!verb.is_empty()).then(|| (verb.to_string(), rung))
+        })
+        .collect()
+}
+
+/// Where `§I` and the binary disagree, in both directions (`.:V115`).
+///
+/// `.:B17` is what one direction alone misses: usage-vs-dispatch had a runner
+/// the same day this did not, and ten verbs shipped while the interface
+/// section never named them. A reader trusts `§I`, so an interface promising
+/// five absent verbs and hiding ten present ones is worse than none.
+#[must_use]
+pub fn interface_drift(spec: &str, source: &str) -> Vec<String> {
+    let rows = specced(spec);
+    let named: Vec<&String> = rows
+        .iter()
+        .filter(|(_, r)| r.is_none())
+        .map(|(v, _)| v)
+        .collect();
+    let mut out: Vec<String> = dispatched(source)
+        .into_iter()
+        .filter(|v| !matches!(v.as_str(), "help" | "--help" | "-h"))
+        .filter(|v| !named.contains(&v))
+        .map(|v| format!("`{v}` dispatches and §I does not name it"))
+        .collect();
+    let live = dispatched(source);
+    out.extend(
+        rows.iter()
+            .filter(|(v, rung)| rung.is_none() && !live.contains(v))
+            .map(|(v, _)| {
+                format!("`{v}` is in §I, does not dispatch, and names no rung")
+            }),
+    );
+    out.sort();
+    out.dedup();
+    out
+}
+
+#[cfg(test)]
+mod interface_tests {
+    use super::*;
+
+    const SPEC: &str = "\
+## §I INTERFACES
+
+- cmd: `sherd budget [dir]` → node/chain token table. exit 1 over
+- cmd: `sherd route \"<query>\"` → dir + reason (0.3)
+- cmd: `sherd validate` → DAG + ids + budget. exit 1 fail
+- file: `SPEC.md` ∀ dir any depth
+";
+
+    const DISPATCH: &str = "\
+    match args.first().map(String::as_str) {
+        Some(\"budget\") => budget(),
+        Some(\"oneshot\") => oneshot(),
+    }
+";
+
+    /// Both halves of `.:B17`, in one fixture: `oneshot` ships unnamed, and
+    /// `validate` is promised with no rung and no implementation.
+    #[test]
+    fn drift_is_reported_in_both_directions() {
+        let found = interface_drift(SPEC, DISPATCH);
+        assert_eq!(
+            found,
+            vec![
+                "`oneshot` dispatches and §I does not name it".to_string(),
+                "`validate` is in §I, does not dispatch, and names no rung"
+                    .to_string(),
+            ]
+        );
+    }
+
+    /// A rung is the promise that makes an unbuilt verb legal in §I. Without
+    /// this, the only way to satisfy the rule would be to delete the plan.
+    #[test]
+    fn a_rung_marked_verb_may_be_unbuilt() {
+        let rows = specced(SPEC);
+        assert!(rows.contains(&("route".to_string(), Some("0.3".to_string()))));
+        assert!(
+            !interface_drift(SPEC, DISPATCH)
+                .iter()
+                .any(|d| d.contains("route"))
+        );
+    }
+
+    #[test]
+    fn a_matched_interface_reports_nothing() {
+        let spec = "- cmd: `sherd budget [dir]` → table\n";
+        // The reader is scoped to the dispatch match, so a fixture without
+        // one dispatches NOTHING -- which is a true answer to a different
+        // question, and reported the verb as unbuilt until this line existed.
+        let dispatch = "    match args.first().map(String::as_str) {\n        Some(\"budget\") => budget(),\n    }\n";
+        assert!(interface_drift(spec, dispatch).is_empty());
+    }
+}

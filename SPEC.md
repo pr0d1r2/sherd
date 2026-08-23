@@ -39,17 +39,27 @@ dev|repo-maintaining tooling, `publish = false` — README generation|anything a
 
 ## §I INTERFACES
 
-- cmd: `sherd init [dir]` → scaffold `SPEC.md` @ dir, `§F` rows from child dirs
+- cmd: `sherd init [dir]` → scaffold `SPEC.md` @ dir, `§F` rows from child dirs (0.2)
 - cmd: `sherd lens <dir> [--depth rule|why|all]` → context pack. default `rule`
-- cmd: `sherd lens <dir> --json` → `{chain:[],body:{},children:[],tokens:{},examined:{}}`
-- cmd: `sherd route "<query>"` → dir + reason. 0 hit / 2 miss / 3 ambiguous
+- cmd: `sherd lens <dir> --json` → `{chain:[],body:{},children:[],tokens:{},examined:{}}` (0.3)
+- cmd: `sherd route "<query>"` → dir + reason. 0 hit / 2 miss / 3 ambiguous (0.3)
 - cmd: `sherd check [dir]` → drift spec↔code + file ceilings. 0 clean / 1 violation / 2 usage
-- cmd: `sherd split <path>` → propose split of over-ceiling file|node. ⊥ write w/o `--apply`
-- cmd: `sherd sync [dir]` → regen `§N` from parent `§F`. exit 1 if wrote
+- cmd: `sherd split <path>` → propose split of over-ceiling file|node. ⊥ write w/o `--apply` (0.4)
+- cmd: `sherd sync [dir]` → regen `§N` from parent `§F`. exit 1 if wrote (0.4)
 - cmd: `sherd graph [--dot|--json|--mermaid]` → federation DAG. `--mermaid` = the generated architecture diagram
 - cmd: `sherd lens <dir> [--facet set|setting|human|all]` → default `set`
 - cmd: `sherd budget [dir]` → node/chain/lens/file token table. exit 1 over
-- cmd: `sherd validate` → DAG + ids + budget + coverage + examined-count. exit 1 fail
+- cmd: `sherd validate` → DAG + ids + budget + coverage + examined-count. exit 1 fail (0.3)
+- cmd: `sherd fed [dir]` → the federation edges a node DECLARES, ⊥ the ones it has
+- cmd: `sherd review [rev]` → mechanical checks on what a commit ADDED (default `HEAD`). ADVISORY: a finding ⊥ fail the cmd, ∵ intent is the reader's call
+- cmd: `sherd slice [--check|--list]` → regen distilled slices from source. `--check` exit 1 on DRIFT, & a slice is never hand-edited
+- cmd: `sherd outcome <node> <kept|reverted>` → record whether a node's work survived review. feeds believability (`src/land`)
+- cmd: `sherd plan [--triage]` → next 3 steps + what would INVALIDATE each. `--triage` = unmanaged rows w/ a proposed home
+- cmd: `sherd apply [--land]` → execute step 1 ONLY, commit to a run branch, STOP. ⊥ main (`.:B12`)
+- cmd: `sherd land [--push]` → fast-forward main to the run branch IF it earned it: gate green + believability
+- cmd: `sherd ask <dir> <q>` → ask the endpoint from a node's lens pack. the pack is the whole prompt
+- cmd: `sherd tdd <dir> <Vn> <task>` → red → judge → green → gate → repair. the LOOP the §G target is about
+- cmd: `sherd oneshot <dir> <Vn> <task>` → the MONOLITH arm: 1 call, whole repo. exists to be COMPARED against `tdd` (R29/R30), ⊥ recommended
 - file: `SPEC.md` ∀ dir any depth. `§G §C §I §R §V §T §B` + `§F` + `§N`
 - file: `§F FEDERATION` pipe table `dir|owns|⊥owns|tokens` — child dir depth +1. `⊥owns` = what it does NOT own + where that lives
 - file: `§N NAV` pipe table `rel|path|lens`, `rel` ∈ `up`|`self`|`sib`. generated, ⊥ hand-edit
@@ -313,7 +323,7 @@ T98|x|`sherd-dev docs` — generate the README Commands section from the binary.
 T99|x|move `gate_with`/`cargo_bin` tdd → `src/land` (owner, & the only non-tdd caller) ∴ `--no-default-features` builds, + gate it in `hk.pkl` (B15)|V74,B15
 T100|x|ONLINE link check, scheduled in CI ⊥ in the commit gate. `lychee --offline` checks 39 relative paths & EXCLUDES 37 external ones by construction ∴ it cannot see the class we have TODAY: `docs/SECURITY.md` & `CHANGELOG.md` point @ `github.com/pr0d1r2/sherd` URLs that ⊥ exist yet. a 404 on someone else's site ! ⊥ reject a commit, & OURS ! ⊥ go unnoticed|V26,V74
 T101|.|move the scripted-toolchain fixtures (`scratch`·`scripted_cargo`·`write_exec`·`repo_fixture`·`node_fixture`) `src/tdd` tests → `testrepo`, then the 7 gate tests follow the code T99 moved. today they sit in `src/tdd` testing `crate::land::` fns ∵ the fixtures do|V74,B15
-T102|.|§I ↔ dispatch runner in `sherd-dev`: ∀ dispatched verb appears in §I, & ∀ §I cmd either dispatches or is MARKED unbuilt. reuses V7's reader (B17)|V115,B17
+T102|x|§I ↔ dispatch runner in `sherd-dev`: ∀ dispatched verb appears in §I, & ∀ §I cmd either dispatches or is MARKED unbuilt. reuses V7's reader (B17)|V115,B17
 T103|.|the LADDER's rungs as §T rows — `init` + B17's runner (0.2) · `route`+`validate` (0.3) · `split`+`sync` (0.4) · loop verdict = gate verdict, measured (0.5). CHANGELOG renders the table ∵ a consumer from crates.io never opens this file|V114,V115
 
 ## §B BUGS
