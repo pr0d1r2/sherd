@@ -162,3 +162,38 @@ fn check_refuses_a_stale_block_without_touching_it() {
         stale
     );
 }
+
+/// The hooks' entry point. One command runs every check, so a hook never
+/// carries its own list of what the gate does.
+#[test]
+fn the_top_level_check_runs_every_check() {
+    let dir = fixture("checkall");
+    fs::write(
+        dir.join("README.md"),
+        format!("# f\n\n{BEGIN}\nstale\n{END}\n{GRAPH_MARKERS}"),
+    )
+    .expect("readme");
+    let out = run(&dir, &["--check"]);
+    assert_eq!(out.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&out.stderr).contains("readme"));
+}
+
+/// The narrow layer. A commit that touched nothing the README is rendered
+/// from does not re-render it -- and this must not become a way for a stale
+/// block to pass, which is why the wide run on push takes no paths at all.
+#[test]
+fn a_change_touching_no_input_is_clean_even_when_a_block_is_stale() {
+    let dir = fixture("scoped");
+    let stale = format!("# f\n\n{BEGIN}\nstale\n{END}\n{GRAPH_MARKERS}");
+    fs::write(dir.join("README.md"), &stale).expect("readme");
+
+    let scoped = run(&dir, &["--check", "src/lens/mod.rs"]);
+    assert_eq!(scoped.status.code(), Some(0));
+
+    let wide = run(&dir, &["--check"]);
+    assert_eq!(wide.status.code(), Some(1));
+    assert_eq!(
+        fs::read_to_string(dir.join("README.md")).expect("readme"),
+        stale
+    );
+}

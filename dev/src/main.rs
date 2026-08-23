@@ -15,6 +15,7 @@
 //! end.
 
 mod badge;
+mod select;
 
 use badge::Outcome;
 use std::path::{Path, PathBuf};
@@ -23,9 +24,13 @@ use std::process::ExitCode;
 const USAGE: &str = "\
 bbx-dev -- tooling for the blackbox repository itself
 
-  bbx-dev readme [--check]   regenerate every generated block in README.md --
-                             the badges, and the three `bbx graph` renderings.
-                             --check reports staleness and writes nothing.
+  bbx-dev --check [<path>...]  run every check, concurrently. Paths narrow the
+                               work to what a change can have invalidated; no
+                               paths means compare everything.
+  bbx-dev readme [--check] [<path>...]
+                               regenerate the generated blocks in README.md --
+                               the badges, and the three `bbx graph`
+                               renderings. --check reports and writes nothing.
 
 exit: 0 clean · 1 violation · 2 usage
 ";
@@ -33,13 +38,57 @@ exit: 0 clean · 1 violation · 2 usage
 fn main() -> ExitCode {
     let argv: Vec<String> = std::env::args().skip(1).collect();
     let args: Vec<&str> = argv.iter().map(String::as_str).collect();
-    match args.split_first() {
-        Some((&"readme", rest)) => readme(rest.contains(&"--check")),
+    let paths: Vec<String> = argv
+        .iter()
+        .filter(|a| !a.starts_with("--"))
+        .filter(|a| a.as_str() != "readme")
+        .cloned()
+        .collect();
+    match args.first() {
+        Some(&"--check") => check_all(&paths),
+        Some(&"readme") => readme(args.contains(&"--check"), &paths),
         _ => {
             eprint!("{USAGE}");
             ExitCode::from(2)
         }
     }
+}
+
+/// Every check this binary knows, run CONCURRENTLY.
+///
+/// One entry point for the hooks: a hook that has to name each check by hand
+/// grows a second list of what the gate does, and the first time the two
+/// disagree the missing one is invisible (`.:V102`). There is one check today
+/// and the loop is written for N because the cost of that is a scope block,
+/// while the cost of retrofitting it is another list.
+///
+/// `std::thread::scope` rather than a runtime: these are file reads and string
+/// comparisons, and a dependency for that would be `.:§C`'s NIH rule read
+/// backwards.
+fn check_all(paths: &[String]) -> ExitCode {
+    type Check = (&'static str, fn(&[String]) -> ExitCode);
+    let checks: &[Check] = &[("readme", |p| readme(true, p))];
+
+    let codes: Vec<(&str, ExitCode)> = std::thread::scope(|s| {
+        let handles: Vec<_> = checks
+            .iter()
+            .map(|(name, f)| (*name, s.spawn(move || f(paths))))
+            .collect();
+        handles
+            .into_iter()
+            .map(|(name, h)| {
+                (name, h.join().unwrap_or_else(|_| ExitCode::from(1)))
+            })
+            .collect()
+    });
+
+    for (name, code) in &codes {
+        if format!("{code:?}") != format!("{:?}", ExitCode::SUCCESS) {
+            eprintln!("bbx-dev: {name} failed");
+            return ExitCode::from(1);
+        }
+    }
+    ExitCode::SUCCESS
 }
 
 /// The repository root: the directory holding `.git` AND `SPEC.md`.
@@ -96,7 +145,15 @@ fn blocks(root: &Path, nodes: usize) -> Result<badge::Blocks, String> {
     ])
 }
 
-fn readme(check_only: bool) -> ExitCode {
+fn readme(check_only: bool, paths: &[String]) -> ExitCode {
+    // What a change can have invalidated. An empty selection from a NON-empty
+    // change set means this commit touched nothing the README is rendered
+    // from, which is clean rather than skipped -- the wide run on push
+    // compares every block regardless.
+    let wanted = select::selected(paths);
+    if wanted.is_empty() {
+        return ExitCode::SUCCESS;
+    }
     let Some(root) = repo_root() else {
         eprintln!(
             "bbx-dev: not inside the repository -- no ancestor holds both .git and SPEC.md"
@@ -109,7 +166,11 @@ fn readme(check_only: bool) -> ExitCode {
     let nodes = bbx::fed::discover(&root).len();
     let outcome = blocks(&root, nodes).and_then(|b| {
         let text = read(&root, "README.md")?;
-        Ok(badge::apply(&text, &b, check_only))
+        let scoped: badge::Blocks = b
+            .into_iter()
+            .filter(|(name, _)| wanted.contains(&name.as_str()))
+            .collect();
+        Ok(badge::apply(&text, &scoped, check_only))
     });
     match outcome {
         Err(e) => {

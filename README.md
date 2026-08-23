@@ -8,7 +8,7 @@
 [![unsafe forbidden](https://img.shields.io/badge/unsafe-forbidden-brightgreen)](Cargo.toml)
 
 [![gate hk](https://img.shields.io/badge/gate-hk-6E4AFF)](hk.pkl)
-[![gate steps 24](https://img.shields.io/badge/gate_steps-24-6E4AFF)](hk.pkl)
+[![gate steps 25](https://img.shields.io/badge/gate_steps-25-6E4AFF)](hk.pkl)
 [![coverage floor 90.9%](https://img.shields.io/badge/coverage_floor-%E2%89%A590.9%25-brightgreen)](.coverage)
 [![lint debt 270](https://img.shields.io/badge/lint_debt-%E2%89%A4270-orange)](.lint-debt)
 [![federated nodes 17](https://img.shields.io/badge/federated_nodes-17-6E4AFF)](SPEC.md)
