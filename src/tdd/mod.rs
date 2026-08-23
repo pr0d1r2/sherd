@@ -1893,6 +1893,48 @@ mod loop_tests {
         );
     }
 
+    /// `.:B25`: the loop's number and the gate's number are the SAME number.
+    ///
+    /// `land::lint_debt_ok` exists so `sherd tdd` predicts what `hk` will do
+    /// (`B30`). It diverged on the build flags, the file set AND the
+    /// denominator at once, and reported 10.8 where the gate computed 14.6 --
+    /// so the loop would call a candidate mergeable that the gate then
+    /// refuses, which is the exact failure the function exists to prevent.
+    ///
+    /// Asserted against `hk.pkl` itself rather than against a remembered
+    /// value: the gate's own text is the authority, and a test that hardcodes
+    /// today's ratio would pass while the two drifted again.
+    #[test]
+    fn the_loop_measures_what_the_gate_measures() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let pkl =
+            std::fs::read_to_string(root.join("hk.pkl")).unwrap_or_default();
+        assert!(!pkl.is_empty(), "this repository has a gate");
+        for flag in ["--workspace", "--all-targets", "--all-features"] {
+            assert!(
+                pkl.contains(flag),
+                "the gate stopped passing {flag}; this function still does"
+            );
+        }
+        assert!(
+            pkl.contains("'^(src|dev)/.*: warning'"),
+            "the gate's warning filter changed; `gate_counts` mirrors it"
+        );
+        assert!(
+            pkl.contains(r#"find src dev -name "*.rs""#),
+            "the gate's denominator changed; `MEASURED` mirrors it"
+        );
+    }
+
+    /// The mirror is honest in both directions.
+    #[test]
+    fn the_gate_filter_counts_src_and_dev_warnings_only() {
+        assert!(crate::land::gate_counts("src/a.rs:1:1: warning: x"));
+        assert!(crate::land::gate_counts("dev/b.rs:1:1: warning: x"));
+        assert!(!crate::land::gate_counts("tests/c.rs:1:1: warning: x"));
+        assert!(!crate::land::gate_counts("src/a.rs:1:1: error: x"));
+    }
+
     /// A tree with no `src/` is not a tree with zero lines of Rust: the
     /// density has no denominator, so there is nothing to compare and the
     /// candidate is not refused on a bench problem (V26).

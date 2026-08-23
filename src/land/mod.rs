@@ -929,12 +929,35 @@ pub(crate) fn lint_debt_ok(root: &Path, cargo: &str) -> (bool, String) {
     )
 }
 
-/// Clippy's warning count for this crate's own sources, per thousand lines,
-/// in TENTHS.
+/// The gate's own clippy invocation. A different build is a different number
+/// (`.:B20`).
+const GATE_ARGS: [&str; 5] = [
+    "clippy",
+    "--workspace",
+    "--all-targets",
+    "--all-features",
+    "--message-format=short",
+];
+
+/// Did the build fail? Then there is nothing to count (`.:B18`).
+fn build_failed(line: &str) -> bool {
+    line.starts_with("error[") || line.starts_with("error:")
+}
+
+/// Clippy's warning count for this tree, per thousand lines, in TENTHS.
+///
+/// EVERY input here is the gate's, because a loop that predicts the gate must
+/// measure what the gate measures (`src/tdd:B30`). It diverged on all three
+/// at once and reported 10.8 where `hk` computed 14.6 (`.:B25`):
+///
+///   the FLAGS -- `--workspace --all-features`, or a different build is
+///   scored (`.:B20`);
+///   the FILE SET -- `src` AND `dev`, or a warning in `dev/` is invisible;
+///   the DENOMINATOR -- the same two directories, or the ratio is over a
+///   tree nobody builds.
 ///
 /// Integer tenths because every comparison in the loop is `usize` and a float
-/// has no business next to a gate. The same integer arithmetic `hk` uses, so
-/// the two cannot disagree by a rounding step.
+/// has no business next to a gate.
 ///
 /// `None` when clippy could not run or there is no Rust to divide by: the
 /// ratchet was read first, so there is simply nothing to compare, and
@@ -942,16 +965,30 @@ pub(crate) fn lint_debt_ok(root: &Path, cargo: &str) -> (bool, String) {
 /// what fails a broken toolchain (V26).
 fn clippy_density(root: &Path, cargo: &str) -> Option<usize> {
     let o = Command::new(cargo)
-        .args(["clippy", "--all-targets", "--message-format=short"])
+        .args(GATE_ARGS)
         .current_dir(root)
         .output()
         .ok()?;
-    let n = String::from_utf8_lossy(&o.stderr)
-        .lines()
-        .filter(|l| l.starts_with("src/") && l.contains(": warning"))
-        .count();
-    let loc = rust_lines(&root.join("src"));
+    let out = String::from_utf8_lossy(&o.stderr);
+    // A count from a build that FAILED is not a measurement: clippy emits no
+    // warnings for a target that does not compile, and the ratchet would read
+    // that as debt paid (`.:B18`).
+    if out.lines().any(build_failed) {
+        return None;
+    }
+    let n = out.lines().filter(|l| gate_counts(l)).count();
+    let loc: usize = MEASURED.iter().map(|d| rust_lines(&root.join(d))).sum();
     (loc > 0).then(|| n.saturating_mul(10_000) / loc)
+}
+
+/// The directories the gate measures. One list, so the numerator and the
+/// denominator cannot drift apart.
+const MEASURED: [&str; 2] = ["src", "dev"];
+
+/// Does `hk` count this line? `^(src|dev)/.*: warning`.
+pub(crate) fn gate_counts(line: &str) -> bool {
+    MEASURED.iter().any(|d| line.starts_with(&format!("{d}/")))
+        && line.contains(": warning")
 }
 
 /// Lines of Rust under a directory, counted the way the gate counts them.
