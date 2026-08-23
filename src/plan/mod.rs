@@ -1248,3 +1248,211 @@ mod git_tests {
         Ok(())
     }
 }
+
+// ---- route: which node answers this question? ----
+
+/// Where a query lands, and why.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Route {
+    /// Exactly one node matched. The reason is the words that matched.
+    Hit(std::path::PathBuf, Vec<String>),
+    /// Several matched: the query spans nodes, and picking one would be a
+    /// guess dressed as an answer.
+    Ambiguous(Vec<std::path::PathBuf>),
+    /// Nothing matched. A miss is reported, never rounded to the nearest
+    /// node -- `.:V4`'s rule, since prose classification is wrong by default.
+    Miss,
+}
+
+/// The words one node answers to: its directory name, plus its `§G`.
+fn node_words(node: &Path) -> Vec<String> {
+    let mut words = Vec::new();
+    if let Some(name) = node.file_name().and_then(|n| n.to_str()) {
+        words.push(name.to_lowercase());
+    }
+    if let Ok(text) = std::fs::read_to_string(node.join("SPEC.md")) {
+        words.extend(goal_words(&text));
+    }
+    words.sort();
+    words.dedup();
+    words
+}
+
+/// The words that identify a node, DERIVED from the tree rather than listed.
+///
+/// A hardcoded table covers the nodes it was written for and silently misses
+/// every one added since -- `VOCAB` above knows nine of this repository's
+/// seventeen, which is the shape of drift `sherd check` exists to catch, in
+/// the checker's own source. So the vocabulary is read: a node's directory
+/// name, plus the significant words of its `§G` goal.
+///
+/// Words shorter than four characters are dropped. They are the articles and
+/// operators of caveman prose, and one of them appearing in a query would
+/// match every node that used it.
+#[must_use]
+pub fn vocabulary(root: &Path) -> Vec<(std::path::PathBuf, Vec<String>)> {
+    fed::discover(root)
+        .into_iter()
+        .map(|node| {
+            let words = node_words(&node);
+            (node, words)
+        })
+        .collect()
+}
+
+/// The `§G` line's own words, lowercased, four characters or longer.
+fn goal_words(spec: &str) -> Vec<String> {
+    crate::spec::sections(spec)
+        .into_iter()
+        .find(|(name, _)| {
+            // `sections` yields the WHOLE heading line, `## §G GOAL`, so a
+            // `starts_with("§G")` matches nothing and every node silently
+            // reduces to its directory name.
+            name.trim_start_matches('#')
+                .trim_start()
+                .starts_with("\u{a7}G")
+        })
+        .map(|(_, body)| {
+            body.split(|c: char| !c.is_alphanumeric())
+                .filter(|w| w.chars().count() >= 4)
+                .map(str::to_lowercase)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Resolve a query to the node that owns it.
+///
+/// ADVISORY in the same sense `propose` is: this reports what the specs say
+/// about themselves, and a reader decides. What it will not do is round a
+/// miss up to the nearest node, because a confident wrong answer costs more
+/// than "I do not know" -- the query's author can read a miss and rephrase.
+#[must_use]
+/// Every node whose vocabulary the query touches, and the words it touched.
+///
+/// The ROOT is never an answer. It owns the whole repository by definition,
+/// and its `§G` names every concern below it, so leaving it in makes almost
+/// every query ambiguous against a node that tells the asker nothing.
+fn route_hits(
+    root: &Path,
+    terms: &[&str],
+) -> Vec<(std::path::PathBuf, Vec<String>)> {
+    let mut hits: Vec<(std::path::PathBuf, Vec<String>)> = Vec::new();
+    for (node, words) in vocabulary(root) {
+        if node == root {
+            continue;
+        }
+        let matched: Vec<String> = words
+            .into_iter()
+            .filter(|w| terms.iter().any(|t| t == w))
+            .collect();
+        if !matched.is_empty() {
+            hits.push((node, matched));
+        }
+    }
+    hits
+}
+
+#[must_use]
+pub fn route(root: &Path, query: &str) -> Route {
+    let q = query.to_lowercase();
+    let terms: Vec<&str> = q
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|w| w.chars().count() >= 4)
+        .collect();
+    let mut hits = route_hits(root, &terms);
+    // RANKED, not counted. Several nodes share a word -- "spec" appears in
+    // most goals -- so presence alone makes everything ambiguous; the node
+    // matching MORE of the query is the one that owns it. A tie is genuinely
+    // ambiguous and says so.
+    let best = hits.iter().map(|(_, w)| w.len()).max().unwrap_or(0);
+    hits.retain(|(_, w)| w.len() == best);
+    match hits.len() {
+        0 => Route::Miss,
+        1 => hits
+            .pop()
+            .map_or(Route::Miss, |(node, why)| Route::Hit(node, why)),
+        _ => Route::Ambiguous(hits.into_iter().map(|(n, _)| n).collect()),
+    }
+}
+
+#[cfg(test)]
+mod route_tests {
+    use super::*;
+
+    #[test]
+    fn a_query_naming_one_node_resolves_to_it() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let Route::Hit(node, why) =
+            route(root, "how does the ollama endpoint retry")
+        else {
+            unreachable!("`ollama` names exactly one node")
+        };
+        assert!(node.ends_with("ollama"), "{}", node.display());
+        assert!(why.contains(&"ollama".to_string()), "the reason: {why:?}");
+    }
+
+    /// A miss is REPORTED, never rounded to the nearest node. The query's
+    /// author can read a miss and rephrase; a confident wrong node sends
+    /// them to read the wrong file.
+    #[test]
+    fn a_query_naming_nothing_is_a_miss() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        assert_eq!(route(root, "wombat marmalade trebuchet"), Route::Miss);
+    }
+
+    /// A tie is genuinely ambiguous, and saying so beats picking the first.
+    #[test]
+    fn a_query_spanning_two_nodes_equally_is_ambiguous() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let Route::Ambiguous(nodes) = route(root, "ollama tokens") else {
+            unreachable!("one word each from two nodes is a tie")
+        };
+        assert!(nodes.len() >= 2, "{nodes:?}");
+    }
+
+    /// The ROOT owns everything and therefore answers nothing.
+    #[test]
+    fn the_root_is_never_the_answer() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        for q in ["federation", "spec", "token"] {
+            match route(root, q) {
+                Route::Hit(node, _) => assert_ne!(node, root, "{q}"),
+                Route::Ambiguous(nodes) => {
+                    assert!(!nodes.contains(&root.to_path_buf()), "{q}");
+                }
+                Route::Miss => {}
+            }
+        }
+    }
+
+    /// Short words are dropped: they are caveman prose's articles, and one
+    /// of them would match every node that ever used it.
+    #[test]
+    fn words_under_four_characters_carry_no_signal() {
+        assert!(goal_words("## \u{a7}G GOAL\n\na of the is\n").is_empty());
+    }
+
+    /// The §G half has to be REAL, not merely non-empty: the directory name
+    /// alone satisfies "has words", and it did while `goal_words` silently
+    /// returned nothing for every node.
+    #[test]
+    fn a_vocabulary_is_derived_for_every_node_the_walk_finds() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let vocab = vocabulary(root);
+        assert_eq!(vocab.len(), fed::discover(root).len());
+        assert!(
+            vocab.iter().all(|(_, w)| !w.is_empty()),
+            "a node with no words can never be routed to"
+        );
+        let fed_words = vocab
+            .iter()
+            .find(|(n, _)| n.ends_with("fed"))
+            .map(|(_, w)| w.clone())
+            .unwrap_or_default();
+        assert!(
+            fed_words.iter().any(|w| w == "federation"),
+            "§G's own words reach the vocabulary: {fed_words:?}"
+        );
+    }
+}
