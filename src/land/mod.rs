@@ -899,50 +899,96 @@ pub(crate) fn fmt_ok(root: &Path, cargo: &str) -> (bool, String) {
     )
 }
 
-/// THE RATCHET, as `hk` runs it: the count may fall, never rise.
+/// Tenths as the number a reader sees: `170` is `17.0`.
+fn per_kloc(tenths: usize) -> String {
+    format!("{}.{}", tenths / 10, tenths % 10)
+}
+
+/// THE RATCHET, as `hk` runs it: the DENSITY may fall, never rise.
 ///
-/// `.lint-debt` carries the number. Without this the loop called code
-/// MERGEABLE that raised the debt 271 -> 276, which `hk` then refuses --
-/// so the loop's verdict did not predict the commit (B30).
+/// `.lint-debt` carries warnings per thousand lines. Without this the loop
+/// called code MERGEABLE that raised the debt 271 -> 276, which `hk` then
+/// refuses -- so the loop's verdict did not predict the commit (B30). It has
+/// to compare the number the gate compares, which is now a ratio (`.:B22`).
 pub(crate) fn lint_debt_ok(root: &Path, cargo: &str) -> (bool, String) {
     let Some(was) = recorded_debt(root) else {
         return (true, String::new());
     };
-    let Some(now) = clippy_warnings(root, cargo) else {
+    let Some(now) = clippy_density(root, cargo) else {
         return (true, String::new());
     };
     let ok = now <= was;
     let word = if ok { "PASS" } else { "ROSE" };
     (
         ok,
-        format!("=== lint debt: {word} === {now} (recorded {was})\n"),
+        format!(
+            "=== lint density: {word} === {} per KLoC (ceiling {})\n",
+            per_kloc(now),
+            per_kloc(was)
+        ),
     )
 }
 
-/// How many warnings clippy reports for THIS crate's own sources.
+/// Clippy's warning count for this crate's own sources, per thousand lines,
+/// in TENTHS.
 ///
-/// `None` when clippy could not run: `.lint-debt` was read first, so there is
-/// simply nothing to compare, and refusing would block every candidate on a
-/// bench problem. The TEST step is what fails a broken toolchain (V26).
-fn clippy_warnings(root: &Path, cargo: &str) -> Option<usize> {
+/// Integer tenths because every comparison in the loop is `usize` and a float
+/// has no business next to a gate. The same integer arithmetic `hk` uses, so
+/// the two cannot disagree by a rounding step.
+///
+/// `None` when clippy could not run or there is no Rust to divide by: the
+/// ratchet was read first, so there is simply nothing to compare, and
+/// refusing would block every candidate on a bench problem. The TEST step is
+/// what fails a broken toolchain (V26).
+fn clippy_density(root: &Path, cargo: &str) -> Option<usize> {
     let o = Command::new(cargo)
         .args(["clippy", "--all-targets", "--message-format=short"])
         .current_dir(root)
         .output()
         .ok()?;
-    Some(
-        String::from_utf8_lossy(&o.stderr)
-            .lines()
-            .filter(|l| l.starts_with("src/") && l.contains(": warning"))
-            .count(),
-    )
+    let n = String::from_utf8_lossy(&o.stderr)
+        .lines()
+        .filter(|l| l.starts_with("src/") && l.contains(": warning"))
+        .count();
+    let loc = rust_lines(&root.join("src"));
+    (loc > 0).then(|| n.saturating_mul(10_000) / loc)
 }
 
-/// The `total` line of `.lint-debt`, if the file is there.
+/// Lines of Rust under a directory, counted the way the gate counts them.
+fn rust_lines(dir: &Path) -> usize {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return 0;
+    };
+    entries
+        .filter_map(Result::ok)
+        .map(|e| {
+            let p = e.path();
+            if p.is_dir() {
+                rust_lines(&p)
+            } else if p.extension().is_some_and(|x| x == "rs") {
+                std::fs::read_to_string(&p)
+                    .map(|t| t.lines().count())
+                    .unwrap_or(0)
+            } else {
+                0
+            }
+        })
+        .sum()
+}
+
+/// The `density` ceiling from `.lint-debt`, in TENTHS, if the file is there.
 pub(crate) fn recorded_debt(root: &Path) -> Option<usize> {
     let text = std::fs::read_to_string(root.join(".lint-debt")).ok()?;
-    text.lines()
-        .find_map(|l| l.strip_prefix("total ")?.trim().parse().ok())
+    text.lines().find_map(|l| {
+        let v = l.strip_prefix("density ")?.trim();
+        let (whole, frac) = v.split_once('.').unwrap_or((v, "0"));
+        let tenth = frac.chars().next()?.to_digit(10)? as usize;
+        whole
+            .parse::<usize>()
+            .ok()?
+            .checked_mul(10)?
+            .checked_add(tenth)
+    })
 }
 
 pub(crate) fn tail(s: &str, n: usize) -> &str {
