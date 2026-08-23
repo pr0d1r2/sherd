@@ -6,7 +6,7 @@
 # time, which no single text can answer -- so the checker owns the rule and
 # this repo owns the list.
 #
-# WHY THESE ARE THE FRAGILE ONES: none describes anything bbx builds. To a
+# WHY THESE ARE THE FRAGILE ONES: none describes anything sherd builds. To a
 # compaction pass counting bytes they read as the most deletable text in the
 # file. Delete them and every gate stays green -- and then someone re-proposes
 # a crate-per-verb workspace and nothing says it was already answered, with a

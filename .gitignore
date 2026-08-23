@@ -1,4 +1,4 @@
 target/
 .direnv/
-.bbx-state
+.sherd-state
 .envrc.local

@@ -7,7 +7,7 @@
               run that stops with no record."
 )]
 
-//! `bbx-dev` end to end, against a FIXTURE repository.
+//! `sherd-dev` end to end, against a FIXTURE repository.
 //!
 //! Every spawn sets `current_dir` to a scratch tree that this file built, and
 //! one test asserts that tree is not this one. `src/cli:V6` is the rule and
@@ -24,15 +24,15 @@ use std::process::{Command, Output};
 const BEGIN: &str = "<!-- BEGIN badges -->";
 const END: &str = "<!-- END badges -->";
 
-/// Every block `bbx-dev readme` generates. A fixture missing one is reported
+/// Every block `sherd-dev readme` generates. A fixture missing one is reported
 /// as NOT OPTED IN rather than stale, so the tests that assert staleness
 /// have to carry all four.
 const GRAPH_MARKERS: &str = "\n<!-- BEGIN graph-tree -->\n<!-- END graph-tree -->\n<!-- BEGIN graph-mermaid -->\n<!-- END graph-mermaid -->\n<!-- BEGIN graph-table -->\n<!-- END graph-table -->\n<!-- BEGIN commands -->\n<!-- END commands -->\n";
 
-/// A repository-shaped directory: the files `bbx-dev badges` reads, and
+/// A repository-shaped directory: the files `sherd-dev badges` reads, and
 /// nothing else.
 fn fixture(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("bbx-dev-{name}"));
+    let dir = std::env::temp_dir().join(format!("sherd-dev-{name}"));
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(dir.join(".git")).expect("fixture dir");
     fs::create_dir_all(dir.join(".github/workflows")).expect("workflow dir");
@@ -67,11 +67,11 @@ fn fixture(name: &str) -> PathBuf {
 }
 
 fn run(dir: &Path, args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_bbx-dev"))
+    Command::new(env!("CARGO_BIN_EXE_sherd-dev"))
         .args(args)
         .current_dir(dir)
         .output()
-        .expect("bbx-dev runs")
+        .expect("sherd-dev runs")
 }
 
 /// The guard for every other test here: if the spawn directory were inside
@@ -88,7 +88,7 @@ fn a_fixture_is_not_this_repository() {
 fn an_unknown_verb_is_a_usage_error() {
     let out = run(&fixture("usage"), &["nonsense"]);
     assert_eq!(out.status.code(), Some(2));
-    assert!(String::from_utf8_lossy(&out.stderr).contains("bbx-dev readme"));
+    assert!(String::from_utf8_lossy(&out.stderr).contains("sherd-dev readme"));
 }
 
 #[test]

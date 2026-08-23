@@ -9,28 +9,28 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 /// The verb list, and the SOURCE the README's Commands section is generated
-/// from (`dev:T2`). Public so `bbx-dev` reads the text this binary actually
+/// from (`dev:T2`). Public so `sherd-dev` reads the text this binary actually
 /// prints rather than a second copy of it: two lists of one command set is
 /// the founding defect §C names, and `B2` is what it costs -- `oneshot`
 /// dispatched for weeks while appearing in no usage.
 pub const USAGE: &str = "\
-bbx -- federated SPEC.md for small-context local models
+sherd -- federated SPEC.md for small-context local models
 
-  bbx budget [dir]     token cost of every node, against the working budget
-  bbx lens <dir> [--depth rule|why|all]  the context pack for one node
-  bbx fed [dir]        the federation edges declared by a node
-  bbx check [dir]      microlith structural check of every node
-  bbx review [rev]     mechanical checks on what a commit added (default HEAD)
-  bbx slice [--check|--list]  regenerate distilled slices from their sources
-  bbx outcome <node> <kept|reverted>  record whether a node's work survived review
-  bbx graph [--tree|--table|--dot]  federation DAG, generated from §F
-  bbx plan             next 3 steps, with what would invalidate each
-  bbx plan --triage    unmanaged rows, with a proposed home for each
-  bbx apply [--land]   execute step 1 only, commit it to a run branch, stop
-  bbx land [--push]    fast-forward main to this run branch, if it earned it
-  bbx ask <dir> <q>    ask the endpoint from a node's lens pack
-  bbx tdd <dir> <Vn> <task>   red -> judge -> green -> gate -> repair
-  bbx oneshot <dir> <Vn> <task>   the monolith arm: one call, whole repo
+  sherd budget [dir]     token cost of every node, against the working budget
+  sherd lens <dir> [--depth rule|why|all]  the context pack for one node
+  sherd fed [dir]        the federation edges declared by a node
+  sherd check [dir]      microlith structural check of every node
+  sherd review [rev]     mechanical checks on what a commit added (default HEAD)
+  sherd slice [--check|--list]  regenerate distilled slices from their sources
+  sherd outcome <node> <kept|reverted>  record whether a node's work survived review
+  sherd graph [--tree|--table|--dot]  federation DAG, generated from §F
+  sherd plan             next 3 steps, with what would invalidate each
+  sherd plan --triage    unmanaged rows, with a proposed home for each
+  sherd apply [--land]   execute step 1 only, commit it to a run branch, stop
+  sherd land [--push]    fast-forward main to this run branch, if it earned it
+  sherd ask <dir> <q>    ask the endpoint from a node's lens pack
+  sherd tdd <dir> <Vn> <task>   red -> judge -> green -> gate -> repair
+  sherd oneshot <dir> <Vn> <task>   the monolith arm: one call, whole repo
 
   -v, --verbose        dump every prompt and stream every reply
 
@@ -118,7 +118,7 @@ pub fn run_args(mut args: Vec<String>) -> ExitCode {
         Some("apply") => match plan::apply(&root, 3) {
             Ok(sha) => {
                 eprintln!(
-                    "\napplied as {sha}. Run `bbx plan` again before the next step -- \
+                    "\napplied as {sha}. Run `sherd plan` again before the next step -- \
                            this commit changed the specs that plan it."
                 );
                 // --land asks to land it now; the evidence still decides.
@@ -129,7 +129,7 @@ pub fn run_args(mut args: Vec<String>) -> ExitCode {
                 }
             }
             Err(e) => {
-                eprintln!("bbx: {e}");
+                eprintln!("sherd: {e}");
                 ExitCode::from(1)
             }
         },
@@ -147,7 +147,7 @@ pub fn run_args(mut args: Vec<String>) -> ExitCode {
                 match crate::tdd::oneshot(&run) {
                     Ok(_) => ExitCode::SUCCESS,
                     Err(e) => {
-                        eprintln!("bbx: {e}");
+                        eprintln!("sherd: {e}");
                         ExitCode::from(1)
                     }
                 }
@@ -175,7 +175,7 @@ pub fn run_args(mut args: Vec<String>) -> ExitCode {
 
 /// The repo root, not the invocation directory.
 ///
-/// `bbx` is a shim over `cargo run`, so CWD is wherever you typed it. Using
+/// `sherd` is a shim over `cargo run`, so CWD is wherever you typed it. Using
 /// CWD federated from a SUBDIRECTORY silently -- fewer nodes, a truncated
 /// chain, and no error to say so. Walk up to the git root instead.
 fn repo_root() -> PathBuf {
@@ -208,7 +208,7 @@ fn repo_root_from(start: &Path) -> PathBuf {
 ///
 /// It used to be handed back verbatim, so `src/tdd` stayed relative while
 /// `fed::discover` returns absolute paths -- the two never compared equal.
-/// `bbx fed` survived that only because the CWD happens to be the repo root;
+/// `sherd fed` survived that only because the CWD happens to be the repo root;
 /// from a subdirectory it read the wrong `SPEC.md` or none.
 ///
 /// `join` leaves an absolute argument alone, so passing a full path still
@@ -216,7 +216,7 @@ fn repo_root_from(start: &Path) -> PathBuf {
 /// `--depth rule|why|all`, defaulting to `rule` (`.:V45`).
 ///
 /// An unknown value is a USAGE error, never a quiet fall back to the default.
-/// `bbx lens x --depth rules` would otherwise look exactly like a flag that
+/// `sherd lens x --depth rules` would otherwise look exactly like a flag that
 /// was honoured, which is `.:B8` wearing a typo -- and `.:V105` says a
 /// declared option must change behaviour or it is a claim with no runner.
 fn depth_arg(args: &[String]) -> Result<lens::Depth, String> {
@@ -249,7 +249,7 @@ fn land_verb(root: &Path, push: bool) -> ExitCode {
             ExitCode::SUCCESS
         }
         Err(e) => {
-            eprintln!("bbx: not landing -- {e}");
+            eprintln!("sherd: not landing -- {e}");
             eprintln!(
                 "     the branch is untouched; it is the record of the try"
             );
@@ -259,7 +259,7 @@ fn land_verb(root: &Path, push: bool) -> ExitCode {
 }
 
 fn usage(msg: &str) -> ExitCode {
-    eprintln!("bbx: {msg}\n\n{USAGE}");
+    eprintln!("sherd: {msg}\n\n{USAGE}");
     ExitCode::from(2)
 }
 
@@ -278,7 +278,7 @@ fn budget(root: &Path, dir: PathBuf) -> ExitCode {
     let mut examined = 0;
     let mut over = 0;
     for node in &nodes {
-        // §I declares `bbx budget [dir]`. The argument was parsed by
+        // §I declares `sherd budget [dir]`. The argument was parsed by
         // `arg_dir` and then dropped, so every invocation reported the whole
         // repo -- an interface promised and unread, which is `.:V104`'s own
         // shape appearing in the command that enforces it.
@@ -288,7 +288,7 @@ fn budget(root: &Path, dir: PathBuf) -> ExitCode {
         let p = match lens::pack(root, node, lens::Depth::Rule) {
             Ok(p) => p,
             Err(e) => {
-                eprintln!("bbx: {}: {e}", node.display());
+                eprintln!("sherd: {}: {e}", node.display());
                 return ExitCode::from(1);
             }
         };
@@ -298,7 +298,7 @@ fn budget(root: &Path, dir: PathBuf) -> ExitCode {
         let ceiling = match lens::ceiling_for(root, node) {
             Ok(c) => c,
             Err(e) => {
-                eprintln!("bbx: {e}");
+                eprintln!("sherd: {e}");
                 return ExitCode::from(1);
             }
         };
@@ -336,7 +336,7 @@ fn budget(root: &Path, dir: PathBuf) -> ExitCode {
     // empty table and exited 0, which is indistinguishable from a clean
     // repo -- the same vacuous-pass shape as `src/tdd:V26`.
     if examined == 0 {
-        eprintln!("bbx: {} matched no node", dir.display());
+        eprintln!("sherd: {} matched no node", dir.display());
         return ExitCode::from(2);
     }
     // T10/V104: the number exists to be COMPARED. Printing it and exiting 0
@@ -362,7 +362,7 @@ fn lens_cmd(root: &Path, dir: &Path, depth: lens::Depth) -> ExitCode {
             ExitCode::SUCCESS
         }
         Err(e) => {
-            eprintln!("bbx: {}: {e}", dir.display());
+            eprintln!("sherd: {}: {e}", dir.display());
             ExitCode::from(2)
         }
     }
@@ -371,7 +371,7 @@ fn lens_cmd(root: &Path, dir: &Path, depth: lens::Depth) -> ExitCode {
 fn fed_cmd(dir: &Path) -> ExitCode {
     let path = dir.join("SPEC.md");
     let Ok(text) = std::fs::read_to_string(&path) else {
-        eprintln!("bbx: no SPEC.md at {}", dir.display());
+        eprintln!("sherd: no SPEC.md at {}", dir.display());
         return ExitCode::from(2);
     };
     for e in fed::edges(&text) {
@@ -390,7 +390,7 @@ fn check(root: &Path) -> ExitCode {
         };
         for v in spec::check(&text) {
             // `v` prints itself already namespaced -- these are the caller's
-            // coordinates prefixed to it, which is all bbx owns here.
+            // coordinates prefixed to it, which is all sherd owns here.
             println!("{}:{}: {v}", path.display(), v.line);
             bad += 1;
         }
@@ -399,7 +399,7 @@ fn check(root: &Path) -> ExitCode {
         // manufacture invariants to silence a gate.
         for (id, cause) in spec::unreflected_bugs(&text) {
             println!(
-                "{}: bbx/spec:V4: {id} names no invariant -- `{cause}` \
+                "{}: sherd/spec:V4: {id} names no invariant -- `{cause}` \
                       will recur (advisory)",
                 path.display()
             );
@@ -411,7 +411,7 @@ fn check(root: &Path) -> ExitCode {
         let (dupes, missing) = fed::find_exhaustive_violations(&edges, node);
         for e in dupes {
             println!(
-                "{}: bbx/fed:V12: `{}` named twice in §F -- descent is ambiguous",
+                "{}: sherd/fed:V12: `{}` named twice in §F -- descent is ambiguous",
                 path.display(),
                 e.dir
             );
@@ -420,7 +420,7 @@ fn check(root: &Path) -> ExitCode {
         for m in missing {
             let name = m.file_name().unwrap_or_default().to_string_lossy();
             println!(
-                "{}: bbx/fed:V11: `{name}/` exists on disk with no §F row -- \
+                "{}: sherd/fed:V11: `{name}/` exists on disk with no §F row -- \
                       unreachable by descent (advisory)",
                 path.display()
             );
@@ -437,7 +437,7 @@ fn check(root: &Path) -> ExitCode {
 #[cfg(feature = "ollama")]
 fn ask(root: &Path, dir: &Path, question: &str) -> ExitCode {
     let Ok(p) = lens::pack(root, dir, lens::Depth::Rule) else {
-        eprintln!("bbx: {}: no pack", dir.display());
+        eprintln!("sherd: {}: no pack", dir.display());
         return ExitCode::from(2);
     };
     use std::io::Write;
@@ -498,7 +498,7 @@ fn ask(root: &Path, dir: &Path, question: &str) -> ExitCode {
             ExitCode::SUCCESS
         }
         Err(e) => {
-            eprintln!("bbx: {e}");
+            eprintln!("sherd: {e}");
             ExitCode::from(2)
         }
     }
@@ -509,7 +509,7 @@ fn tdd_cmd(root: &Path, dir: &Path, invariant: &str, task: &str) -> ExitCode {
     match crate::tdd::drive(root, dir, invariant, task, 3) {
         Ok(_) => ExitCode::SUCCESS,
         Err(e) => {
-            eprintln!("bbx: {e}");
+            eprintln!("sherd: {e}");
             ExitCode::from(1)
         }
     }
@@ -572,7 +572,7 @@ fn plan_cmd(root: &Path) -> ExitCode {
         println!("  {n:3}  {why}");
     }
     println!(
-        "\nRun `bbx plan` again after each apply -- applying a task edits\nthe spec that plans the next one, so this list goes stale."
+        "\nRun `sherd plan` again after each apply -- applying a task edits\nthe spec that plans the next one, so this list goes stale."
     );
     st.save();
     ExitCode::SUCCESS
@@ -640,7 +640,7 @@ fn review_cmd(root: &Path, rev: &str) -> ExitCode {
         Ok(fs) => {
             for (file, f) in &fs {
                 println!(
-                    "{}: bbx/review:{}: {}",
+                    "{}: sherd/review:{}: {}",
                     file.display(),
                     f.rule,
                     f.detail
@@ -650,20 +650,20 @@ fn review_cmd(root: &Path, rev: &str) -> ExitCode {
             ExitCode::SUCCESS
         }
         Err(e) => {
-            eprintln!("bbx: {e}");
+            eprintln!("sherd: {e}");
             ExitCode::from(2)
         }
     }
 }
 
 fn slice_cmd(root: &Path, mode: &str) -> ExitCode {
-    let decls = match std::fs::read_to_string(root.join(".bbx-slices"))
+    let decls = match std::fs::read_to_string(root.join(".sherd-slices"))
         .map_err(|e| e.to_string())
         .and_then(|t| slice::parse_decls(&t))
     {
         Ok(d) => d,
         Err(e) => {
-            eprintln!("bbx: {e}");
+            eprintln!("sherd: {e}");
             return ExitCode::from(2);
         }
     };
@@ -672,7 +672,7 @@ fn slice_cmd(root: &Path, mode: &str) -> ExitCode {
         let rendered = match slice::render(root, d) {
             Ok(r) => r,
             Err(e) => {
-                eprintln!("bbx: {e}");
+                eprintln!("sherd: {e}");
                 return ExitCode::from(1);
             }
         };
@@ -704,7 +704,7 @@ fn slice_cmd(root: &Path, mode: &str) -> ExitCode {
             }
             _ => {
                 if let Err(e) = std::fs::write(&out, &rendered) {
-                    eprintln!("bbx: {}: {e}", out.display());
+                    eprintln!("sherd: {}: {e}", out.display());
                     return ExitCode::from(2);
                 }
                 println!(
@@ -720,7 +720,7 @@ fn slice_cmd(root: &Path, mode: &str) -> ExitCode {
         // V3: report what was CHECKED, not only what failed.
         println!("\n  {} slice(s) checked · {drift} drifted", decls.len());
         if drift > 0 {
-            println!("  regenerate with `bbx slice`, or fix the source");
+            println!("  regenerate with `sherd slice`, or fix the source");
             return ExitCode::from(1);
         }
     }
@@ -739,7 +739,7 @@ mod tests {
     ///
     /// Exit codes are the contract `§I` states -- `0 clean / 1 violation /
     /// 2 usage` -- so asserting them is asserting the documented surface, not
-    /// merely executing lines. The gate runs `bbx check` and `bbx budget` on
+    /// merely executing lines. The gate runs `sherd check` and `sherd budget` on
     /// every commit and requires them clean, so SUCCESS here is a claim the
     /// gate independently holds true.
     ///
@@ -760,7 +760,7 @@ mod tests {
             assert_eq!(
                 run_args(argv(&verb)),
                 ExitCode::SUCCESS,
-                "`bbx {}` must exit 0 on a clean tree",
+                "`sherd {}` must exit 0 on a clean tree",
                 verb.join(" ")
             );
         }
@@ -1017,7 +1017,7 @@ mod tests {
     #[test]
     fn a_tree_that_is_not_a_repository_resolves_to_itself() {
         let dir = std::env::temp_dir().join(format!(
-            "bbx-notarepo-{}-{}",
+            "sherd-notarepo-{}-{}",
             std::process::id(),
             line!()
         ));
@@ -1050,7 +1050,7 @@ mod tests {
     #[test]
     fn a_verb_missing_its_argument_is_usage_not_a_crash() {
         // Each of these needs an argument it is not given. Usage, never a
-        // panic: `bbx` runs unattended inside the loop, and a panic there is
+        // panic: `sherd` runs unattended inside the loop, and a panic there is
         // a run that stops with no record.
         assert_eq!(run_args(argv(&["lens"])), ExitCode::from(2));
         assert_eq!(run_args(argv(&["outcome"])), ExitCode::from(2));
@@ -1128,7 +1128,7 @@ mod tests {
             assert_eq!(
                 code,
                 ExitCode::SUCCESS,
-                "`bbx {}` must exit 0",
+                "`sherd {}` must exit 0",
                 a.join(" ")
             );
         }

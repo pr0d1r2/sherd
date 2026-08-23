@@ -2,7 +2,7 @@
 
 ## §G GOAL
 
-`src/` — hub. code nodes of `bbx`. ⊥ own logic itself.
+`src/` — hub. code nodes of `sherd`. ⊥ own logic itself.
 
 ## §F FEDERATION
 

@@ -2,7 +2,7 @@
 
 ## §G GOAL
 
-`blackbox` (cmd `bbx`) — two-axis federation of `SPEC.md` + Rust source over a dir DAG, so a 128k local model works at one altitude & pulls deeper only when measured cost says it must.
+`sherd` (cmd `sherd`) — two-axis federation of `SPEC.md` + Rust source over a dir DAG, so a 128k local model works at one altitude & pulls deeper only when measured cost says it must.
 
 MOTIVATING NUMBER: `itok` = 135,096 tok (28,462 spec + 106,634 code) vs 102,529 working on the target box. An 11,291-line CLI ⊥ fit its own best-case hardware.
 
@@ -33,23 +33,23 @@ dev|repo-maintaining tooling, `publish = false` — README generation|anything a
 - repo partitions **set** \| **setting** \| **human** (`set-and-setting` vocabulary). default pack = set.
 - caveman encoding ∀ generated spec text. MEASURED 22% saving ⊥ 75% (R23) — it disciplines saying LESS, ⊥ encodes denser.
 - gate runner = `hk` (from `nix-hk`; nixos-26.05 ships none — landed on master after branch-off). ops DECLARED in `hk.pkl`, ⊥ a shell body in `.githooks`. schema VENDORED `pkl/Config.pkl` ∴ the gate runs w/ ⊥ network.
-- SETTING as contract (V82), one line each: `rustfmt` 80 col + edition 2024 · `clippy -D warnings` · `cargo test` · `bbx slice/check/budget` · coverage · lint ratchet · hygiene & linters, named in `hk.pkl`.
+- SETTING as contract (V82), one line each: `rustfmt` 80 col + edition 2024 · `clippy -D warnings` · `cargo test` · `sherd slice/check/budget` · coverage · lint ratchet · hygiene & linters, named in `hk.pkl`.
 - CODE limits as contract (V82), `clippy.toml` @ root + `[lints.clippy]` denies: fn ≤15 lines · cognitive ≤7 · nesting ≤4 · args ≤4 · fn bools ≤1 · struct bools ≤3 · trait bounds ≤3 · type complexity ≤150 · `unwrap`/`expect`/`panic`/`indexing_slicing`/`todo`/`unimplemented`/`dbg_macro`/`arithmetic_side_effects` DENY · `unsafe_code` FORBID. thresholds are Sandi Metz adapted; reasoning RESTATED here, ⊥ cited to a sibling — an id that resolves in no namespace this repo can reach reads authoritative & is ⊥ checkable.
 - ⊥ global index file. discovery by walk.
 
 ## §I INTERFACES
 
-- cmd: `bbx init [dir]` → scaffold `SPEC.md` @ dir, `§F` rows from child dirs
-- cmd: `bbx lens <dir> [--depth rule|why|all]` → context pack. default `rule`
-- cmd: `bbx lens <dir> --json` → `{chain:[],body:{},children:[],tokens:{},examined:{}}`
-- cmd: `bbx route "<query>"` → dir + reason. 0 hit / 2 miss / 3 ambiguous
-- cmd: `bbx check [dir]` → drift spec↔code + file ceilings. 0 clean / 1 violation / 2 usage
-- cmd: `bbx split <path>` → propose split of over-ceiling file|node. ⊥ write w/o `--apply`
-- cmd: `bbx sync [dir]` → regen `§N` from parent `§F`. exit 1 if wrote
-- cmd: `bbx graph [--dot|--json|--mermaid]` → federation DAG. `--mermaid` = the generated architecture diagram
-- cmd: `bbx lens <dir> [--facet set|setting|human|all]` → default `set`
-- cmd: `bbx budget [dir]` → node/chain/lens/file token table. exit 1 over
-- cmd: `bbx validate` → DAG + ids + budget + coverage + examined-count. exit 1 fail
+- cmd: `sherd init [dir]` → scaffold `SPEC.md` @ dir, `§F` rows from child dirs
+- cmd: `sherd lens <dir> [--depth rule|why|all]` → context pack. default `rule`
+- cmd: `sherd lens <dir> --json` → `{chain:[],body:{},children:[],tokens:{},examined:{}}`
+- cmd: `sherd route "<query>"` → dir + reason. 0 hit / 2 miss / 3 ambiguous
+- cmd: `sherd check [dir]` → drift spec↔code + file ceilings. 0 clean / 1 violation / 2 usage
+- cmd: `sherd split <path>` → propose split of over-ceiling file|node. ⊥ write w/o `--apply`
+- cmd: `sherd sync [dir]` → regen `§N` from parent `§F`. exit 1 if wrote
+- cmd: `sherd graph [--dot|--json|--mermaid]` → federation DAG. `--mermaid` = the generated architecture diagram
+- cmd: `sherd lens <dir> [--facet set|setting|human|all]` → default `set`
+- cmd: `sherd budget [dir]` → node/chain/lens/file token table. exit 1 over
+- cmd: `sherd validate` → DAG + ids + budget + coverage + examined-count. exit 1 fail
 - file: `SPEC.md` ∀ dir any depth. `§G §C §I §R §V §T §B` + `§F` + `§N`
 - file: `§F FEDERATION` pipe table `dir|owns|⊥owns|tokens` — child dir depth +1. `⊥owns` = what it does NOT own + where that lives
 - file: `§N NAV` pipe table `rel|path|lens`, `rel` ∈ `up`|`self`|`sib`. generated, ⊥ hand-edit
@@ -58,22 +58,22 @@ dev|repo-maintaining tooling, `publish = false` — README generation|anything a
 - file: `.spec-records` — closed-option baseline, `microlith --records`
 - file: `.claude/commands/sit.md` — `/sit`, ONE oversight cycle. loop-safe, halts w/ a recorded reason
 - file: `.claude/commands/titrate.md` — `/titrate`, granularity descent. attempt → enrich pack | split task. floor = VERIFIABILITY ⊥ size
-- file: `.bbx-frontier` — `shape rung= kind= pack= sig= tests= tried= kept=`. TRACKED, ⊥ `.bbx-state`: learning that dies at the clone boundary ⊥ learning
+- file: `.sherd-frontier` — `shape rung= kind= pack= sig= tests= tried= kept=`. TRACKED, ⊥ `.sherd-state`: learning that dies at the clone boundary ⊥ learning
 - file: `AGENTS.md` — supervisor class. auto-loaded by Codex & Claude, ⊥ reachable by a worker prompt (V97)
-- env: `BBX_MODEL` (`gpt-oss:20b`), `BBX_ENDPOINT` (`http://localhost:11434`)
+- env: `SHERD_MODEL` (`gpt-oss:20b`), `SHERD_ENDPOINT` (`http://localhost:11434`)
 - lib: `microlith::check_spec(&text,&records)`, `microlith::fmt`, `::anchors`
 - lib: `itok::estimate`, `itok::walk`, `itok::glob`
-- violation: `<file>:<line>: bbx/<Vn>: <msg>` + `why` + `mechanical`|`judgment`. `--format json` carries `kind` as data
+- violation: `<file>:<line>: sherd/<Vn>: <msg>` + `why` + `mechanical`|`judgment`. `--format json` carries `kind` as data
 
 ## §R RESEARCH
 
 id|topic|finding|src
-R1|crates.io name|`bbx` taken (BBCode parser, lib-only, `bin_names: []`). BIN name `bbx` free on brew, debian, PATH ∴ package≠bin|crates.io API, formulae.brew.sh, sources.debian.org
+R1|crates.io name|`sherd` taken (BBCode parser, lib-only, `bin_names: []`). BIN name `sherd` free on brew, debian, PATH ∴ package≠bin|crates.io API, formulae.brew.sh, sources.debian.org
 R2|cargo workspace|`members=["crates/*"]` ERRORS on a hub dir w/o `Cargo.toml`. per-depth globs + cross-nested path deps build clean|cargo 1.96.1, tested
 R3|rust module form|`mod.rs` = the `default.nix` shape. private sibling → `error[E0603]` ∴ COMPILER enforces the facade, ⊥ grep|cargo 1.96.1, tested
 R4|itok size|`SPEC.md` 28,462 tok + code 106,634 = 135,096 ∴ 103% of a 128k window. an 11,291-line CLI ⊥ fit|itok 0.2.0 `--bpe`
 R5|spec fatness|itok 656B/rule × 103 rules. rationale = 80% of §V (microlith 73%) ∴ per-row FATNESS is the multiplier, ⊥ rule count|measured over both §V
-R6|federation yield|dir federation moves 41% of itok §V bytes; intermediate hubs absorb 9.5%; bbx own §V 64% stays root|classified 103 + 55 rules
+R6|federation yield|dir federation moves 41% of itok §V bytes; intermediate hubs absorb 9.5%; sherd own §V 64% stays root|classified 103 + 55 rules
 R7|inline tests|42% of itok+microlith `src/` is `#[cfg(test)]`; `tracecmd.rs` 65% ∴ whole-file ceiling ranks a SMALL module worst|measured per file
 R8|tokenizer drift|bytes/4 measured 48% LOW on caveman-encoded `SPEC.md` (5,761 real vs 3,890 est) ∴ ⊥ ever a gate|itok `--bpe` vs bytes/4
 R9|gpt-oss:20b arch|24 layers, 8 KV heads, k/v len 64, sliding_window 128, ctx 131,072, 32 experts/4 used, MXFP4, 20.9B|ollama `/api/show` @ 192.168.0.181
@@ -94,8 +94,8 @@ R23|caveman saving|MEASURED 22%, ⊥ the 75% FORMAT.md claims (10 / 13 / 35% on 
 R24|profile shares|itok by profile: implement 47.4% · tdd 81.4% · refactor 80.9% · harden 31.2% · document 17.5%. tdd @ ONE node = 6.1% ∴ 13x from composing facet × horizontal|derived from R18
 R25|widening cost|same 11.6k pack: APPEND a facet 4.12s (prefix cached, only new tok prefill) · PREPEND 8.60s (full cold) = 2.1x ∴ optional facets belong at the END|measured @ .181
 R27|notation cost|NOTATION slice 182 tok vs whole `FORMAT.md` 892 ∴ slicing saves 80%. doc comments in the surface cost 78 tok & were what let the judge tell prose from path|measured
-R28|tdd loop cost|3 round-trips · 3,707 tok · max single call 1,651 vs 157,071 monolithic = 95x. step 3 (gates) = 0 tok. +15% max-call for notation+docs turned 3 failed runs into a correct one|measured, `bbx tdd` on src/fed V2
-R29|premise gate|HEAD-TO-HEAD same node/invariants. monolith 1/2 green (V2 `E0425`, V3 green) · decomposed 2/2. TOTAL tok comparable (2,659 vs 2,712) ∴ decomposition ⊥ save total. MAX SINGLE CALL 2,659 vs 1,243 = 2.1x — that is the whole benefit, & it is the binding constraint|measured, `bbx oneshot` vs `bbx tdd`
+R28|tdd loop cost|3 round-trips · 3,707 tok · max single call 1,651 vs 157,071 monolithic = 95x. step 3 (gates) = 0 tok. +15% max-call for notation+docs turned 3 failed runs into a correct one|measured, `sherd tdd` on src/fed V2
+R29|premise gate|HEAD-TO-HEAD same node/invariants. monolith 1/2 green (V2 `E0425`, V3 green) · decomposed 2/2. TOTAL tok comparable (2,659 vs 2,712) ∴ decomposition ⊥ save total. MAX SINGLE CALL 2,659 vs 1,243 = 2.1x — that is the whole benefit, & it is the binding constraint|measured, `sherd oneshot` vs `sherd tdd`
 R30|quality parity|when the monolith SUCCEEDS its output matches the decomposed form — `missing_not_owns(&e)`, `in_f`=3, composed ⊥ duplicated ∴ decomposition's win is FITTING, ⊥ quality, at this task size|measured
 R31|scale curve|MONO call grows w/ BODIES, DECOMP max bounded by SIGNATURES. impl 375→5,218 tok: ratio 1.1x · 1.1x · 1.2x · 1.6x · 1.9x · 3.4x (predicted, no inference)|computed over 6 nodes
 R32|scale, measured|large node (impl 5,218): MONO 9,029 tok one call, FAILED `E0425` · DECOMP max 3,155, GREEN = 2.9x on max call. small node (impl 1,118): 2.1x ∴ the gap WIDENS w/ node size|measured
@@ -107,12 +107,12 @@ R37|judge is STABLE|blind lens, 3 runs × 2 arms × 5 items = 30 calls @ ~420 to
 R38|the corpus is BELOW the frontier|perfect separation on BOTH arms w/ ⊥ a single miss ∴ this task sits comfortably inside competence & LOCATES NOTHING. a test that never fails measures no boundary. next titration ! go UP (harder judge: longer fn, weaker invariant, ⊥-obvious stub) or SIDEWAYS (generation, where `src/tdd:T13` still reads 0 merit wins), ⊥ repeat this one|derived from R37
 R39|judge boundary LOCATED|blind lens titration, 4 rungs, 2 runs IDENTICAL: `0-tells` 10/10 · `1-bare` 10/10 · `2-vague` 7/10 · `3-subtle` 6/8. ∴ the boundary is real AND stable AT THE EDGE, ⊥ only deep inside competence — R37 had only shown stability at 100%|`cargo test -- --ignored blind_lens_titration`, 2 runs @ .24, 76 calls
 R40|invariant PRECISION is the axis, ⊥ prompt help|stripping `blind_prompt`'s enumerated tells cost NOTHING (10/10 → 10/10) though every recorded stub matches a clause near-verbatim ∴ the checklist was ⊥ doing the work — HYPOTHESIS FALSIFIED. vague `§V` wording costs 30%, the largest single drop, vs 25% for stubs no clause reaches ∴ cheapest lever on delegation = sharper `§V` rows, ⊥ prompt engineering. `src/lens:B1` & `src/plan:B1` reached this from the other direction|derived from R39
-R41|context stopped binding|T41 made `--depth rule` select: whole repo 170,822 → 109,363 tok (-36%), root 11,576 → 7,638, `src/tdd` 17,127 → 9,886 (-42%). 13 of 13 chains were OVER ceiling, now 0 ∴ the fattest chain is 9.6% of working budget & R4's motivating number no longer describes THIS repo. what remains unsolved is competence, ⊥ context|`bbx budget` before/after T41
+R41|context stopped binding|T41 made `--depth rule` select: whole repo 170,822 → 109,363 tok (-36%), root 11,576 → 7,638, `src/tdd` 17,127 → 9,886 (-42%). 13 of 13 chains were OVER ceiling, now 0 ∴ the fattest chain is 9.6% of working budget & R4's motivating number no longer describes THIS repo. what remains unsolved is competence, ⊥ context|`sherd budget` before/after T41
 R42|precision drives WRITING too|generation titration, 5 pure fns × sharp\|vague × 3 runs, graded by `rustc` on HIDDEN tests the writer never saw: sharp 12/15 · vague 6/15 = 2.0x. per-item results IDENTICAL ∀ 3 runs ∴ deterministic, ⊥ underpowered — R40's judging effect carries to writing|`cargo test -- --ignored generation_titration`, 30 calls @ .24
 R43|the TYPE is the cheaper channel|the 2x splits 3 ways, ⊥ evenly: `working` & `bucket` sharp 3/3 vague 0/3 — their rule is MAGIC NUMBERS (`ENTRY_COST`, 4 bucket bounds) no signature carries ∴ prose is the only channel. `verdict` & `for_path` 3/3 BOTH — `enum Verdict{Fits{slack},Over{by}}` & named params already encode the rule ∴ vague prose costs NOTHING. `is_yes` 0/3 both = beyond the frontier at every wording|derived from R42
-R44|sharp wording is 3.3x|extended corpus, 11 pure fns × sharp\|vague × 3 runs, 66 calls, graded by `rustc` on HIDDEN tests: sharp 30/33 (91%) · vague 9/33 (27%). at SHARP wording the 20B wrote 10 of 11 correct ∴ the frontier for `one pure fn from a fixed signature` is FAR wider than assumed — `src/tdd:T13` 0 merit wins is evidence about the TASK SHAPE `bbx tdd` uses, ⊥ about capability|`generation_titration`, 66 calls @ .24
+R44|sharp wording is 3.3x|extended corpus, 11 pure fns × sharp\|vague × 3 runs, 66 calls, graded by `rustc` on HIDDEN tests: sharp 30/33 (91%) · vague 9/33 (27%). at SHARP wording the 20B wrote 10 of 11 correct ∴ the frontier for `one pure fn from a fixed signature` is FAR wider than assumed — `src/tdd:T13` 0 merit wins is evidence about the TASK SHAPE `sherd tdd` uses, ⊥ about capability|`generation_titration`, 66 calls @ .24
 R45|the type ! carry the DECIDING rule, ⊥ the answer SHAPE|R43 pre-registered as classes, scored 8/11. `checked_working` predicted Type & behaved Prose: `Option<u64>` says CAN FAIL, ⊥ FAILS BELOW 28,543 ∴ shape ⊥ content. `parse_limit` & `escape_cell` predicted Beyond, both PASSED @ sharp ∴ a 3-rule parser & an escaper are INSIDE. both frontier misses erred PESSIMISTIC. `is_yes` alone is beyond at any wording|derived from R44
-R46|plan coverage is 3 of 78|`bbx plan`: 3 actionable rows across the whole repo (`src/tdd` T13 — itself a MEASUREMENT row —, `src/ollama` T3, `src/review` T3), 69 unmanaged: 26 root rows w/ no `mod.rs` · 23 edit specs\|wiring ⊥ add a fn · 9 need `main.rs` · 7 write beyond their module · 2 replace ⊥ append · 2 research. ∴ ANY per-node `bbx tdd` experiment is bounded by TASKS ⊥ by clock, & 2 usable nodes is ⊥ a sample (`src/plan:B8` measured 5 of 21; it is now 3 of 78)|`bbx plan`, measured
+R46|plan coverage is 3 of 78|`sherd plan`: 3 actionable rows across the whole repo (`src/tdd` T13 — itself a MEASUREMENT row —, `src/ollama` T3, `src/review` T3), 69 unmanaged: 26 root rows w/ no `mod.rs` · 23 edit specs\|wiring ⊥ add a fn · 9 need `main.rs` · 7 write beyond their module · 2 replace ⊥ append · 2 research. ∴ ANY per-node `sherd tdd` experiment is bounded by TASKS ⊥ by clock, & 2 usable nodes is ⊥ a sample (`src/plan:B8` measured 5 of 21; it is now 3 of 78)|`sherd plan`, measured
 R47|code size, ⊥ one runner|`src/tdd/mod.rs` 62,963B code (~4x V50's 4,000 tok) + 25,612B tests (~3x the 2,000). `src/cli` 25,122B, `src/ollama` 23,032B, both over. longest fns: `drive_from` 313 lines · `run_sampled` 100 · `expected_calls` 75 · `oneshot` 63. ⊥ a function-size rule anywhere, & V50's file rule has no runner (B11)|`wc`, split @ col-0 `#[cfg(test)]` as `split_module` does
 R48|the density map named a NODE|`src/tdd` structural violations cluster into 3 concerns ⊥ spread evenly: the LOOP (`drive_from` 267 lines/cognitive 21 · `run_sampled` 85 · `oneshot` 54) · SOURCE READING (`expected_calls` 70/14 · `signatures` 50/12 · `split_module`) · the experiment harness. & the source-reading cluster SPANS `src/review` too (`public_fns` · `unwired`) ∴ V109 produced a CROSS-NODE finding, ⊥ a file-size complaint — the duplication is ⊥ inside `src/tdd` & a purely internal split would have preserved it|derived from the T85 map
 R49|node context changes NOTHING|T82 re-run, fixed harness, 66 calls, 0 errors: `bare` 30/33 · `ctx` 30/33 @ a 10,009-tok pack. the SAME single item (`is_yes`) failed 3/3 in BOTH ∴ a TRUE null, ⊥ two noisy sets cancelling. BOUNDED: these items are self-contained BY DESIGN ∴ this says context is SAFE, ⊥ that context is useless — a task needing the node's spec would be a different measurement. `is_yes` has now failed across 4 conditions (sharp·vague·bare·ctx) ∴ T81 has a stable frontier item to dissect|`context_titration`, 66 calls @ .24
@@ -150,7 +150,7 @@ V23: ignore globs (`target/`, `.git/`) ⊥ walked, ⊥ ceiling-checked. per-FILE
 V24: ∀ emitted token number ! carry method label. ⊥ bare int
 V25: `ollama` tier unreachable → fall back `bpe` + warn stderr. ⊥ fall to `dummy`, ⊥ silent
 V26: `§F`.tokens written & checked by same tier. tier switch → recompute all
-V27: this repo ! valid federation. `bbx validate` on self exit 0, CI gate
+V27: this repo ! valid federation. `sherd validate` on self exit 0, CI gate
 V30: bootstrap — parse/DAG/budget land before self-spec written. ⊥ claim dogfood til self-validate green
 V34: ∀ non-root `SPEC.md` ! carry `§N` — `up` ≥1, `self` = 1, `sib` = ∀ co-child
 V35: root `§N` — `up` = `-`, `self` = `.`, ⊥ sib
@@ -159,7 +159,7 @@ V38: `§N`.lens = verbatim copy of that dir's `§F`-row lens. single source
 V39: multi-parent → `up` 2+ rows. `sib` = union ∀ parent, deduped
 V40: `§N` alone ! answer "where am I, what is beside me" ⊥ opening another file
 — two axes —
-V42: federation has 2 axes. **horizontal** = dir depth. **vertical** = detail (`rule` → `why` → evidence). node over budget → vertical FIRST, horizontal only if rule-only still over. MEASURED 3x that horizontal ⊥ the lever: itok 59% of §V bytes stay @ root · itok 66% of stmts · bbx own 64%
+V42: federation has 2 axes. **horizontal** = dir depth. **vertical** = detail (`rule` → `why` → evidence). node over budget → vertical FIRST, horizontal only if rule-only still over. MEASURED 3x that horizontal ⊥ the lever: itok 59% of §V bytes stay @ root · itok 66% of stmts · sherd own 64%
 V43: `§V`/`§B` statement = rule + rationale. rule inline @ `SPEC.md`, rationale @ `SPEC.why.md` keyed by id. MEASURED: rationale = 80% of `itok` §V, 73% of `microlith` ∴ vertical buys 5x vs horizontal 1.7x
 V44: vertical split lossless **by reference ⊥ by deletion**. ∀ id ∈ `SPEC.md` → row ∈ `SPEC.why.md` | explicit `-`. rationale is where closed-option records live ∴ dropping it is the failure both sibling repos already guard
 V45: `lens --depth rule` default. `why` pulled on demand, ⊥ resident. entry cost is re-billed EVERY turn
@@ -173,7 +173,7 @@ V51: `mod.rs`/`lib.rs` ceiling = `ceiling.mod` (default 1500) — tighter. it CO
 V52: ceiling forces a REVIEW, ⊥ a shrink. raise = reviewed event, reason in the commit. a ceiling set a hair above current turns every addition into a raise & trains the reflex it exists to catch
 V53: `split` proposal ! report COUPLING after the cut, ⊥ sizes alone. a split that lowers bytes & raises cross-module refs is a regression
 V54: `Mechanical` ⊥ mean easy — it means the tool computes the SINGLE answer. where to cut a module is ⊥ computable ∴ every `split` direction is `Judgment`. an agent applying Judgment blindly silences the guard
-V55: ∀ printed id qualified (`bbx/V13`) — an unqualified id lands in the CONSUMER's namespace where it names a different rule. coordinates stay `file:line:`, id beside the message ⊥ inside them
+V55: ∀ printed id qualified (`sherd/V13`) — an unqualified id lands in the CONSUMER's namespace where it names a different rule. coordinates stay `file:line:`, id beside the message ⊥ inside them
 V56: guard & rule ! share a UNIT. ceiling in `itok` tokens, cap in chars, order in lines — each states its unit at the point it gates
 V57: CI globs by DATA DEPENDENCY ⊥ file extension. a step's glob ! name every input its tests read
 V58: grammar ⊥ ship til run over a corpus. `§F`/`§N` recognition measured over the 54-spec fleet & FP rate reported. a false positive naming the wrong rule costs more than a false negative
@@ -223,13 +223,13 @@ V75: format facts read from the CHECKER's own source, ⊥ a vendored `FORMAT.md`
 V101: a dep ! resolve to an IMMUTABLE artifact — registry version + lock checksum. a sibling PATH dep is a shared working tree ∴ the gate's green is true only for the INSTANT it ran & expires silently when the sibling moves (B5). a new path dep ! carry a §B-recorded reason
 V102: a gate ! declare its OP SET as data, ⊥ bury it in a hook body. green names only what RAN ∴ an op nobody declared is invisible, ⊥ merely absent — fmt & clippy were missing for the project's whole life & every verdict looked identical (B6)
 V103: the criterion ⊥ WEAKEN as the rung narrows — a rung-4 task judged against the same `§V` as a rung-1 one, else the descent proves nothing. a granularize-until-success loop converges on TRIVIA by construction (`src/tdd:B2` = a judge loosening from "proves the invariant" to "would compile"). success below the verifiability floor is recorded UNVERIFIED, ⊥ kept
-V104: a declared LIMIT ! have a runner that EXITS NONZERO — V74's shape, widened from §C to any number the spec names. V6/V7/V8 declare ceilings, `.context-limits` carries them, `bbx budget` PRINTS them & exits 0 ∴ 4 nodes drifted over unseen (B7). & a path w/ NO ceiling row is UNCHECKED ⊥ unlimited: absence ! read as violation or default, ⊥ as permission
+V104: a declared LIMIT ! have a runner that EXITS NONZERO — V74's shape, widened from §C to any number the spec names. V6/V7/V8 declare ceilings, `.context-limits` carries them, `sherd budget` PRINTS them & exits 0 ∴ 4 nodes drifted over unseen (B7). & a path w/ NO ceiling row is UNCHECKED ⊥ unlimited: absence ! read as violation or default, ⊥ as permission
 V105: a declared OPTION ! CHANGE BEHAVIOUR. `Depth::Rule` is §I's default & selected nothing for the project's whole life ∴ every pack shipped archive & every ceiling was measured against it (B8). testable ∀ flag: same input, two settings, DIFFERENT output — a flag whose branches agree is a claim w/ no runner (V74)
 V106: BUILDABLE on the 20B = (a) chain + the file it edits fits working budget & (b) ∃ a rung where the output SURVIVES REVIEW (⊥ merely the gate) & (c) setup cost < writing it by hand. (a) alone is what `budget` checks & is ⊥ SUFFICIENT — after T41 every chain is ≤10% of working & 0 merit wins remain. a module claimed buildable w/o (b) & (c) measured is a wish (`.:B4`: name the denominator)
 V107: push the invariant into the TYPE & the SIGNATURE before sharpening its prose — & the type ! carry the DECIDING rule, ⊥ merely the SHAPE of the answer. MEASURED: where the type holds the rule (`enum Verdict{Fits{slack},Over{by}}`), vague wording costs 0; `Option<u64>` holds only `can fail` & its magic number still cost 100% (R45). prose precision is the fallback for what a type cannot hold, & it is worth 3.3x (R44)
 V108: an experiment comparing 2 conditions ! differ in exactly ONE variable. the R44 → `src/tdd:T13` gap holds FIVE at once — pack size · signature given vs invented · tests hidden vs model-authored · judge in the loop · repair steps — ∴ ⊥ result across it is attributable & the honest form is one row per variable (R46). a 5-variable comparison that CONFIRMS a hypothesis is worth as little as one that refutes it
 V109: clippy violation DENSITY = a 3rd dir-promotion trigger (V73 has 2). a file whose fns keep tripping `too_many_lines`/`cognitive_complexity` holds several concerns, & the CLUSTER names the SEAM — where V50 says only `too big` & leaves the boundary to eye. limits ∴ ⊥ hygiene: they are how federation boundaries are DISCOVERED ⊥ guessed
-V110: decomposition is ⊥ uniformly costly — BREADTH & DEPTH differ & the rule must ⊥ discourage the cheap direction w/ the dear one. a SIBLING @ depth 2 pays root + `src` + itself & adds NOTHING to any existing chain ∴ promoting sideways LOWERS per-node cost & raises only the total-if-all-loaded, which nothing ever loads. a CHILD adds a level EVERY descendant pays EVERY turn (R6: hubs absorb 9.5%) ∴ depth is where splitting can RAISE the cost of working. prefer siblings. ∀ proposed split ! carry `bbx budget` before/after — this repo can MEASURE that curve where ordinary refactoring cannot
+V110: decomposition is ⊥ uniformly costly — BREADTH & DEPTH differ & the rule must ⊥ discourage the cheap direction w/ the dear one. a SIBLING @ depth 2 pays root + `src` + itself & adds NOTHING to any existing chain ∴ promoting sideways LOWERS per-node cost & raises only the total-if-all-loaded, which nothing ever loads. a CHILD adds a level EVERY descendant pays EVERY turn (R6: hubs absorb 9.5%) ∴ depth is where splitting can RAISE the cost of working. prefer siblings. ∀ proposed split ! carry `sherd budget` before/after — this repo can MEASURE that curve where ordinary refactoring cannot
 V111: a test the WRITER authored ⊥ grade that writer. MEASURED anti-correlated (R51): 0 of 3 wrong impls caught, 7 of 30 correct ones rejected. `src/tdd` step 1 authors the test that step 3's RED gate then requires ∴ the loop's red is satisfied by a test that does ⊥ measure the invariant, & `src/tdd:B2`/`B12` are that shape reported one at a time
 V112: test-vs-impl DISAGREEMENT measures the INVARIANT, ⊥ the code. both written blind from ONE row, they disagreed 7 of 33 (R51), & the disagreements are gaps the row left open (R54) ∴ 2 calls + a compile is a mechanical AMBIGUITY DETECTOR for a `§V` row. it grades the SPEC — & unlike a mutation gate (refuted, R53) needs no reference answer
 V113: GENERATED means a RUNNER regenerates it, ⊥ that it was generated once. an artefact spliced by hand & never re-spliced is indistinguishable from a hand-written one the day after, & the sentence claiming otherwise is the most misleading line on the page (B16). ∀ generated block ! carry markers, a generator, & a `--check` in the gate
@@ -238,17 +238,17 @@ V73: dir promotion has 2 triggers — (a) V50 code ceiling, (b) module owns SPEC
 ## §T TASKS
 
 id|status|task|cites
-T1|x|scaffold single crate `bbx`, module=dir+`mod.rs`, explicit `[[bin]]`, deps `itok`+`microlith` by path|C,R1,R3
+T1|x|scaffold single crate `sherd`, module=dir+`mod.rs`, explicit `[[bin]]`, deps `itok`+`microlith` by path|C,R1,R3
 T2|x|bind `microlith` — `check`, `fmt`, section split. ⊥ reimpl|C
-T3|.|capability-parity audit `microlith` vs what `bbx` needs. write the comparison BEFORE relying on it|V59
+T3|.|capability-parity audit `microlith` vs what `sherd` needs. write the comparison BEFORE relying on it|V59
 T4|x|parse `§F` table → (dir, owns, ⊥owns, tokens), escape-aware|I,V1
 T6|x|superseded — edges/chain/discover land; depth & cycle are `src/fed:T4`|V1,V2,V4
 T8|x|bind `itok::estimate`, tier floor `bpe`, method label|V17,V24
-T10|x|`bbx budget` + over-budget exit 1|V6,V7,V8,V104
+T10|x|`sherd budget` + over-budget exit 1|V6,V7,V8,V104
 T12|.|id namespacing + resolver `path:Vn`|V10,V11
-T14|x|`bbx lens` render pack, `--depth rule` default|I,V15,V45
+T14|x|`sherd lens` render pack, `--depth rule` default|I,V15,V45
 T16|x|moved — `src/cli:T4`|I
-T17|x|ollama client `BBX_MODEL`/`BBX_ENDPOINT`|I,V25
+T17|x|ollama client `SHERD_MODEL`/`SHERD_ENDPOINT`|I,V25
 T19|.|route ambiguous exit 3 / miss exit 2|V20
 T20|x|model-free path — `--no-default-features` drops `ollama` & its deps|V18
 T21|x|moved — `src/cli:T6`|I
@@ -257,18 +257,18 @@ T24|x|moved — `src/cli:T7`|I
 T25|x|moved — `src/cli:T3`|I,V48
 T28|.|backprop: bug → leaf `§B`, decide promote|V14
 T36|x|superseded — `§N` derivation is `src/fed:T6`, at the node that owns it|V36,V38,V39
-T37|.|`bbx sync` + exit 1 when wrote|I,V36
+T37|.|`sherd sync` + exit 1 when wrote|I,V36
 T41|x|`lens --depth rule\|why\|all` — `pack` reads the WHOLE `SPEC.md` ∀ chain member & `Depth` is consulted ONLY for `Why` ∴ `rule` selects nothing & `§R`/`§B` archive rides in every pack (MEASURED 33% of root, 59% of `src/tdd`, 58% of `src/plan`). `rule_depth` already exists & is TESTED in `src/tdd` — move it to the owner, ⊥ reimpl|V45,V15,V105
 T42|.|cross-file losslessness proof, asserted pre-write|V49,V44
 T46|.|coupling report after proposed split|V53
-T47|.|violation renderer `file:line: bbx/Vn:` + why + mechanical\|judgment + json `kind`|V55,V54
+T47|.|violation renderer `file:line: sherd/Vn:` + why + mechanical\|judgment + json `kind`|V55,V54
 T48|.|sibling-divergence detector for V13|V62
 T49|.|`§F`/`§N` upstream to FORMAT/microlith before shipping a dialect|V47
 T50|.|corpus run over 54-spec fleet, FP rate reported|V58
 T52|.|planted-violation test ∀ guard + accepts-real-shapes companion|V61
-T53|x|PREMISE GATE run — `bbx oneshot` vs `bbx tdd`, R29/R32/R33. bounds MAX CALL 2.1x→2.9x, ⊥ total, ⊥ quality|V60,V27
+T53|x|PREMISE GATE run — `sherd oneshot` vs `sherd tdd`, R29/R32/R33. bounds MAX CALL 2.1x→2.9x, ⊥ total, ⊥ quality|V60,V27
 T54|x|self-federate: root `§F` + per-node `SPEC.md`|V27,V30
-T55|.|CI: `bbx validate` self exit 0; globs by data dependency|V27,V57
+T55|.|CI: `sherd validate` self exit 0; globs by data dependency|V27,V57
 T56|x|`§F` gains `⊥owns` column — parse & emit|I,V66
 T57|x|superseded — `src/fed:T5`/`T7`: duplicate rows fail, missing rows advisory|V64,V65
 T58|.|`cap.row` gate — inline `§V`/`§R`/`§B` text over 200B|V69,V70
@@ -278,27 +278,27 @@ T64|.|setting-as-contract extraction — guard files → one line each|V82
 T65|x|`graph --mermaid` generated diagram|V83
 T67|.|materializability audit: which guard files are fleet standard vs repo facts|V84,R20
 T68|.|report caveman 22%-⊥-75% upstream to cavekit FORMAT.md|R23
-T69|.|profile declaration — flag > §T row > `bbx.toml` default. ⊥ inference|V88
+T69|.|profile declaration — flag > §T row > `sherd.toml` default. ⊥ inference|V88
 T70|x|V101 runner — path deps limited to the one recorded exception (`itok`)|V101
 T71|x|`itok` published ∴ registry dep, ⊥ path dep, & `packages.default` builds w/ `doCheck` ON|V101,R20
 T72|x|gate → `hk` from `nix-hk`, ops in `hk.pkl`, `pre-commit` + `pre-push`, fmt & clippy gated for the 1st time|V26,V82,V102
-T73|.|`/titrate` machinery — `.bbx-frontier` record, believability re-keyed node → SHAPE, cost ledger w/ the denominator named (`.:B4`)|V103,V60
+T73|.|`/titrate` machinery — `.sherd-frontier` record, believability re-keyed node → SHAPE, cost ledger w/ the denominator named (`.:B4`)|V103,V60
 T74|x|titrate the JUDGE upward until it FAILS — longer fn, weaker `§V`, ⊥-obvious stub. R38: a corpus that never misses locates no boundary|V103,R37,R38
-T75|x|after T41: re-measure ∀ chain, reset `.context-limits` from the new baseline, & wire `bbx budget` into `hk.pkl` ∴ V104 gets its runner IN THE GATE, ⊥ only in a command a human remembers to run|V104,V50
-T76|.|BUILDABILITY SWEEP: `bbx tdd` @ every node, N=3, record (node, rung, kept/tried) → `.bbx-frontier`. answers WHICH modules are buildable, ⊥ whether the idea works|V106,V103,R37
+T75|x|after T41: re-measure ∀ chain, reset `.context-limits` from the new baseline, & wire `sherd budget` into `hk.pkl` ∴ V104 gets its runner IN THE GATE, ⊥ only in a command a human remembers to run|V104,V50
+T76|.|BUILDABILITY SWEEP: `sherd tdd` @ every node, N=3, record (node, rung, kept/tried) → `.sherd-frontier`. answers WHICH modules are buildable, ⊥ whether the idea works|V106,V103,R37
 T77|x|titrate GENERATION against sharp vs vague `§V` — R40 measured precision as the dominant axis for JUDGING; nobody has checked whether it drives WRITING, & vague rows are the live hypothesis for `src/tdd:T13` 0 merit wins|V106,R40
-T78|x|`bbx lens` builds its dir w/ `PathBuf::from`, ⊥ `arg_dir` ∴ it never got T10 root-resolution & `lens .` reports a different chain than `budget` for the same node (B9)|V104,I
+T78|x|`sherd lens` builds its dir w/ `PathBuf::from`, ⊥ `arg_dir` ∴ it never got T10 root-resolution & `lens .` reports a different chain than `budget` for the same node (B9)|V104,I
 T79|x|EXTEND the generation corpus — 5 items is thin & R43's 3-way split rests on 2 items per class. add items ∀ class (type-carried · magic-number · beyond-frontier). ⊥ more RUNS: variance is 0 (R42)|V107,R43
 T80|.|audit `§V` rows for what a TYPE could carry instead (V107). the rows that need prose precision are the ones no signature can hold|V107,R43
 T81|.|`is_yes` is the ONLY item beyond reach @ sharp wording (R45) — find WHY. 3 conjoined rules (first line · case-insensitive · trim) or something else? it is the one datapoint about what the frontier is MADE of|V107,R45
 T82|x|VARIABLE 1 of the R44→T13 gap — PACK SIZE. same 11 items, same hidden tests, same sharp wording; prompt carries the node lens pack (~10k) vs ~500. does federated context help generation, hurt it, or nothing? R15/R16 measured prefill cost, ⊥ whether a fat pack degrades WRITING|V108,V106,R44
 T83|x|VARIABLE 2 — TEST AUTHORSHIP. hidden tests written first vs the model authoring its own. `src/tdd:B2`/`B12` are both a model writing a test that AGREES w/ its own wrong impl ∴ the live suspect for T13's zero|V108,V106
-T84|x|VARIABLE 3 — SIGNATURE given vs invented. R44 handed the writer a signature; `bbx tdd` makes it invent one, & `src/tdd:B12` is a test calling a name the impl never defined|V108,V106
+T84|x|VARIABLE 3 — SIGNATURE given vs invented. R44 handed the writer a signature; `sherd tdd` makes it invent one, & `src/tdd:B12` is a test calling a name the impl never defined|V108,V106
 T85|x|adopt `clippy.toml` + `[lints.clippy]` (microlith's text, reasoning restated locally). MEASURE the violation count FIRST — the count decides ratchet vs pay-down, ⊥ a strategy picked blind. ⊥ `warn`: a check that cannot fail is B6|V82,V109,R47
-T86|.|build the FILE-ceiling runner V50 never had into `bbx check`, wire it like `budget`. §I already claims `check` does it (B11)|V50,V104,B11
+T86|.|build the FILE-ceiling runner V50 never had into `sherd check`, wire it like `budget`. §I already claims `check` does it (B11)|V50,V104,B11
 T87|x|`hk util` hygiene steps the siblings run & we ⊥: merge-conflict · private-key · large-files · BOM · case-conflict · symlinks · trailing-ws · final-newline · line-endings. ⊥ new deps|V26
 T88|.|`no-commit-to-branch --branch main` in the PRE-COMMIT set only — ⊥ `all`, or CI on `main` fails itself (microlith's note). AGENTS.md claims it & nothing enforces it (B12)|V74,B12
-T89|.|pub-fn ↔ test PAIRING via `bbx review` — reuse `public_fns`/`expected_calls`, ⊥ reimpl. catches what a % hides: a fn w/ NO test, carried by its neighbours|V72,V16
+T89|.|pub-fn ↔ test PAIRING via `sherd review` — reuse `public_fns`/`expected_calls`, ⊥ reimpl. catches what a % hides: a fn w/ NO test, carried by its neighbours|V72,V16
 T90|x|coverage floor, RATCHETED ⊥ set: start AT the measured 64.76% (R50), rises only w/ the tests that earn it, `.coverage` holds the number like `.lint-debt` holds the other. 98% is the DESTINATION in §C, ⊥ a gate that goes red tomorrow — the clippy adoption already showed a cliff is unpayable & a ratchet catches real defects (3 so far)|V16,R50,B6
 T91|~|`src/cli` FIRST: 445 lines, 0 tests, 0% — found twice by different instruments (T85 density map, R50 coverage). biggest single lever on the floor & the node w/ no test module at all|R50,V16
 T92|~|`src/tdd`: move `RECORDED`/`VAGUE`/`SUBTLE`/`GEN_CORPUS`/`grade`/the titrations behind `#[cfg(test)]` — they are FIXTURES in the impl half — & decompose `drive_from` (267 lines, cognitive 21, worst in the repo). the source-reading half leaves via T93, ⊥ internally (R48)|V50,V109,V110,R48
@@ -307,26 +307,26 @@ T94|x|promote `src/assay` — SIBLING @ depth 2 (V110). owns the corpora + the g
 T95|x|split METHOD from FINDINGS w/ T94. RESOLVED as: `.:V103`/`.:V108` STAY @ root & the `src/assay` dupes deleted — the checker cannot express a cross-node cite in the CITES column, so an invariant cited by a root `§T` row ! live @ root. the harness cluster (`.:tdd:V27`→`assay:V1`, T17/T18→T5/T6, B25→B1) moved whole. root T74-T84 STAY: moving them renumbers & dangles every `.:T82`-style cite, for a saving V110 measures @ ~1 tok/chain/row|V110,B14
 T96|x|move the `#[ignore]`d titrations from `src/assay` inline tests to `tests/` — an ignored body counts in the coverage denominator & never runs, so every experiment LOWERS the number & a better instrument reads worse (`.coverage` records 75.50→75.11). integration-level anyway|V16,R50
 T97|x|build the AMBIGUITY DETECTOR (V112): ∀ `§V` row ask for a test & an impl BLIND, compile them against each other, flag DISAGREEMENT as an underspecified row. a REPORT ⊥ a gate. it grades the spec, ⊥ the model|V112,R54
-T98|x|`bbx-dev docs` — generate the README Commands section from the binary. README names 5 unbuilt verbs & omits 7 built ones ∴ the prose is already behind the code|`dev:V1`
+T98|x|`sherd-dev docs` — generate the README Commands section from the binary. README names 5 unbuilt verbs & omits 7 built ones ∴ the prose is already behind the code|`dev:V1`
 T99|x|move `gate_with`/`cargo_bin` tdd → `src/land` (owner, & the only non-tdd caller) ∴ `--no-default-features` builds, + gate it in `hk.pkl` (B15)|V74,B15
-T100|x|ONLINE link check, scheduled in CI ⊥ in the commit gate. `lychee --offline` checks 39 relative paths & EXCLUDES 37 external ones by construction ∴ it cannot see the class we have TODAY: `docs/SECURITY.md` & `CHANGELOG.md` point @ `github.com/pr0d1r2/blackbox` URLs that ⊥ exist yet. a 404 on someone else's site ! ⊥ reject a commit, & OURS ! ⊥ go unnoticed|V26,V74
+T100|x|ONLINE link check, scheduled in CI ⊥ in the commit gate. `lychee --offline` checks 39 relative paths & EXCLUDES 37 external ones by construction ∴ it cannot see the class we have TODAY: `docs/SECURITY.md` & `CHANGELOG.md` point @ `github.com/pr0d1r2/sherd` URLs that ⊥ exist yet. a 404 on someone else's site ! ⊥ reject a commit, & OURS ! ⊥ go unnoticed|V26,V74
 T101|.|move the scripted-toolchain fixtures (`scratch`·`scripted_cargo`·`write_exec`·`repo_fixture`·`node_fixture`) `src/tdd` tests → `testrepo`, then the 7 gate tests follow the code T99 moved. today they sit in `src/tdd` testing `crate::land::` fns ∵ the fixtures do|V74,B15
 
 ## §B BUGS
 
 id|date|cause|fix
 B1|2026-08-01|`fed::walk` hand-rolled while §C says fs walk = `itok::walk`/`itok::glob`, ⊥ reimpl. wrote it w/o reading itok's walk API — the exact belief-⊥-measurement trap V59 names, committed in the first commit that could commit it. ⊥ caught by `check`: no runner reads §C|V74. port to `itok::walk` or amend §C w/ the measured reason itok's walk ⊥ fit
-B2|2026-08-01|`§R` written as RECORDS w/ `id|state|record`. FORMAT 4.1.0 §R = RESEARCH `id|topic|finding|src`. assumed from a stale local `FORMAT.md` (6 sections) while the dep shipped 4.1.0 (7). 16 violations on first `bbx check`, all real|read the CHECKER's own `SECTIONS`/`CANONICAL_WORDS`, ⊥ a vendored copy. §R now RESEARCH; closed options → `.spec-records` (R13)
+B2|2026-08-01|`§R` written as RECORDS w/ `id|state|record`. FORMAT 4.1.0 §R = RESEARCH `id|topic|finding|src`. assumed from a stale local `FORMAT.md` (6 sections) while the dep shipped 4.1.0 (7). 16 violations on first `sherd check`, all real|read the CHECKER's own `SECTIONS`/`CANONICAL_WORDS`, ⊥ a vendored copy. §R now RESEARCH; closed options → `.spec-records` (R13)
 B3|2026-08-01|SPEC defect, mine: V78 written as a STATIC partition — SET = impl+spec+agents, SETTING = tests+guardrails — & committed. TDD breaks it: the test IS the work ∴ `tests` ∈ set, & nothing about the file changed. facet (property of the FILE) conflated w/ profile (property of the TASK). MEASURED after: `tdd` loads 81.4% of itok, `refactor` 80.9% ∴ the axis nearly collapses for 2 of 5 profiles|V78 now names the classification only; V86 adds PROFILE as the task-dependent selection; V87 records that facet × horizontal = 6.1% where facet alone = 81.4%. found by a READER asking about TDD, ⊥ by any check — no gate reads a partition's fitness for a workflow
-B4|2026-08-01|SPEC defect, mine, repeated across ~6 commit messages: claimed "95x on the binding constraint" comparing our max call to 157,071 — which is `itok`'s WHOLE-REPO tdd profile, ⊥ what a one-call prompt needs. MEASURED baseline for the same task = 2,659 tok ∴ real ratio 2.1x. compared against a straw man nobody would build|`bbx oneshot` built as the honest monolith arm; R29/R30 carry the measurement; V60 restated. GENERALLY: a ratio ! name what is in the DENOMINATOR & that thing ! be something someone would actually do
-B5|2026-08-05|HEAD stopped COMPILING w/ ⊥ blackbox commit. `67fa9ad` (08-02 10:26) imported `microlith`'s inner `violation` module & the gate passed; microlith privatized it 9h later (`421ab02`, 08-02 19:16) ∴ E0603 on a tree already judged green, & already pushed. `../microlith` was a path dep ∴ no version could hold it still, & `Cargo.lock` read `0.4.0` for a sibling saying `0.5.0`|`microlith` = crates.io `0.5` + lock checksum (V101). `itok` too (T71) ∴ none left. `src/spec:B1` carries the import half
+B4|2026-08-01|SPEC defect, mine, repeated across ~6 commit messages: claimed "95x on the binding constraint" comparing our max call to 157,071 — which is `itok`'s WHOLE-REPO tdd profile, ⊥ what a one-call prompt needs. MEASURED baseline for the same task = 2,659 tok ∴ real ratio 2.1x. compared against a straw man nobody would build|`sherd oneshot` built as the honest monolith arm; R29/R30 carry the measurement; V60 restated. GENERALLY: a ratio ! name what is in the DENOMINATOR & that thing ! be something someone would actually do
+B5|2026-08-05|HEAD stopped COMPILING w/ ⊥ sherd commit. `67fa9ad` (08-02 10:26) imported `microlith`'s inner `violation` module & the gate passed; microlith privatized it 9h later (`421ab02`, 08-02 19:16) ∴ E0603 on a tree already judged green, & already pushed. `../microlith` was a path dep ∴ no version could hold it still, & `Cargo.lock` read `0.4.0` for a sibling saying `0.5.0`|`microlith` = crates.io `0.5` + lock checksum (V101). `itok` too (T71) ∴ none left. `src/spec:B1` carries the import half
 B6|2026-08-18|gate ran `build` + `test` ONLY, from the first commit that had a hook — no fmt, no clippy — ∴ an entirely unformatted tree & 18 clippy findings accrued behind a verdict that read green every time. the ops lived as a shell BODY in `.githooks/pre-commit` ∴ the SET of checks was never reviewable data & nobody could see what was ⊥ there|ops → `hk.pkl`, file-scoped & readable; fmt + clippy gated & the debt paid (`790bcf6`). V102. `-D warnings` moved off `RUSTFLAGS` so it stops reaching `../itok`
-B7|2026-08-18|`.context-limits` declares per-node chain ceilings & `bbx budget` PRINTED the table w/o comparing against them or failing — T10 sat `.` from the first commit ∴ every chain drifted over unseen. w/ the comparison RUNNING it is 13 of 13, ⊥ the 4 first counted: root alone grew 10,060 → 11,576 in ONE session & every chain pays root|V104. T10 built the runner (exit 1). `src/land`/`src/slice` inherit `src` by longest prefix — they are over an INHERITED ceiling, ⊥ unbounded as this row first claimed
+B7|2026-08-18|`.context-limits` declares per-node chain ceilings & `sherd budget` PRINTED the table w/o comparing against them or failing — T10 sat `.` from the first commit ∴ every chain drifted over unseen. w/ the comparison RUNNING it is 13 of 13, ⊥ the 4 first counted: root alone grew 10,060 → 11,576 in ONE session & every chain pays root|V104. T10 built the runner (exit 1). `src/land`/`src/slice` inherit `src` by longest prefix — they are over an INHERITED ceiling, ⊥ unbounded as this row first claimed
 B8|2026-08-18|`lens::pack` reads the WHOLE `SPEC.md` ∀ chain member & consults `Depth` only to APPEND `SPEC.why.md` ∴ `--depth rule` — §I's documented DEFAULT — selected nothing, & `§R`/`§B` archive has ridden in every pack & every budget since the command existed. MEASURED 33% of root, 59% of `src/tdd`, 58% of `src/plan`. `rule_depth` was written, tested & correct in `src/tdd` the whole time, called only by the tdd worker path|V105. T41 moves `rule_depth` to the owner & makes `Depth` select; T75 re-measures after
-B9|2026-08-18|`bbx lens <dir>` passes `PathBuf::from(d)` straight to `pack` while `budget`/`fed` go through `arg_dir`, which T10 fixed to resolve against ROOT ∴ `lens .` reports a 2-node chain where `budget` reports 1 node for the same target, & from a subdirectory `lens` reads a truncated chain w/ no error. the same relative-vs-absolute defect T10 fixed, one command over, missed because the fix was applied to the HELPER & ⊥ to every caller|T78. GENERALLY: fixing a shared helper ! be followed by finding who does ⊥ use it
-B11|2026-08-19|V50 declared a `.rs` file code ceiling from the first commit & `check()` runs ONLY `spec::check` + `unreflected_bugs` ∴ it has no runner — while §I claims `bbx check` does "drift spec↔code + file ceilings", which is FALSE. 3rd of this family in one week (B6 gate ops nobody declared, B7 chain ceilings nobody compared). MEASURED 4x over @ `src/tdd` (R47), unseen for the project's life|V104. T86 builds the runner; T85'"'"'s clippy limits catch the FUNCTION half V50 never covered
+B9|2026-08-18|`sherd lens <dir>` passes `PathBuf::from(d)` straight to `pack` while `budget`/`fed` go through `arg_dir`, which T10 fixed to resolve against ROOT ∴ `lens .` reports a 2-node chain where `budget` reports 1 node for the same target, & from a subdirectory `lens` reads a truncated chain w/ no error. the same relative-vs-absolute defect T10 fixed, one command over, missed because the fix was applied to the HELPER & ⊥ to every caller|T78. GENERALLY: fixing a shared helper ! be followed by finding who does ⊥ use it
+B11|2026-08-19|V50 declared a `.rs` file code ceiling from the first commit & `check()` runs ONLY `spec::check` + `unreflected_bugs` ∴ it has no runner — while §I claims `sherd check` does "drift spec↔code + file ceilings", which is FALSE. 3rd of this family in one week (B6 gate ops nobody declared, B7 chain ceilings nobody compared). MEASURED 4x over @ `src/tdd` (R47), unseen for the project's life|V104. T86 builds the runner; T85'"'"'s clippy limits catch the FUNCTION half V50 never covered
 B12|2026-08-19|`AGENTS.md` says "Branch only. Never commit to `main`" & nothing enforces it ∴ ~20 commits landed on `main` in one session, mine, unchallenged & unremarked until a reader asked about something else. the rule was READ by the agent it governs & still lost to convenience|V74 again — a rule w/ no runner is a comment. T88 gates it in the PRE-COMMIT set only (⊥ `all`: CI runs `check --all` on `main` & would fail itself)
 B13|2026-08-19|TWO readings of "parse Rust source" shipped across nodes: `src/tdd` has `signatures` (declarations + shapes) · `expected_calls` (call sites) · `split_module` (test boundary), `src/review` has `public_fns` (declarations) · `unwired` (declarations vs calls). both line-oriented heuristics over the same text, both already w/ §B rows for reading it wrong (`src/tdd:B13`, `src/tdd:B18`, `src/review:B2`) ∴ the founding defect §C names, in the repo that exists to end it. unseen until the T85 density map crossed a node boundary — no per-file gate can see a duplication that spans two files|T93 promotes `src/code` as the ONE owner. `split_module`'s own doc already says "two readings of one rule is the defect this project exists to end"
 B14|2026-08-19|writing `src/assay/SPEC.md` in T94 I RESTATED 3 invariants that already existed — `V1`≡`.:tdd:V27`, `V3`≡`.:V103`, `V4`≡`.:V108` — instead of moving them ∴ two readings of one rule, the founding defect §C names, introduced ONE COMMIT after B13 recorded it & inside a node created to END a duplication. a new node's spec is written from the concern, ⊥ from the rows the concern already had, & nothing checks that|V74. T95 deleted the dupes. GENERALLY: promoting a node ! START by listing the rows that already own the concern — authoring fresh guarantees a second reading
 B15|2026-08-23|`cargo build --no-default-features` FAILS — 4 errors, `src/assay` & `src/land` reach `crate::tdd` which is `ollama`-gated ∴ the featureless build has been broken since the feature split, while `Cargo.toml` DOCUMENTS it as "the deterministic, networkless core that §C demands". a claim in a manifest w/ no runner, unseen ∵ nothing ever built that configuration|T99 moved the gate cluster to `src/land` — its owner: `land` DECIDES whether work earned its merge — & gated `cargo build --no-default-features` in `hk.pkl`. `src/assay` is now feature-gated w/ the loop it measures. V74 again — & found by writing `default-features = false` in `dev/Cargo.toml`, ⊥ by any check
-B16|2026-08-23|`.:README` Architecture said "generated by `bbx graph` — never hand-drawn, so it cannot drift" & had drifted: 7 nodes drawn, 17 real, missing `plan`·`review`·`state`·`slice`·`land`·`cli`·`code`·`assay`·`dev`. GENERATED once, by hand, then never again — the claim named a PROPERTY of the output & no runner held it. same shape as the badges one commit earlier, in the same file, w/ the sentence asserting the opposite ∴ a reader was told to trust the stalest thing on the page|V113. `bbx-dev readme` splices all 4 blocks from `fed::tree`/`mermaid`/`table` + the badge facts, gated by `readme-generated`. GENERALLY: "generated" is a claim about the LAST run, ⊥ about the artefact — it needs a checker like every other rule (V74)
+B16|2026-08-23|`.:README` Architecture said "generated by `sherd graph` — never hand-drawn, so it cannot drift" & had drifted: 7 nodes drawn, 17 real, missing `plan`·`review`·`state`·`slice`·`land`·`cli`·`code`·`assay`·`dev`. GENERATED once, by hand, then never again — the claim named a PROPERTY of the output & no runner held it. same shape as the badges one commit earlier, in the same file, w/ the sentence asserting the opposite ∴ a reader was told to trust the stalest thing on the page|V113. `sherd-dev readme` splices all 4 blocks from `fed::tree`/`mermaid`/`table` + the badge facts, gated by `readme-generated`. GENERALLY: "generated" is a claim about the LAST run, ⊥ about the artefact — it needs a checker like every other rule (V74)

@@ -1,6 +1,6 @@
 # Third-party notices
 
-`blackbox` carries three kinds of other people's work: two documents vendored
+`sherd` carries three kinds of other people's work: two documents vendored
 into the tree, and a dependency closure. Each is acknowledged below.
 
 ## `FORMAT.md` — vendored from cavekit
@@ -13,7 +13,7 @@ also ships the format it reads.
 - Copyright © 2026 Julius Brussee
 - Licensed under the MIT License, reproduced in full below
 
-What `blackbox` *enforces* lives in its own [`SPEC.md`](../SPEC.md); the
+What `sherd` *enforces* lives in its own [`SPEC.md`](../SPEC.md); the
 vendored document is an input, not the identity.
 
 > **This copy has drifted from upstream.** It is 119 lines against the 147 of
@@ -30,15 +30,15 @@ copied 2026-08-01 from `set/skills/principles`.
 - Upstream: <https://github.com/pr0d1r2/set-and-setting>
 - Licensed under the MIT License
 
-They are sliced into `src/tdd/principles.txt` by `bbx slice`, and
-`bbx slice --check` gates the drift — so the copy in the binary cannot
+They are sliced into `src/tdd/principles.txt` by `sherd slice`, and
+`sherd slice --check` gates the drift — so the copy in the binary cannot
 silently diverge from the copy in the tree.
 [`vendor/README.md`](../vendor/README.md) records *why* these thirteen and not
 others, which is a judgement worth keeping next to the files.
 
 ### MIT License
 
-Applies to both vendored sources above, and to `blackbox` itself.
+Applies to both vendored sources above, and to `sherd` itself.
 
 ```text
 MIT License
@@ -69,7 +69,7 @@ Dev-dependencies are excluded: they are not distributed in anything you run.
 
 Two are siblings, and their own notices apply in turn:
 
-- **`itok`** — the token and context estimator. `blackbox` uses its `bpe`
+- **`itok`** — the token and context estimator. `sherd` uses its `bpe`
   tier to measure slices. See its
   [`THIRD-PARTY-NOTICES.md`](https://github.com/pr0d1r2/itok/blob/main/docs/THIRD-PARTY-NOTICES.md).
 - **`microlith`** — owns the `SPEC.md` format rules.
@@ -87,7 +87,7 @@ The remaining closure is permissive throughout:
 | `BSD-3-Clause` | 1 |
 | `CDLA-Permissive-2.0` | 1 |
 
-Where an expression offers a choice, `blackbox` is distributed under MIT and
+Where an expression offers a choice, `sherd` is distributed under MIT and
 takes the MIT option.
 
 Worth naming individually, because they are the ones that are not plain
@@ -124,7 +124,7 @@ Nominative use only; no affiliation or endorsement is implied.
 - **Ollama** is a trademark of Ollama Inc.
 - **Claude** and **Anthropic** are trademarks of Anthropic PBC.
 
-## `blackbox` itself
+## `sherd` itself
 
 Everything not covered above is licensed under the MIT License — see
 [`LICENSE`](../LICENSE).

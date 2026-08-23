@@ -10,7 +10,7 @@ name: links
 #
 # It leaves a real gap, which is `.:T100`. MEASURED at the time it was
 # written: 39 relative links verified, 37 external ones excluded, and two of
-# the excluded ones pointed at `github.com/pr0d1r2/blackbox` pages that did
+# the excluded ones pointed at `github.com/pr0d1r2/sherd` pages that did
 # not exist yet -- in `docs/SECURITY.md` and `CHANGELOG.md`. Our own broken
 # links are exactly what the offline run cannot see.
 #
@@ -23,7 +23,7 @@ name: links
 #
 # KNOWN RED UNTIL PUBLICATION, measured 2026-08-23: 72 of 74 external URLs
 # resolve, and the two that do not are ours --
-# `github.com/pr0d1r2/blackbox/releases/tag/v0.1.0` in CHANGELOG.md and
+# `github.com/pr0d1r2/sherd/releases/tag/v0.1.0` in CHANGELOG.md and
 # `.../security/advisories/new` in docs/SECURITY.md. Both are the correct
 # destinations the moment the repository is public, so they are left as they
 # are rather than accepted or removed: this job going green is one of the

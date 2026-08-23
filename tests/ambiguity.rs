@@ -1,6 +1,6 @@
 #![cfg(feature = "ollama")]
 //! Gated with the loop it measures: every titration here needs a live 20B,
-//! and the corpora it reads live in `bbx::assay`, which the `ollama` feature
+//! and the corpora it reads live in `sherd::assay`, which the `ollama` feature
 //! carries (`.:B15`).
 
 //! T97. The ambiguity detector, run against a live endpoint.
@@ -19,14 +19,14 @@
 
 #![cfg(feature = "ollama")]
 
-use bbx::assay::{
+use sherd::assay::{
     GEN_CORPUS, GenItem, Reading, RowReadings, ambiguity_report, cross,
     gen_prompt, test_prompt,
 };
 use std::io::Write;
 
 fn ask(prompt: &str) -> Result<String, String> {
-    bbx::ollama::generate(prompt).map(|r| bbx::ollama::rust_block(&r.text))
+    sherd::ollama::generate(prompt).map(|r| sherd::ollama::rust_block(&r.text))
 }
 
 /// One row, read twice, blind both times.
@@ -74,7 +74,7 @@ fn name(sig: &str) -> &str {
 
 /// T97. Reports on the SPEC; asserts nothing about the model.
 ///
-/// `#[ignore]` because it needs `BBX_ENDPOINT`. 2 calls per row per run.
+/// `#[ignore]` because it needs `SHERD_ENDPOINT`. 2 calls per row per run.
 ///
 /// ONE run, and that is a measured decision rather than the obvious default.
 /// The first sweep ran three and every row came back identical (`.:R55`),

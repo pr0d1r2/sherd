@@ -5,7 +5,7 @@ writes code from a narrow context; you do the judgement it cannot.
 
 ## Read the diff
 
-`cargo test` + `bbx check` have **passed wrong code three times**, all in §B:
+`cargo test` + `sherd check` have **passed wrong code three times**, all in §B:
 
 - a filter on `not_owns` — the prose column — treated as a path
 - a sanitiser that stripped `/` out of `dir` so a violation would vanish
@@ -19,10 +19,10 @@ A green gate is not correctness. It is the floor.
 - **Never `--no-verify`.** The gate refusing is the system working.
 - **Never raise a ceiling, edit a test, or weaken a judge to make something
   pass.** Loosening a judge is how the stub got in.
-- **Branch only.** Never commit to `main`. `bbx apply` enforces this.
-- **`bbx check` clean before every commit.** The gate is `hk`; its ops live in
+- **Branch only.** Never commit to `main`. `sherd apply` enforces this.
+- **`sherd check` clean before every commit.** The gate is `hk`; its ops live in
   `hk.pkl` — `cargo fmt --check`, `cargo clippy -- -D warnings`, `cargo test`,
-  `bbx slice --check`, `bbx check`, in that order, cheapest first. They are
+  `sherd slice --check`, `sherd check`, in that order, cheapest first. They are
   file-scoped, so a SPEC-only commit skips the compile. Run the whole set by
   hand with `hk check --all`.
 - **Commit from inside the dev shell.** The hooks REFUSE when `hk` is not on
@@ -71,18 +71,18 @@ Ids are node-scoped. Cite across nodes with the namespaced, backticked form
 ## Commands
 
 ```sh
-bbx plan        next 3 steps, with what invalidates each
-bbx apply       execute step 1, commit it, stop
-bbx lens <dir>  the context pack for one node
-bbx budget      token cost of every node
-bbx check       structural check of every node
-bbx graph       federation DAG, generated from §F
+sherd plan        next 3 steps, with what invalidates each
+sherd apply       execute step 1, commit it, stop
+sherd lens <dir>  the context pack for one node
+sherd budget      token cost of every node
+sherd check       structural check of every node
+sherd graph       federation DAG, generated from §F
 ```
 
-`bbx plan` **is** replan — stateless, re-derived every run.
+`sherd plan` **is** replan — stateless, re-derived every run.
 
-Endpoint: `BBX_ENDPOINT` (default `http://localhost:11434`), `BBX_MODEL`
-(default `gpt-oss:20b`). `bbx` comes from the dev shell (`direnv allow`).
+Endpoint: `SHERD_ENDPOINT` (default `http://localhost:11434`), `SHERD_MODEL`
+(default `gpt-oss:20b`). `sherd` comes from the dev shell (`direnv allow`).
 
 ## Claude Code
 

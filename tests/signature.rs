@@ -1,6 +1,6 @@
 #![cfg(feature = "ollama")]
 //! Gated with the loop it measures: every titration here needs a live 20B,
-//! and the corpora it reads live in `bbx::assay`, which the `ollama` feature
+//! and the corpora it reads live in `sherd::assay`, which the `ollama` feature
 //! carries (`.:B15`).
 
 //! T84, run against a live endpoint: the same invariant and the same hidden
@@ -18,13 +18,13 @@
 
 #![cfg(feature = "ollama")]
 
-use bbx::assay::{
+use sherd::assay::{
     GEN_CORPUS, GenItem, SignaturePair, gen_prompt, gen_prompt_no_sig,
     grade_detail, signature_mark, signature_report,
 };
 
 fn ask(p: &str) -> Result<String, String> {
-    bbx::ollama::generate(p).map(|r| bbx::ollama::rust_block(&r.text))
+    sherd::ollama::generate(p).map(|r| sherd::ollama::rust_block(&r.text))
 }
 
 /// Same invariant, same hidden tests. Only the signature differs -- one

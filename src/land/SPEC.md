@@ -27,9 +27,9 @@ V11: a BEST-EFFORT path ! say when it did nothing. `push_branch` returned early 
 
 id|status|task|cites
 T1|x|`stamp`, `run_branch`, `landable`, `Evidence`|V2,V6,V8
-T2|x|`apply` branches instead of refusing; `bbx land` + `apply --land`|V1
+T2|x|`apply` branches instead of refusing; `sherd land` + `apply --land`|V1
 T3|.|MEASURE V2: nothing has EVER landed — 0 outcomes recorded, every node @ 0.50 untried. the threshold is UNEXERCISED|V2
-T4|.|`bbx runs` — list `bbx/apply-*` branches w/ why each was refused|V9
+T4|.|`sherd runs` — list `sherd/apply-*` branches w/ why each was refused|V9
 T5|.|needs a second repo to test against — `--ff-only` refusal is untested on a moved `main`|V5
 T6|x|`push_branch` after every `apply` commit, remote-optional|V7
 T7|.|`land` ⊥ distinguish SUPERVISOR commits from generated ones ∴ hand-written work on a run branch is blocked by a believability score earned by the LOOP. MEASURED 2026-08-02: refused my own reviewed commit @ 0.33|V2
@@ -37,4 +37,4 @@ T7|.|`land` ⊥ distinguish SUPERVISOR commits from generated ones ∴ hand-writ
 ## §B BUGS
 
 id|date|cause|fix
-B5|2026-08-19|`remote()` matched the literal name `gitlab` & nothing else ∴ on ANY clone naming its remote `origin` — which is every clone but this fleet's — `push_branch` returned early & printed nothing, so `bbx land --push` looked identical whether it pushed or skipped. a PUBLIC MIT repo where the documented `--push` silently does nothing for a contributor|V11. `gitlab` first, then `origin`; the no-remote case now SAYS the branch stays local. found by a coverage test asserting `Some("origin")` — the test was written to exercise a line & exposed a behaviour
+B5|2026-08-19|`remote()` matched the literal name `gitlab` & nothing else ∴ on ANY clone naming its remote `origin` — which is every clone but this fleet's — `push_branch` returned early & printed nothing, so `sherd land --push` looked identical whether it pushed or skipped. a PUBLIC MIT repo where the documented `--push` silently does nothing for a contributor|V11. `gitlab` first, then `origin`; the no-remote case now SAYS the branch stays local. found by a coverage test asserting `Some("origin")` — the test was written to exercise a line & exposed a behaviour

@@ -165,7 +165,7 @@ mod tests {
 
     fn file_matches_text() -> Result<(), String> {
         let p = std::env::temp_dir()
-            .join(format!("bbx-tok-{}.md", std::process::id()));
+            .join(format!("sherd-tok-{}.md", std::process::id()));
         let body = "# SPEC\n\nV1: something ! hold\n";
         std::fs::write(&p, body).map_err(|e| e.to_string())?;
         let from_file = count_file(&p).map_err(|e| e.to_string())?;

@@ -118,7 +118,7 @@ pub fn test_prompt(inv: &str, sig: &str, preamble: &str) -> String {
 /// Ask for an implementation with NO signature given.
 ///
 /// T84, variable 3 of 3 (`.:V108`). `.:R44` handed the writer a signature;
-/// `bbx tdd` makes it invent one, and `src/tdd:B12` is that going wrong -- a
+/// `sherd tdd` makes it invent one, and `src/tdd:B12` is that going wrong -- a
 /// test calling `check_edge_depths` while step 2 defined a different name,
 /// unrecoverable by three repairs.
 ///
@@ -199,7 +199,7 @@ const STUBS: &[(&str, &str)] = &[
 /// The same request, prefixed with a real node's lens pack.
 ///
 /// T82, variable 1 of 3 (`.:V108`). R44 measured writing from a ~500 token
-/// prompt; `bbx tdd` sends the node's whole chain, ~10k after T41. R15 and
+/// prompt; `sherd tdd` sends the node's whole chain, ~10k after T41. R15 and
 /// R16 measured what a fat pack COSTS in wall clock. Whether it makes the
 /// model WORSE at writing is a different question, and the one the `§G`
 /// TARGET line rests on -- federation is only worth having if the context it
@@ -295,8 +295,8 @@ fn scratch_paths() -> (std::path::PathBuf, std::path::PathBuf) {
     let dir = std::env::temp_dir();
     let pid = std::process::id();
     (
-        dir.join(format!("bbx_gen_{pid}_{n}.rs")),
-        dir.join(format!("bbx_gen_{pid}_{n}")),
+        dir.join(format!("sherd_gen_{pid}_{n}.rs")),
+        dir.join(format!("sherd_gen_{pid}_{n}")),
     )
 }
 

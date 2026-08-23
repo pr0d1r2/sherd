@@ -7,7 +7,7 @@ right. That is most of it.
 
 This project has a particular habit worth naming up front: **claims here are
 expected to carry evidence.** That is not a slogan borrowed for a document —
-`bbx land` refuses a merge that cannot show its working, and the same standard
+`sherd land` refuses a merge that cannot show its working, and the same standard
 applies to the humans. "This is slower" invites a measurement; "this
 rule is wrong" invites the case against it. That standard applies to
 maintainers exactly as much as to contributors, and pushing back on an

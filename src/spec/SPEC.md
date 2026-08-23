@@ -12,7 +12,7 @@
 ## §V INVARIANTS
 
 V1: what `microlith` owns is ADAPTED, ⊥ reimplemented. two implementations of one format is the defect `microlith` exists to end
-V2: `§F`/`§N` ⊥ belong here — they are blackbox additions, they live in `fed`
+V2: `§F`/`§N` ⊥ belong here — they are sherd additions, they live in `fed`
 V3: parity vs `microlith` ! be MEASURED before claiming absorption (`.:V59`). currently BELIEF
 V5: what is imported from `microlith` is what its ROOT re-exports. an inner module path is ⊥ contract — the dep may privatize it & does (E0603, B1). same for RENDERING: print the dep's own `Display`, ⊥ recompose its parts
 V4: a `§B` row whose fix names no `§V` is UNREFLECTED — pain w/o reflection. it will recur & the log becomes a list of things that happened, ⊥ a set of guards. advisory: some bugs warrant no rule & forcing one manufactures invariants to silence a gate

@@ -1,20 +1,29 @@
 # Changelog
 
-All notable changes to `blackbox` are documented here. The format follows
+All notable changes to `sherd` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com), and this project adheres to
 [Semantic Versioning](https://semver.org).
 
-The crate is `bbx-cli`; the binary it installs is `bbx`. Those are two names
-on purpose — `bbx` was taken on crates.io by an unrelated BBCode parser, and
+The crate is `sherd`; the binary it installs is `sherd`. Those are two names
+on purpose — `sherd` was taken on crates.io by an unrelated BBCode parser, and
 the binary name was verified free rather than renamed to match.
 
 ## Versioning
 
-Pre-`1.0`, a minor bump may change behaviour. `blackbox` is early: what works
+Pre-`1.0`, a minor bump may change behaviour. `sherd` is early: what works
 and what is specced-but-unbuilt is listed in the README's Status section
 rather than implied by the version number.
 
 ## [Unreleased]
+
+### Changed
+
+- **The project is `sherd`.** One name for the package, the binary and the
+  repository — `cargo install sherd` installs `sherd`. The crate was
+  `bbx-cli` with a `bbx` binary because both `bbx` and `blackbox` are taken
+  on crates.io, so no spelling of the old name could be shared by the package
+  and the command. Environment variables are `SHERD_*`, state files are
+  `.sherd-*`, and the dev crate is `sherd-dev`.
 
 ### Added
 
@@ -25,7 +34,7 @@ rather than implied by the version number.
   ever ran the suite outside a checkout. The two tests that failed there are
   handed fixture repositories now, and the whole suite passes from a non-repo
   tree: 284 tests, 0 failures. CI gains a `nix-build` job on the same three
-  platforms. The build produces `bbx` only; `bbx-dev` is compiled and tested
+  platforms. The build produces `sherd` only; `sherd-dev` is compiled and tested
   in the sandbox but never installed.
 - **Six linters in the gate**: `actionlint` (the workflow is code no local run
   exercises), `shellcheck` (`.envrc` runs on every shell entry), `nixfmt`,
@@ -64,7 +73,7 @@ rather than implied by the version number.
   `hk.pkl` instead of written as a shell body in `.githooks/pre-commit`. The
   ops are file-scoped, so a SPEC-only commit skips the compile; they are
   reachable by hand and from CI as `hk check --all`; and the fix half
-  (`cargo fmt`, `bbx slice`) is declared next to the check half rather than
+  (`cargo fmt`, `sherd slice`) is declared next to the check half rather than
   described in a refusal message. `hk` comes from the `nix-hk` flake input,
   because nixos-26.05 ships none.
 - **`cargo fmt` and `cargo clippy` are gated for the first time.** They had
@@ -90,7 +99,7 @@ rather than implied by the version number.
 
 First public release. Early, and honest about it.
 
-`blackbox` splits a repository so that no single model call has to hold all
+`sherd` splits a repository so that no single model call has to hold all
 of it — a directory DAG where every directory may carry its own `SPEC.md`,
 with a `§F` table naming its children.
 
@@ -99,14 +108,14 @@ with a `§F` table naming its children.
 - **Federation**: `budget` (token cost per node), `lens` (the context pack
   for one node), `fed`, `graph`, `check` (structural check across every
   node).
-- **`bbx tdd`** — red → judge → green → gate → repair, each call given a
+- **`sherd tdd`** — red → judge → green → gate → repair, each call given a
   deliberately narrow context. The gate step is local, deterministic and
   costs zero tokens: correctness is decided there, not by the model.
-- **`bbx oneshot`** — the monolith arm, so the federated path can be
+- **`sherd oneshot`** — the monolith arm, so the federated path can be
   compared against it rather than merely asserted better.
-- **`bbx land`** — a merge that asks for evidence.
-- **`bbx slice`** — distils `vendor/principles/` into `src/tdd/principles.txt`;
-  `bbx slice --check` gates the drift, so the copy in the binary cannot
+- **`sherd land`** — a merge that asks for evidence.
+- **`sherd slice`** — distils `vendor/principles/` into `src/tdd/principles.txt`;
+  `sherd slice --check` gates the drift, so the copy in the binary cannot
   diverge from the copy in the tree.
 - Public documentation: `LICENSE`, `docs/SECURITY.md`,
   `docs/CODE_OF_CONDUCT.md`, `docs/CONTRIBUTING.md` and
@@ -114,7 +123,7 @@ with a `§F` table naming its children.
 
 ### Security
 
-- **TLS on the model endpoint.** `ureq 3` with `rustls`, so `BBX_ENDPOINT`
+- **TLS on the model endpoint.** `ureq 3` with `rustls`, so `SHERD_ENDPOINT`
   may be `https://`. This matters because what gets POSTed is the prompt —
   slices of your spec and your source — and `ollama` is a *default* feature,
   so plaintext would have been the default path rather than an opt-in one.
@@ -132,7 +141,7 @@ Stated rather than left to be discovered:
 - `itok` is a path dependency, so this crate cannot yet be built from a clean
   clone without it.
 - Two functions in `src/fed/` were written by `gpt-oss:20b` through
-  `bbx tdd`. Their defects are recorded in that node's `§B` rather than
+  `sherd tdd`. Their defects are recorded in that node's `§B` rather than
   smoothed over.
 
-[0.1.0]: https://github.com/pr0d1r2/blackbox/releases/tag/v0.1.0
+[0.1.0]: https://github.com/pr0d1r2/sherd/releases/tag/v0.1.0

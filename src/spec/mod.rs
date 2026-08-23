@@ -2,12 +2,12 @@
 //!
 //! R3: microlith owns intra-file spec ops as zero-dep pure functions. This
 //! module does not reimplement parse, fmt, id or citation checking -- it
-//! adapts them. What blackbox adds (`§F`, `§N`) lives in [`crate::fed`].
+//! adapts them. What sherd adds (`§F`, `§N`) lives in [`crate::fed`].
 
 /// A microlith rule violation. Its `Display` is `microlith/V13: msg` -- the
 /// namespace ALREADY QUALIFIED.
 ///
-/// `bbx check` once spelled that prefix as a literal `"cavespec/"`, so renaming
+/// `sherd check` once spelled that prefix as a literal `"cavespec/"`, so renaming
 /// the crate left every violation line naming a crate that no longer exists.
 /// The name is not re-exported to fix that: the published crate keeps
 /// `violation` private, and printing the `Violation` itself is the reading that
@@ -220,7 +220,7 @@ mod tests {
     fn fmt_is_lossless_and_idempotent() {
         // `fmt` is the write half of the spec binding and had no test at all.
         // Idempotence is the property that matters: a formatter whose second
-        // pass differs from its first turns every `bbx` run into a diff, and
+        // pass differs from its first turns every `sherd` run into a diff, and
         // the gate would then fail on a tree nobody edited.
         let once = fmt(SAMPLE).unwrap_or_default();
         assert!(!once.is_empty(), "a valid spec formats to something");
