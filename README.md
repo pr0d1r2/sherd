@@ -304,26 +304,36 @@ violation would disappear.
 
 ## Status
 
-**Rung `0.1` of the [version ladder](CHANGELOG.md#version-ladder), reached
+**Rung `0.3` of the [version ladder](CHANGELOG.md#version-ladder), reached
 and not published.** An even minor is stable, an odd minor is functional but
 not for production, and the first published artifact will be `0.5.0-rc.1` —
 so there is nothing on crates.io yet, on purpose.
 
-What runs today is the deterministic core: `budget`, `lens`, `fed`, `graph`,
-`check`, `slice`, `review`, `plan`, plus the model-facing `ask`, `tdd` and
-`oneshot`. `init`, `route`, `split`, `sync`, `validate` and `SPEC.why.md` are
-specced and unbuilt. `§F`/`§N` are extensions
+What runs today: `init`, `budget`, `lens`, `fed`, `graph`, `check`,
+`validate`, `route`, `slice`, `review`, `plan`, `apply`, `land`, plus the
+model-facing `ask`, `tdd` and `oneshot`. `split`, `sync` and `SPEC.why.md`
+are specced and unbuilt, and each carries the rung it is promised for.
+`§F`/`§N` are extensions
 [microlith](https://github.com/pr0d1r2/microlith) cannot yet parse — they
 need to go upstream rather than fork the format.
 
-**The claim this project exists to test is not settled.** `§G` targets *most
-modules buildable on the 20B, not merely readable by it*, and `src/tdd:T13`
-records exactly one merit win — five round-trips, 20,559 tokens, the loop
-reporting `MERGEABLE` — which then **failed review**: the row asked for
-bounded backoff, the function retried tight with none, and the lint ratchet
-rose. The loop's verdict and the gate's verdict disagreed, and the loop was
-the optimistic one. Rung `0.5` is where those two have to mean the same
-thing, measured over more than one attempt.
+**The model half is frozen until `0.7`.** `ask`, `tdd` and `oneshot` work and
+are not going away, but no further development lands in `src/ollama`,
+`src/tdd` or `src/assay` until the mechanical surface is correct and
+published. They answer a different kind of question: whether a directory DAG
+parses, budgets and validates is settled by tests, while whether a 20B writes
+code that survives review is a research result that may take months. Tying a
+release to the second would hold the first hostage — and the first is the
+half you can reuse.
+
+**That research question is open, and the record says so.** `§G` targets
+*most modules buildable on the 20B, not merely readable by it*, and
+`src/tdd:T13` records exactly one merit win — five round-trips, 20,559
+tokens, the loop reporting `MERGEABLE` — which then **failed review**: the
+row asked for bounded backoff, the function retried tight with none, and the
+lint ratchet rose. The loop's verdict and the gate's verdict disagreed, and
+the loop was the optimistic one. Rung `0.7` is where those two have to mean
+the same thing, measured over more than one attempt.
 
 Two LLM-authored functions live in `src/fed/`, written by gpt-oss:20b through
 `sherd tdd`, with their defects recorded in that node's `§B` rather than
