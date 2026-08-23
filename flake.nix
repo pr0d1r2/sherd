@@ -85,13 +85,45 @@
         '';
     in
     {
-      # Still no `packages.default`, but the reason has MOVED. The path dep is
-      # gone -- itok and microlith both resolve from the registry now (T71), so
-      # a pure build can see every source it needs. What blocks it is B15: two
-      # tests walk up for a git repo and find whichever tree the runner sits
-      # in, so they pass in a checkout and fail in a sandbox. Shipping the
-      # package with `doCheck = false` would hide exactly the defect the
-      # sandbox is worth having, so T98 fixes the tests first.
+      # `packages.default`, finally, and with `doCheck` ON -- which is the
+      # whole point of having it. Two things had to land first: T71 removed
+      # the path dep, so a pure build can see every source it needs, and
+      # `src/cli:T9` handed the two ambient tests a fixture repository, so
+      # the suite no longer asserts facts about wherever the runner sits.
+      #
+      # Shipping this earlier with `doCheck = false` would have hidden
+      # exactly the defect the sandbox is worth having: `src/cli:B1` was
+      # invisible for the project's life BECAUSE nothing ever ran the suite
+      # outside a checkout. A package that skips its own tests is a build,
+      # not a check.
+      packages = forAll (pkgs: {
+        default = pkgs.rustPlatform.buildRustPackage {
+          pname = "bbx-cli";
+          version = "0.1.0";
+          src = ./.;
+          cargoLock.lockFile = ./Cargo.lock;
+          # `git` is a test dependency, not a runtime one: `testrepo` builds a
+          # real repository with `git init` because the verbs under test read
+          # real history. The sandbox has no git unless it is asked for.
+          nativeCheckInputs = [ pkgs.git ];
+          # BUILD only the published crate, TEST the whole workspace. `dev/`
+          # ships to nobody -- that is the reason it is a separate member --
+          # so `bbx-dev` must not land in this package's `bin/`, which it did
+          # on the first build here. Its tests still run in the sandbox,
+          # because a member no sandbox ever exercises is a member whose
+          # breakage waits for a human.
+          cargoBuildFlags = [
+            "-p"
+            "bbx-cli"
+          ];
+          cargoTestFlags = [ "--workspace" ];
+          meta = {
+            description = "two-axis federation of SPEC.md and source over a dir DAG";
+            mainProgram = "bbx";
+            licenses = pkgs.lib.licenses.mit;
+          };
+        };
+      });
 
       devShells = forAll (pkgs: {
         default = pkgs.mkShell {

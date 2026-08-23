@@ -280,7 +280,7 @@ T67|.|materializability audit: which guard files are fleet standard vs repo fact
 T68|.|report caveman 22%-⊥-75% upstream to cavekit FORMAT.md|R23
 T69|.|profile declaration — flag > §T row > `bbx.toml` default. ⊥ inference|V88
 T70|x|V101 runner — path deps limited to the one recorded exception (`itok`)|V101
-T71|~|`itok` is published ∴ registry dep, no path dep left. flake pkg waits on src/cli B1|V101,R20
+T71|x|`itok` published ∴ registry dep, ⊥ path dep, & `packages.default` builds w/ `doCheck` ON|V101,R20
 T72|x|gate → `hk` from `nix-hk`, ops in `hk.pkl`, `pre-commit` + `pre-push`, fmt & clippy gated for the 1st time|V26,V82,V102
 T73|.|`/titrate` machinery — `.bbx-frontier` record, believability re-keyed node → SHAPE, cost ledger w/ the denominator named (`.:B4`)|V103,V60
 T74|x|titrate the JUDGE upward until it FAILS — longer fn, weaker `§V`, ⊥-obvious stub. R38: a corpus that never misses locates no boundary|V103,R37,R38
