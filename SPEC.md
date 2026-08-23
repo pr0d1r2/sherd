@@ -138,6 +138,7 @@ R52|it fails hardest where it matters|`is_yes` — the ONE item beyond the front
 R53|the mutation remedy is REFUTED|33/33 authored tests KILLED a known-wrong stub — 0 survived, 0 ⊥ compiled. control: the hidden tests kill all 11 stubs ∴ the mutants are real. the check proposed after T83 would have caught NONE of its failures: the tests are ⊥ vacuous|`authored_tests_vs_mutants`, 33 calls @ .24
 R54|the failure is OVER-specification|`escape_cell`'s authored test demands `" a | b "` → `"a\\|b"` (spaces round the PIPE gone, where the row trims the CELL) & that an already-escaped pipe stays. NEITHER is in the invariant ∴ a correct impl FAILS it 3/3. the model fills an underspecified row w/ plausible unstated rules; the impl — blind, same text — fills them differently|`target/authored-tests.txt`
 R55|the detector re-found R54's row, BLIND & mechanically|T97, 11 rows × 3 runs, 66 calls, every run IDENTICAL. ONE row flagged — `escape_cell` 3/3 — & it is R54's row, which a HUMAN found by reading raw output after the fact. the GAP: the row says pipe → `\|` & cell trimmed, & is SILENT on an ALREADY-escaped pipe ∴ the impl escapes it twice, the test demands it stay, & BOTH readings are in the row (`FORMAT.md`'s own rule is silent identically). the invented rule MOVES — R54's test demanded 2, this one demands 1 — & the row is flagged either way. ⊥ reproduced: R52's `for_path`, 0/3 here ∴ that was pooled, ⊥ per-item. 2 of 11 rows yield NO verdict, deterministically: `sign` 3/3 ⊥ compiled (`[i64; 10]` holding 9 elements — an ordinary compile error, ⊥ a `.:src/tdd:B12` name mismatch) & `abort_budget_ms` 3/3 HUNG ∴ `src/assay:B2` was ⊥ a one-off & `src/assay:V6` paid for itself on run 1|`cargo test --test ambiguity -- --ignored`, 66 calls @ .24
+R56|an ignored body reads as uncovered|MEASURED `.coverage` 75.50 → 75.11 when the `#[ignore]`d titrations moved from `src/assay` inline tests to `tests/`. an ignored test body counts in the coverage DENOMINATOR & never runs ∴ every experiment added inline LOWERS the number & a better instrument reads worse. carried out of `T96` when that row went — the row was history, the measurement is not|`tests/`, `cargo llvm-cov`
 
 ## §V INVARIANTS
 
@@ -259,27 +260,12 @@ V73: dir promotion has 2 triggers — (a) V50 code ceiling, (b) module owns SPEC
 ## §T TASKS
 
 id|status|task|cites
-T1|x|scaffold single crate `sherd`, module=dir+`mod.rs`, explicit `[[bin]]`, deps `itok`+`microlith` by path|C,R1,R3
-T2|x|bind `microlith` — `check`, `fmt`, section split. ⊥ reimpl|C
 T3|.|capability-parity audit `microlith` vs what `sherd` needs. write the comparison BEFORE relying on it|V59
-T4|x|parse `§F` table → (dir, owns, ⊥owns, tokens), escape-aware|I,V1
-T6|x|superseded — edges/chain/discover land; depth & cycle are `src/fed:T4`|V1,V2,V4
-T8|x|bind `itok::estimate`, tier floor `bpe`, method label|V17,V24
-T10|x|`sherd budget` + over-budget exit 1|V6,V7,V8,V104
 T12|.|id namespacing + resolver `path:Vn`|V10,V11
-T14|x|`sherd lens` render pack, `--depth rule` default|I,V15,V45
-T16|x|moved — `src/cli:T4`|I
-T17|x|ollama client `SHERD_MODEL`/`SHERD_ENDPOINT`|I,V25
 T19|.|route ambiguous exit 3 / miss exit 2|V20
-T20|x|model-free path — `--no-default-features` drops `ollama` & its deps|V18
-T21|x|moved — `src/cli:T6`|I
 T23|.|coverage gap warn for un-specced source dirs|V16
-T24|x|moved — `src/cli:T7`|I
-T25|x|moved — `src/cli:T3`|I,V48
 T28|.|backprop: bug → leaf `§B`, decide promote|V14
-T36|x|superseded — `§N` derivation is `src/fed:T6`, at the node that owns it|V36,V38,V39
 T37|.|`sherd sync` + exit 1 when wrote|I,V36
-T41|x|`lens --depth rule\|why\|all` — `pack` reads the WHOLE `SPEC.md` ∀ chain member & `Depth` is consulted ONLY for `Why` ∴ `rule` selects nothing & `§R`/`§B` archive rides in every pack (MEASURED 33% of root, 59% of `src/tdd`, 58% of `src/plan`). `rule_depth` already exists & is TESTED in `src/tdd` — move it to the owner, ⊥ reimpl|V45,V15,V105
 T42|.|cross-file losslessness proof, asserted pre-write|V49,V44
 T46|.|coupling report after proposed split|V53
 T47|.|violation renderer `file:line: sherd/Vn:` + why + mechanical\|judgment + json `kind`|V55,V54
@@ -287,52 +273,22 @@ T48|.|sibling-divergence detector for V13|V62
 T49|.|`§F`/`§N` upstream to FORMAT/microlith before shipping a dialect|V47
 T50|.|corpus run over 54-spec fleet, FP rate reported|V58
 T52|.|planted-violation test ∀ guard + accepts-real-shapes companion|V61
-T53|x|PREMISE GATE run — `sherd oneshot` vs `sherd tdd`, R29/R32/R33. bounds MAX CALL 2.1x→2.9x, ⊥ total, ⊥ quality|V60,V27
-T54|x|self-federate: root `§F` + per-node `SPEC.md`|V27,V30
-T55|x|CI: `sherd validate` self exit 0; globs by data dependency|V27,V57
-T56|x|`§F` gains `⊥owns` column — parse & emit|I,V66
-T57|x|superseded — `src/fed:T5`/`T7`: duplicate rows fail, missing rows advisory|V64,V65
 T58|.|`cap.row` gate — inline `§V`/`§R`/`§B` text over 200B|V69,V70
 T59|.|PAY THE DEBT: record rationale for V1-V63 into `SPEC.why.md` before it accretes inline. rationale currently lives only in the design conversation|V69,V70,V44
-T60|x|facades land — `itok::` only in `src/tokens`, `microlith::` only in `src/spec`|V71,V72
 T64|.|setting-as-contract extraction — guard files → one line each|V82
-T65|x|`graph --mermaid` generated diagram|V83
 T67|.|materializability audit: which guard files are fleet standard vs repo facts|V84,R20
 T68|.|report caveman 22%-⊥-75% upstream to cavekit FORMAT.md|R23
 T69|.|profile declaration — flag > §T row > `sherd.toml` default. ⊥ inference|V88
-T70|x|V101 runner — path deps limited to the one recorded exception (`itok`)|V101
-T71|x|`itok` published ∴ registry dep, ⊥ path dep, & `packages.default` builds w/ `doCheck` ON|V101,R20
-T72|x|gate → `hk` from `nix-hk`, ops in `hk.pkl`, `pre-commit` + `pre-push`, fmt & clippy gated for the 1st time|V26,V82,V102
 T73|.|`/titrate` machinery — `.sherd-frontier` record, believability re-keyed node → SHAPE, cost ledger w/ the denominator named (`.:B4`)|V103,V60
-T74|x|titrate the JUDGE upward until it FAILS — longer fn, weaker `§V`, ⊥-obvious stub. R38: a corpus that never misses locates no boundary|V103,R37,R38
-T75|x|after T41: re-measure ∀ chain, reset `.context-limits` from the new baseline, & wire `sherd budget` into `hk.pkl` ∴ V104 gets its runner IN THE GATE, ⊥ only in a command a human remembers to run|V104,V50
 T76|.|BUILDABILITY SWEEP: `sherd tdd` @ every node, N=3, record (node, rung, kept/tried) → `.sherd-frontier`. answers WHICH modules are buildable, ⊥ whether the idea works|V106,V103,R37
-T77|x|titrate GENERATION against sharp vs vague `§V` — R40 measured precision as the dominant axis for JUDGING; nobody has checked whether it drives WRITING, & vague rows are the live hypothesis for `src/tdd:T13` 0 merit wins|V106,R40
-T78|x|`sherd lens` builds its dir w/ `PathBuf::from`, ⊥ `arg_dir` ∴ it never got T10 root-resolution & `lens .` reports a different chain than `budget` for the same node (B9)|V104,I
-T79|x|EXTEND the generation corpus — 5 items is thin & R43's 3-way split rests on 2 items per class. add items ∀ class (type-carried · magic-number · beyond-frontier). ⊥ more RUNS: variance is 0 (R42)|V107,R43
 T80|.|audit `§V` rows for what a TYPE could carry instead (V107). the rows that need prose precision are the ones no signature can hold|V107,R43
 T81|.|`is_yes` is the ONLY item beyond reach @ sharp wording (R45) — find WHY. 3 conjoined rules (first line · case-insensitive · trim) or something else? it is the one datapoint about what the frontier is MADE of|V107,R45
-T82|x|VARIABLE 1 of the R44→T13 gap — PACK SIZE. same 11 items, same hidden tests, same sharp wording; prompt carries the node lens pack (~10k) vs ~500. does federated context help generation, hurt it, or nothing? R15/R16 measured prefill cost, ⊥ whether a fat pack degrades WRITING|V108,V106,R44
-T83|x|VARIABLE 2 — TEST AUTHORSHIP. hidden tests written first vs the model authoring its own. `src/tdd:B2`/`B12` are both a model writing a test that AGREES w/ its own wrong impl ∴ the live suspect for T13's zero|V108,V106
-T84|x|VARIABLE 3 — SIGNATURE given vs invented. R44 handed the writer a signature; `sherd tdd` makes it invent one, & `src/tdd:B12` is a test calling a name the impl never defined|V108,V106
-T85|x|adopt `clippy.toml` + `[lints.clippy]` (microlith's text, reasoning restated locally). MEASURE the violation count FIRST — the count decides ratchet vs pay-down, ⊥ a strategy picked blind. ⊥ `warn`: a check that cannot fail is B6|V82,V109,R47
 T86|.|build the FILE-ceiling runner V50 never had into `sherd check`, wire it like `budget`. §I already claims `check` does it (B11)|V50,V104,B11
-T87|x|`hk util` hygiene steps the siblings run & we ⊥: merge-conflict · private-key · large-files · BOM · case-conflict · symlinks · trailing-ws · final-newline · line-endings. ⊥ new deps|V26
 T88|.|`no-commit-to-branch --branch main` in the PRE-COMMIT set only — ⊥ `all`, or CI on `main` fails itself (microlith's note). AGENTS.md claims it & nothing enforces it (B12)|V74,B12
 T89|.|pub-fn ↔ test PAIRING via `sherd review` — reuse `public_fns`/`expected_calls`, ⊥ reimpl. catches what a % hides: a fn w/ NO test, carried by its neighbours|V72,V16
-T90|x|coverage floor, RATCHETED ⊥ set: start AT the measured 64.76% (R50), rises only w/ the tests that earn it, `.coverage` holds the number like `.lint-debt` holds the other. 98% is the DESTINATION in §C, ⊥ a gate that goes red tomorrow — the clippy adoption already showed a cliff is unpayable & a ratchet catches real defects (3 so far)|V16,R50,B6
 T91|~|`src/cli` FIRST: 445 lines, 0 tests, 0% — found twice by different instruments (T85 density map, R50 coverage). biggest single lever on the floor & the node w/ no test module at all|R50,V16
 T92|~|`src/tdd`: move `RECORDED`/`VAGUE`/`SUBTLE`/`GEN_CORPUS`/`grade`/the titrations behind `#[cfg(test)]` — they are FIXTURES in the impl half — & decompose `drive_from` (267 lines, cognitive 21, worst in the repo). the source-reading half leaves via T93, ⊥ internally (R48)|V50,V109,V110,R48
-T93|x|promote `src/code` — SIBLING of `src/spec`, ⊥ child of `src/tdd`: depth 2 deepens no chain where a child would bill every descendant every turn (V110). owns reading Rust source AS TEXT — `signatures` · `expected_calls` · `split_module` from `src/tdd`, `public_fns` + the parse half of `unwired` from `src/review`. ONE reading of one rule (B13)|V73,V109,V110,B13
-T94|x|promote `src/assay` — SIBLING @ depth 2 (V110). owns the corpora + the grader: `GEN_CORPUS`·`RECORDED`·`VAGUE`·`SUBTLE`·`TIERS`, `grade`, `titrate_tier` & their types — ~460 lines, the LARGEST cluster in `src/tdd`. an assay tests a sample against what it is CLAIMED to be & reports when the claim is false, which is what a corpus + a compiler-grader do|V73,V109,V110,R48
-T95|x|split METHOD from FINDINGS w/ T94. RESOLVED as: `.:V103`/`.:V108` STAY @ root & the `src/assay` dupes deleted — the checker cannot express a cross-node cite in the CITES column, so an invariant cited by a root `§T` row ! live @ root. the harness cluster (`.:src/tdd:V27`→`src/assay:V1`, T17/T18→T5/T6, B25→B1) moved whole. root T74-T84 STAY: moving them renumbers & dangles every `.:T82`-style cite, for a saving V110 measures @ ~1 tok/chain/row|V110,B14
-T96|x|move the `#[ignore]`d titrations from `src/assay` inline tests to `tests/` — an ignored body counts in the coverage denominator & never runs, so every experiment LOWERS the number & a better instrument reads worse (`.coverage` records 75.50→75.11). integration-level anyway|V16,R50
-T97|x|build the AMBIGUITY DETECTOR (V112): ∀ `§V` row ask for a test & an impl BLIND, compile them against each other, flag DISAGREEMENT as an underspecified row. a REPORT ⊥ a gate. it grades the spec, ⊥ the model|V112,R54
-T98|x|`sherd-dev docs` — generate the README Commands section from the binary. README names 5 unbuilt verbs & omits 7 built ones ∴ the prose is already behind the code|`dev:V1`
-T99|x|move `gate_with`/`cargo_bin` tdd → `src/land` (owner, & the only non-tdd caller) ∴ `--no-default-features` builds, + gate it in `hk.pkl` (B15)|V74,B15
-T100|x|ONLINE link check, scheduled in CI ⊥ in the commit gate. `lychee --offline` checks 39 relative paths & EXCLUDES 37 external ones by construction ∴ it cannot see the class we have TODAY: `docs/SECURITY.md` & `CHANGELOG.md` point @ `github.com/pr0d1r2/sherd` URLs that ⊥ exist yet. a 404 on someone else's site ! ⊥ reject a commit, & OURS ! ⊥ go unnoticed|V26,V74
 T101|.|move the scripted-toolchain fixtures (`scratch`·`scripted_cargo`·`write_exec`·`repo_fixture`·`node_fixture`) `src/tdd` tests → `testrepo`, then the 7 gate tests follow the code T99 moved. today they sit in `src/tdd` testing `crate::land::` fns ∵ the fixtures do|V74,B15
-T102|x|§I ↔ dispatch runner in `sherd-dev`: ∀ dispatched verb appears in §I, & ∀ §I cmd either dispatches or is MARKED unbuilt. reuses V7's reader (B17)|V115,B17
 T103|~|LADDER rungs as work: 0.4 = `split`+`sync` DONE · 0.5 = the MECHANICAL surface correct & reusable, measured on a foreign repo · 0.6 = settle · 0.7 = the model half resumes (V117). 0.1-0.3 reached|V114,V117
 T104|.|lint ratchet ! also count `--no-default-features` — 131 warnings on the SHIPPED binary are uncounted today|V118,B20
 

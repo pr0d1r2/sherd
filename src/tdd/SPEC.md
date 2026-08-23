@@ -59,32 +59,19 @@ V24: a run that keeps nothing leaves nothing. restore is STRUCTURAL — a `Drop`
 V25: a row naming `f(...)` is a CONTRACT — the red test ! call `f`. checked DETERMINISTICALLY before the judge, @ 0 tokens. a test that drives a different entry point can be a perfectly good test & still leave step 2 w/ no new fn to write ∴ it rewrites an existing one (B23). a fn named w/o an arg list is a REFERENCE ("⊥ touch `generate_via`"), ⊥ an instruction
 V26: a gate that did ⊥ EXECUTE is an ERROR, ⊥ a red gate. `Result`, ⊥ `bool` — a missing toolchain returning `false` is indistinguishable from a failing test, & step 1 REQUIRES red ∴ an absent `cargo` read as "red as required" & the loop would write code against a gate that never ran (B24). `.:V48` for a subprocess
 V27: the loop ! be drivable w/ a SUBSTITUTED transport. `ollama::generate_via` takes `&dyn Transport` & `.:ollama` has a fake, but nothing threads one up ∴ `drive_from` — 267 lines, cognitive 21, ⊥ ONE offline test — can only be exercised by a 40-min endpoint run. V26 one level up: a thing that cannot RUN offline cannot be VERIFIED, & every §B in this node was found the expensive way
-V28: this loop's job is COORDINATION, ⊥ generation. MEASURED (`.:T84`, commit bd3b80d): signature GIVEN 30/33 · INVENTED 2/33 PASS w/ 31/33 uncallable & ZERO callable-but-wrong ∴ once the 2 halves agree on a NAME the code is right, & `expected_calls` (added for B12) is what makes the loop possible @ all, ⊥ a convenience. w/ `.:R49` (context: no effect) & `.:R51` (self-authored tests anti-correlated) that closes T13: the zero is 2 halves disagreeing about what they build, ⊥ a model that cannot write
+V28: this loop's job is COORDINATION, ⊥ generation. MEASURED (commit bd3b80d): signature GIVEN 30/33 · INVENTED 2/33 PASS w/ 31/33 uncallable & ZERO callable-but-wrong ∴ once the 2 halves agree on a NAME the code is right, & `expected_calls` (added for B12) is what makes the loop possible @ all, ⊥ a convenience. w/ `.:R49` (context: no effect) & `.:R51` (self-authored tests anti-correlated) that closes T13: the zero is 2 halves disagreeing about what they build, ⊥ a model that cannot write
 V29: `unwired` is a LANDING rule, ⊥ a candidate rule. its own wording is "a `pub fn` called only from tests LANDED but was never wired in" ∴ its subject is code that shipped & STAYED unwired. the loop only appends, so at the moment of judgement nothing else CAN call a new fn & V23 made that fatal — every correct run reverted. ⊥ weakened by moving: `land::evidence` runs `review::commit` over every commit on the branch, which is where "landed" applies (T19)
 V18: step 2 gets the CONTRACT — the calls the test makes that ⊥ exist yet, extracted deterministically (`.:V18`). the SIGNATURE constrains the design: `check_edge_depth(text)` took no path ∴ no walking ∴ no ignore-glob violation & no temp dir. fixing a NAME mismatch removed 3 unrelated defects (B12)
 
 ## §T TASKS
 
 id|status|task|cites
-T1|x|`split_module`, `insert_test`, `insert_impl` w/ structural test-region guard|V1,V7
-T2|x|red → judge → green → gate → repair loop|V2,V3,V4,V5
-T3|x|invariant-exists precondition|V6
 T4|~|needs wiring, ⊥ a new function — `classify_failure` exists|V2
 T5|.|`§T` row status flip on green (`.` → `x`)|V5
-T6|x|judge gets `signatures()` data model|V8,B2
 T7|.|needs a hook change, ⊥ a function|B3
 T8|.|record per-request template overhead (~67 tok, measured) in entry-cost accounting|V2
-T9|x|step 2 ! define exactly the fn the test calls — pass the expected signature|V18
-T10|x|blind impl judge after green — `blind_prompt`, `is_yes`|V22,V11
-T11|x|MEASURE V22 — `blind_lens_vs_the_recorded_stubs` 5/5 reject + `blind_lens_vs_working_code` 5/5 accept. the CONTROL is ⊥ optional: a lens answering NO to everything scores 5/5 on stubs alone|V22
-T12|x|`Candidate`, `best`, `candidate_count` + N-candidate step 2|V23
 T13|~|FIRST MERIT WIN 2026-08-22, live, after 6 blockers fell (`.:src/state:B1`, B26-B29, `.:src/review:B6`): 5 round-trips, 20,559 tok, `MERGEABLE -- gates green + second lens`. it did ⊥ SURVIVE REVIEW: row said bounded BACKOFF, fn retries tight w/ none, no doc, lint 271→276 ∴ `hk` refuses what the loop calls mergeable. REMAINING: a rung whose output survives a READER|V23,`.:V106`
 T14|.|`sherd tdd` on `src/ollama` T3 failed 2x (8 round-trips, 17,551 tok, 4 compile errors incl `E0428` redefined). per `.:sit` a row failing twice is EVIDENCE ABOUT THE ROW — retry ⊥ productive until it is split|V23
-T15|x|`named_fn` + pre-judge contract check|V25
-T16|x|`gate` returns `Result` — unrunnable ⊥ red|V26
-T17|x|thread `&dyn Transport` through `drive`→`drive_from`→`run`→`run_sampled`→`generate_via`. `drive_from` already takes 6 args vs the limit of 4 ∴ bundle into a `Run` struct ⊥ add a 7th (`.:V50`)|V27,`.:V50`
-T18|x|ONE offline test driving the WHOLE loop against a scripted transport: test authored → gate RED → impl written → gate GREEN. the first end-to-end test the loop has ever had, & the precondition for `.:T92`|V27,V26
-T19|x|decide what `unwired` means for a fn the loop JUST added — it is a real rule & the loop cannot wire a call site w/o editing existing code (`.:src/plan:V13`). options: exempt same-commit additions · classify such a row undrivable · a 4th wiring step. pick w/ evidence, ⊥ by weakening the judge (B2)|V29,V23
 
 ## §B BUGS
 

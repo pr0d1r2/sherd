@@ -43,11 +43,7 @@ V8: `undocumented` — a NEW `pub fn` w/ no doc comment. NEW only
 ## §T TASKS
 
 id|status|task|cites
-T1|x|`unwired` + `negative-only` + `public_fns`|V1,V2
-T2|x|`sherd review [rev]` over a commit's diff|V5
 T3|.|duplication check — new fn re-parsing what an existing fn parses|V1
-T4|x|wired into `apply` — findings surfaced, advisory (`.:src/plan:V12`)|V3
-T5|x|`ignored-input` rule|V4
 
 ## §B BUGS
 

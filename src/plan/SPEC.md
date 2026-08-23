@@ -56,8 +56,6 @@ V21: SOURCE cites anchors ∴ code is a 2nd & INDEPENDENT reading of where law b
 ## §T TASKS
 
 id|status|task|cites
-T1|x|`open_tasks`, `classify`, `plan` w/ horizon + confidence|V1,V2,V5
-T2|x|unmanaged rows reported w/ reason|V3
 T3|.|`needs` column in `§T` so ordering is declared ⊥ guessed|V4
 T4|.|machine-actionable marker in `§T` so classify ⊥ heuristic|V5
 T5|.|needs `crate::ollama` — cross-node, name it before driving|V1

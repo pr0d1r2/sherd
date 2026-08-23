@@ -36,8 +36,6 @@ V5: node unreadable → error, ⊥ skipped. a pass on a node the parser never sa
 ## §T TASKS
 
 id|status|task|cites
-T1|x|`pack` assembly, chain + children + cost|V1,V3
-T2|x|`Depth` rule\|why, `verdict`|V2,V4
 T3|.|`SPEC.why.md` resolution for `Depth::Why`|V2
 T4|.|needs `sherd.toml` — no tier is declared anywhere yet|V4
 T5|.|given a node dir, return its child dirs when the pack exceeds `ceiling_for`|`.:V9`

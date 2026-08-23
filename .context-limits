@@ -45,23 +45,6 @@
 #
 # Measured 2026-08-23, `sherd budget`: root 10,399 · src 10,525 · deepest
 # src/tdd 13,296.
-SPEC.md        12500
-src            12700
-src/assay      14200
-src/cli        15500
-src/code       13600
-src/fed        14000
-src/land       13800
-src/lens       13200
-src/ollama     14600
-src/plan       17500
-src/review     13500
-src/slice      13300
-src/spec       15500
-src/state      12900
-src/tdd        16000
-src/tokens     13200
-dev            15500
 
 # RAISE 2026-08-23 (second today), `dev` 13000 -> 15500 and `src/plan` 13800
 # -> 17500. Both are RESTORATIONS of the 15-30% slack this file asks for:
@@ -102,3 +85,41 @@ dev            15500
 # closed B2. Every node this file has raised today was inside 1.2% of its
 # ceiling before it was touched, which says the morning's 20% was measured
 # against a tree that then had a working day happen to it.
+
+# RESET 2026-08-23, third edit today and the only one that goes DOWN. Every
+# ceiling is ~22% above the chain measured after `src/fed:V9` was enforced:
+# 106 finished `§T` rows were deleted across the tree, 45 of them at root.
+#
+# A `§T` row states REMAINING work, and rule depth loads `§T`, so every
+# finished row was billed to every chain on every turn. Root fell 12,420 ->
+# 9,922 and the repo fell 228,835 -> 184,174 tokens, about 19%.
+#
+# This supersedes the three raises made earlier today. `dev`, `src/cli`,
+# `src/plan` and `src/spec` were raised to 15,500-17,500 within hours of
+# hitting their ceilings, and each is now back under 13,000 without any of
+# the law added today being removed. The raises were real at the time and
+# the reason they stopped being necessary is worth more than the raises
+# were: the pressure was history, not law.
+#
+# Every chain is now under 13,107 -- ten percent of the 131,072 window,
+# which is the boundary the target tier makes meaningful. Six were over it
+# this morning. The largest is `src/plan` at 12,385, and `src/plan:T14`
+# still stands: that node owns two subjects and the split is worth making
+# on its own terms rather than because a ceiling forced it.
+SPEC.md        12200
+dev            13000
+src            12300
+src/assay      13600
+src/cli        13200
+src/code       13200
+src/fed        13300
+src/land       13400
+src/lens       12800
+src/ollama     14000
+src/plan       15200
+src/review     13000
+src/slice      12900
+src/spec       13200
+src/state      12500
+src/tdd        15100
+src/tokens     12800

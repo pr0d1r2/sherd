@@ -201,6 +201,33 @@ pub fn declares(spec: &str, id: &str) -> bool {
             .is_some_and(|r| r.starts_with('|') || r.starts_with(':'))
     })
 }
+
+/// `§T` rows marked done, which `src/fed:V9` says do not belong there.
+///
+/// A `§T` row states REMAINING work. A finished one reads to a machine as work
+/// to do, and it is paid by every chain that descends through the node on
+/// every turn. The record of what was finished is the commit trail.
+///
+/// Returns id and the head of the task text, enough to find the row.
+#[must_use]
+pub fn completed_tasks(spec: &str) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    let mut in_t = false;
+    for line in spec.lines() {
+        if line.starts_with("## \u{a7}") {
+            in_t = line.starts_with("## \u{a7}T");
+            continue;
+        }
+        let cells: Vec<&str> = line.split('|').collect();
+        let [id, "x", task, ..] = cells.as_slice() else {
+            continue;
+        };
+        if in_t && id.starts_with('T') {
+            out.push(((*id).to_string(), task.chars().take(52).collect()));
+        }
+    }
+    out
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -266,6 +293,23 @@ mod tests {
         assert!(declares(s, "B7"));
         assert!(!declares(s, "V2"), "V1 must not answer for V2");
         assert!(!declares(s, "V"), "a prefix is not an id");
+    }
+
+    /// `src/fed:V9`: a `§T` row states REMAINING work. A finished one reads to
+    /// a machine as work to do, and rule depth loads `§T` on every descent, so
+    /// every chain pays for it every turn.
+    #[test]
+    fn a_finished_task_is_not_remaining_work() {
+        let s = "## \u{a7}T TASKS\nid|status|task|cites\n\
+                 T1|x|the thing landed|V1\nT2|.|the other thing|V2\n\
+                 T3|~|half of it|V3\n";
+        let done = completed_tasks(s);
+        assert_eq!(done.len(), 1, "only `x` is finished");
+        assert_eq!(done.first().map(|d| d.0.as_str()), Some("T1"));
+
+        // A `§B` row that happens to start with T is not a task.
+        let b = "## \u{a7}B BUGS\nid|date|cause|fix\nT9|x|not a task row|f\n";
+        assert!(completed_tasks(b).is_empty(), "§T only");
     }
 
     use std::path::Path;

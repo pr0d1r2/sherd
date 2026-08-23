@@ -102,4 +102,15 @@
 # removed those four had an E0716 borrow error, the suite did not compile,
 # and clippy reported 191 warnings instead of 289. The guard refused to
 # record it. A count from a build that failed is not a measurement.
-total 289
+#
+# RAISED 289 -> 290 on 2026-08-23 for `src/fed:V9`'s check. One site:
+# `cli::check` gains a fifth loop over the same spec and crosses the
+# cognitive-complexity limit at 9/7. It is a dispatcher -- five independent
+# checks over one file -- and splitting it would move loops into helpers
+# whose only relationship is that they are called from the same place.
+#
+# Four more were avoided: `completed_tasks` matched `[id, "x", task, ..]`
+# on the cell slice instead of indexing it three times. The pattern is
+# shorter and states the shape it wants, and the `"x"` in the pattern IS
+# the status test.
+total 290

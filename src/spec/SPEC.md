@@ -42,13 +42,10 @@ V7: a CITATION is a LINK & `check` resolves it. canonical owner is the node PATH
 ## §T TASKS
 
 id|status|task|cites
-T1|x|`check`, `fmt`, `sections` binding|V1
 T2|.|capability-parity audit vs `microlith`, written down|V3
 T3|.|`--records` baseline wiring for closed-option survival|V1
 T4|.|check closed-option records survive an edit, via `--records`|`.:V44`
 T5|.|`SPEC.why.md` format — one rationale per `§V`/`§B` id|`.:V43`
-T6|x|`unreflected_bugs` — `§B` rows naming no invariant|V4
-T7|x|V5 runner — `microlith` reached only through its root, in every `src/` file|V5
 
 ## §B BUGS
 
@@ -57,3 +54,4 @@ B1|2026-08-05|facade re-exported through the dep's INNER path — `microlith::vi
 T8|x|`scaffold(dir, children)` — the `SPEC.md` skeleton: 4 sections, `§F` rows from child dirs, ZERO ids & no inference. its test is `check` on its own output, ⊥ a string compare|V6
 T9|x|`upsert_section` — the ONE writer for a generated section: replaces in place or inserts after an anchor, ⊥ appends. FORMAT fixes the order ∴ a section appended below `§B` is in the wrong place the moment it is written|V6
 B2|2026-08-23|the anchor CITATION has 3 spellings in source & nothing rejects any of them: `src/tdd` 19 · `tdd` 3 · `src/fed` 14 · `sherd/fed` 2 · `fed` 1 · `src/cli` 14 · `cli` 2, & `assay` 8 / `plan` 7 appear ONLY bare. 24 of 81 citations are non-canonical ∴ any tool reading them UNDER-COUNTS silently — & `src/plan:V19` rests the whole `--apply` design on the qualified form being reliable, while `src/plan:V21` reads these same citations as a migration & split signal. found by grepping source for anchors, ⊥ by `check`, which validates that a `§B` names a `§V` (V4) & never that the NAME resolves|V7. `spec::citations` parses `owner:ID`, `spec::declares` answers whether a spec holds that row, & `check` resolves every one. FIXED: 24 bare citations canonicalized to `src/X`, the one bare-`microlith` owner rewritten to the slash form, & the root `V41` — cited from 4 files SINCE THE FIRST COMMIT, never written, no history of it ever existing — became `src/cli:V14`, the shim rule nobody had written down. 38 dead links, 0 after. GENERALLY: a link nothing resolves is a comment, & `.:V10` had stated the form for weeks w/ nothing reading it
+B3|2026-08-23|deleting 106 finished `§T` rows broke 10 CITATIONS in one command — 6 of them — root `T79`·`T82`·`T83`·`T84`·`T97` & `dev` `T2` — were cited as PROVENANCE by rows that survived, & `src/assay:T4` turned out to name 2 experiments as "remaining" that had both already run. caught by V7's resolver, ONE COMMIT after it was built & by nothing else|V7. each citation repointed at the `§R` row that HOLDS the finding — the §R text already named the experiment in prose ∴ nothing was lost, & `src/tdd:V28` dropped its citation entirely ∵ it carries the measurement itself & names the commit. GENERALLY: a row may be DELETED only once what cites it points somewhere that survives, & the checker that proves it is the same one V7 built
