@@ -523,6 +523,17 @@ mod tests {
         assert_eq!(fn_body(src, "absent"), None);
     }
 
+    /// `fn_names` sees every declaration form this crate uses, because the
+    /// duplication check compares a new function against ALL of them and one
+    /// it cannot name is one it cannot compare.
+    #[test]
+    fn every_declaration_form_in_this_crate_is_named() {
+        let src = "pub fn a() {}\nfn b() {}\npub(crate) fn c() {}\n    \
+                   fn d() {}\npub fn e<'x>(v: &'x str) {}\nstruct S;\n";
+        assert_eq!(fn_names(src), vec!["a", "b", "c", "d", "e"]);
+        assert!(fn_names("struct S;\nlet x = 1;\n").is_empty());
+    }
+
     /// An escaped quote is not the end of a literal, and a marker shorter
     /// than three characters carries no signal about WHAT is parsed --
     /// `" "` and `"("` appear in every parser here.

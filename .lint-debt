@@ -243,8 +243,30 @@
 # That is the argument for the shape ratchet from the other end: the long
 # function was not merely hard to read, it was where the unsafe indexing
 # lived, and splitting it removed both.
-density 15.5
+#
+# 15.5 -> 14.7 on 2026-08-24. Thirteen `indexing_slicing` sites, the same
+# family that paid twice before: a length check followed by positional
+# indexes becomes a slice pattern that states the shape.
+#
+#   let [first, second] = e.as_slice() else { unreachable!(...) };
+#   let [test_block, impl_block, ..] = blocks.as_slice() else { return Err(..) };
+#
+# The second replaced `blocks.len() < 2` plus `blocks[0]`/`blocks[1]` in
+# `tdd::oneshot`, where the length check and the two indexes said the same
+# thing twice.
+#
+# WHAT IS LEFT, and why it stays:
+#
+#   17 of the 31 remaining index sites are in `src/assay`, FROZEN until rung
+#     0.7 (`.:V117`).
+#   48 `unwrap`/`expect` are ALL in test code, where the panic IS the failure
+#     report. `unwrap_or_default` in a test trades a clear failure for a
+#     silent wrong answer.
+#   48 arithmetic are index expressions (`i + 1` for a 1-indexed line) and
+#     counters; `saturating_add` on a line counter is noise, not safety.
+#   98 too_many_lines is the SHAPE ratchet's business, not this one.
+density 14.6
 shape 9.3
-count 266
-excess 1600
-loc 17122
+count 252
+excess 1601
+loc 17150

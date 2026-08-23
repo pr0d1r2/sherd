@@ -276,15 +276,17 @@ pub fn oneshot(r: &Run) -> Result<Vec<Step>, String> {
         .step_by(2)
         .map(|b| b.strip_prefix("rust").unwrap_or(b).trim())
         .collect();
-    if blocks.len() < 2 {
+    // The pattern IS the contract: a test block and an impl block, in that
+    // order. A length check plus two indexes says the same thing twice.
+    let [test_block, impl_block, ..] = blocks.as_slice() else {
         return Err(format!(
             "monolith returned {} code blocks, expected 2",
             blocks.len()
         ));
-    }
+    };
     std::fs::write(
         &mod_path,
-        insert_impl(&insert_test(&original, blocks[0]), blocks[1]),
+        insert_impl(&insert_test(&original, test_block), impl_block),
     )
     .map_err(|e| e.to_string())?;
     let (ok, out) = crate::land::gate_with(r.root, &r.cargo)?;

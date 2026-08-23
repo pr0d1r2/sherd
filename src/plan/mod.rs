@@ -785,9 +785,11 @@ pub fn propose(text: &str) -> Proposal {
         .filter(|(_, ks)| ks.iter().any(|k| t.contains(k)))
         .map(|(n, _)| *n)
         .collect();
-    match hits.len() {
-        1 => Proposal::Move(hits[0]),
-        0 => Proposal::Keep,
+    // The pattern carries the arity: exactly one hit MOVES, and anything
+    // else is Keep or Decompose. A `len()` match plus an index said it twice.
+    match hits.as_slice() {
+        [one] => Proposal::Move(one),
+        [] => Proposal::Keep,
         _ => Proposal::Decompose(hits),
     }
 }

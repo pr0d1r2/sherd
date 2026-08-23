@@ -237,9 +237,11 @@ mod tests {
     #[test]
     fn sections_split_on_headers() {
         let s = sections(SAMPLE);
-        assert_eq!(s.len(), 2);
-        assert!(s[0].0.contains("GOAL"));
-        assert!(s[1].1.contains("V1:"));
+        let [goal, inv] = s.as_slice() else {
+            unreachable!("two sections, and the pattern says so")
+        };
+        assert!(goal.0.contains("GOAL"));
+        assert!(inv.1.contains("V1:"));
     }
 
     #[test]
@@ -248,7 +250,7 @@ mod tests {
             "## \u{a7}B BUGS\nid|date|cause|fix\nB1|d|it broke|we fixed it\n";
         let u = unreflected_bugs(s);
         assert_eq!(u.len(), 1);
-        assert_eq!(u[0].0, "B1");
+        assert_eq!(u.first().map(|b| b.0.clone()), Some("B1".to_string()));
     }
 
     /// `B2`: three spellings for one citation and nothing rejected any.
