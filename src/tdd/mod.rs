@@ -1958,6 +1958,105 @@ mod loop_tests {
         );
     }
 
+    /// The split's real payoff: these were unreachable inside a 269-line body
+    /// and are now pure functions a test can call directly.
+    ///
+    /// `contract_objection` is the zero-token check that saved 10 round-trips
+    /// and 25,991 tokens the day it was written (B23), and until now nothing
+    /// asserted the message it feeds back actually names the function.
+    #[test]
+    fn the_contract_objection_names_the_function_the_row_asked_for() {
+        let o = contract_objection("post_with_retry");
+        assert!(o.contains("post_with_retry"), "{o}");
+        assert!(
+            o.contains("calls `post_with_retry` directly"),
+            "the objection has to be actionable, not just a complaint: {o}"
+        );
+    }
+
+    /// `NoWinner` is a REFUSAL, not a pick: repair polishes a stub, it does
+    /// not fix one.
+    #[test]
+    fn a_green_candidate_carrying_findings_is_refused_not_repaired() {
+        let clean = Candidate {
+            code: "pub fn f() {}".into(),
+            green: true,
+            findings: 0,
+        };
+        let flawed = Candidate {
+            findings: 2,
+            ..clean.clone()
+        };
+        let tried = |c: Candidate| Tried {
+            cand: c,
+            out: String::new(),
+        };
+        assert_eq!(pick_candidate(&[tried(clean.clone())]), Ok(0));
+        let refused = pick_candidate(&[tried(flawed)]);
+        assert!(
+            refused.is_err_and(|e| e.contains("reverted")),
+            "a green candidate with findings is reverted, not kept"
+        );
+        // And an empty slate is a refusal too, never a panic on index 0.
+        assert!(pick_candidate(&[]).is_err());
+    }
+
+    /// The step-2 prompt names exactly what the test calls, so step 2 cannot
+    /// invent a neighbouring name and leave the test uncallable.
+    #[test]
+    fn the_green_prompt_carries_the_contract_and_the_failure() {
+        let t = Scripted::new(&[]);
+        let run = Run {
+            root: Path::new("."),
+            node: Path::new("."),
+            owner: Path::new("."),
+            invariant: "V1",
+            task: "add `existing`",
+            max_repair: 1,
+            cargo: "false".into(),
+            transport: &t,
+        };
+        let ctx = probe_ctx(&run, "pub fn existing(x: u64) -> bool");
+        let p = green_prompt(&ctx, "fn t() { assert!(existing(1)); }", "E0425");
+        assert!(p.contains("existing"), "the surface is shown: {p}");
+        assert!(p.contains("E0425"), "the failure is shown: {p}");
+        assert!(
+            p.contains("Do not modify the test"),
+            "step 2 may not rewrite the test it was given"
+        );
+    }
+
+    /// Repair is shown what it last added, so it REPLACES rather than
+    /// appending a second definition (B5).
+    #[test]
+    fn the_repair_prompt_shows_what_was_last_added() {
+        let p = repair_prompt(
+            "pub fn existing()".into(),
+            "pub fn mine() -> u8 { 0 }",
+            "fn t() {}",
+            "assertion failed",
+        );
+        assert!(p.contains("pub fn mine() -> u8 { 0 }"), "{p}");
+        assert!(p.contains("assertion failed"), "{p}");
+        assert!(
+            p.contains("corrected version of the function(s) you previously"),
+            "repair replaces its own work, it does not add more"
+        );
+    }
+
+    /// A `Ctx` over a scratch node, for the pure steps that read one.
+    fn probe_ctx<'a>(run: &'a Run<'a>, surface: &str) -> Ctx<'a> {
+        Ctx {
+            run,
+            mod_path: std::path::PathBuf::from("mod.rs"),
+            inv: "V1: a ! b".into(),
+            spec_rules: String::new(),
+            surface: surface.to_string(),
+            tests: String::new(),
+            in_scope: String::new(),
+        }
+    }
+
     /// A `cargo` whose clippy step emits `n` warning lines on stderr.
     fn cargo_with_warnings(dir: &Path, n: usize) -> Result<String, String> {
         let script = dir.join("noisy-cargo");
