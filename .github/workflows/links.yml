@@ -1,0 +1,66 @@
+name: links
+
+# The ONLINE link check, and it is deliberately not part of the gate.
+#
+# `hk`'s `links` step runs `lychee --offline`: it verifies relative paths,
+# which is the half that breaks when a file moves, and skips every external
+# URL. That is the right call for a commit hook -- a 404 on someone else's
+# site is not a reason to reject your commit, and the gate refuses network
+# access anyway.
+#
+# It leaves a real gap, which is `.:T100`. MEASURED at the time it was
+# written: 39 relative links verified, 37 external ones excluded, and two of
+# the excluded ones pointed at `github.com/pr0d1r2/blackbox` pages that did
+# not exist yet -- in `docs/SECURITY.md` and `CHANGELOG.md`. Our own broken
+# links are exactly what the offline run cannot see.
+#
+# So: a schedule, not a gate. It reports rather than blocks, it runs weekly
+# rather than per commit, and `workflow_dispatch` is there so a link change
+# can be checked without waiting for Monday.
+#
+# lychee comes from the dev shell like every other linter, so this workflow
+# and a laptop run the same version.
+#
+# KNOWN RED UNTIL PUBLICATION, measured 2026-08-23: 72 of 74 external URLs
+# resolve, and the two that do not are ours --
+# `github.com/pr0d1r2/blackbox/releases/tag/v0.1.0` in CHANGELOG.md and
+# `.../security/advisories/new` in docs/SECURITY.md. Both are the correct
+# destinations the moment the repository is public, so they are left as they
+# are rather than accepted or removed: this job going green is one of the
+# things that says the publish actually happened.
+
+on:
+  schedule:
+    # Mondays, 06:00 UTC. A weekly cadence for external rot, which moves on
+    # the timescale of other people's site redesigns rather than of commits.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: links-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  online:
+    runs-on: ubuntu-latest
+    # One platform, because a URL does not resolve differently per
+    # architecture. The gate's matrix exists for code; this checks the
+    # internet.
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: cachix/install-nix-action@630ae543ea3a38a9a4166f03376c02c50f408342 # v31.11.0
+        with:
+          extra_nix_config: |
+            extra-substituters = https://pr0d1r2.cachix.org
+            extra-trusted-public-keys = pr0d1r2.cachix.org-1:NfWjbhgAj41byXhCKiaE+av3Vnphm1fTezHXEGsiQIM=
+      - uses: nix-community/cache-nix-action/restore@7df957e333c1e5da7721f60227dbba6d06080569 # v7
+        with:
+          primary-key: nix-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('flake.nix', 'flake.lock') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-${{ runner.arch }}-
+
+      # `--max-concurrency 4` and a cache, so a weekly sweep of a few dozen
+      # URLs does not read as abuse to anyone's server.
+      - run: >
+          nix develop --command lychee --no-progress --cache
+          --max-concurrency 4 --accept 200,204,206,301,302,303,307,308 .
