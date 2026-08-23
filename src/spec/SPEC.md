@@ -16,6 +16,7 @@ V2: `§F`/`§N` ⊥ belong here — they are sherd additions, they live in `fed`
 V3: parity vs `microlith` ! be MEASURED before claiming absorption (`.:V59`). currently BELIEF
 V5: what is imported from `microlith` is what its ROOT re-exports. an inner module path is ⊥ contract — the dep may privatize it & does (E0603, B1). same for RENDERING: print the dep's own `Display`, ⊥ recompose its parts
 V4: a `§B` row whose fix names no `§V` is UNREFLECTED — pain w/o reflection. it will recur & the log becomes a list of things that happened, ⊥ a set of guards. advisory: some bugs warrant no rule & forcing one manufactures invariants to silence a gate
+V6: a SCAFFOLD emits ⊥ ids & ⊥ inference. a seeded `T1` is `T1` FOREVER (ids monotonic, never reused) & a task citing a placeholder rule is a spec that lies from commit one ∴ prompts are PROSE a human replaces. `§G` is never guessed from a dir name, & an `§F` row's owns/⊥owns are prompts, ⊥ a model's guess. its own test is `check` on the output: a generator whose output its checker rejects has shipped a 2nd dialect — & that test caught the prompt "numbered from V1" being read as a CITATION
 
 ## §T TASKS
 
@@ -32,3 +33,4 @@ T7|x|V5 runner — `microlith` reached only through its root, in every `src/` fi
 
 id|date|cause|fix
 B1|2026-08-05|facade re-exported through the dep's INNER path — `microlith::violation::{Violation, NAMESPACE}` — & `check` recomposed `{NAMESPACE}/{rule}: {msg}`, which `Violation: Display` already prints. the dep trimmed its lib to root verbs ∴ E0603 & a HEAD that ⊥ compile (`.:B5`). the recomposition was a 2nd reading of an id the dep owns — V1 applied to output, ⊥ only to logic|import `microlith::Violation`; print `{v}` w/ the caller's coords prefixed. V5, runner @ T7
+T8|x|`scaffold(dir, children)` — the `SPEC.md` skeleton: 4 sections, `§F` rows from child dirs, ZERO ids & no inference. its test is `check` on its own output, ⊥ a string compare|V6

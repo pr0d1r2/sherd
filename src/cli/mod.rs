@@ -16,6 +16,7 @@ use std::process::ExitCode;
 pub const USAGE: &str = "\
 sherd -- federated SPEC.md for small-context local models
 
+  sherd init [dir] [--stdout]  scaffold a SPEC.md, §F rows from child dirs
   sherd budget [dir]     token cost of every node, against the working budget
   sherd lens <dir> [--depth rule|why|all]  the context pack for one node
   sherd fed [dir]        the federation edges declared by a node
@@ -73,6 +74,7 @@ pub fn run_args(mut args: Vec<String>) -> ExitCode {
             (None, _) => usage("lens needs a dir"),
         },
         Some("fed") => fed_cmd(&arg_dir(&args, &root)),
+        Some("init") => init_cmd(&root, &args),
         Some("graph") => {
             match args.get(1).map(String::as_str) {
                 Some("--dot") => print!("{}", fed::dot(&root)),
@@ -235,6 +237,138 @@ fn depth_arg(args: &[String]) -> Result<lens::Depth, String> {
 fn arg_dir(args: &[String], root: &Path) -> PathBuf {
     args.get(1)
         .map_or_else(|| root.to_path_buf(), |d| root.join(d))
+}
+
+/// `sherd init [dir] [--stdout]` -- scaffold a `SPEC.md` for a directory.
+///
+/// REFUSES an existing file, exit 1, and there is no `--force`. Clobbering a
+/// spec is the one write this tool must never make: `SPEC.md` is the law the
+/// rest of the binary enforces, and a scaffold that can overwrite it can
+/// erase every invariant a repository has recorded. Deleting it first is a
+/// deliberate act a human takes, with git watching.
+///
+/// `--stdout` writes nothing and prints instead, so the output can be read
+/// before it is a file.
+/// Directories under `dir` that could BE nodes.
+///
+/// The same exclusions the walk uses, so `init` and `graph` cannot disagree
+/// about what a child is -- a scaffold naming a child the DAG will not
+/// descend into writes a row that can never be satisfied.
+fn child_dirs(dir: &Path) -> Result<Vec<String>, String> {
+    let entries = std::fs::read_dir(dir)
+        .map_err(|e| format!("sherd: {}: {e}", dir.display()))?;
+    let mut children: Vec<String> = entries
+        .filter_map(Result::ok)
+        .filter(|e| e.path().is_dir())
+        .filter_map(|e| e.file_name().into_string().ok())
+        .filter(|n| !n.starts_with('.') && n != "target")
+        .collect();
+    children.sort();
+    Ok(children)
+}
+
+/// `sherd init [dir] [--stdout]` -- scaffold a `SPEC.md` for a directory.
+///
+/// REFUSES an existing file, exit 1, and there is no `--force`. Clobbering a
+/// spec is the one write this tool must never make: `SPEC.md` is the law the
+/// rest of the binary enforces, and a scaffold that can overwrite it can
+/// erase every invariant a repository has recorded. Deleting it first is a
+/// deliberate act a human takes, with git watching.
+///
+/// `--stdout` writes nothing and prints instead, so the output can be read
+/// before it is a file.
+/// The directory to scaffold: the first non-flag argument, or the root.
+fn init_dir(root: &Path, args: &[String]) -> PathBuf {
+    args.iter()
+        .skip(1)
+        .find(|a| !a.starts_with("--"))
+        .map_or_else(|| root.to_path_buf(), |d| root.join(d))
+}
+
+/// The refusal, and there is no `--force` to bypass it.
+///
+/// Clobbering a spec is the one write this tool must never make: `SPEC.md` is
+/// the law the rest of the binary enforces, so a scaffold that can overwrite
+/// it can erase every invariant a repository has recorded. Deleting the file
+/// first is a deliberate act a human takes, with git watching.
+fn init_refusal(target: &Path) -> Option<ExitCode> {
+    target.exists().then(|| {
+        eprintln!(
+            "sherd: {} exists -- refusing to overwrite a spec. There is no --force: \
+             delete it yourself if that is what you mean.",
+            target.display()
+        );
+        ExitCode::from(1)
+    })
+}
+
+fn init_cmd(root: &Path, args: &[String]) -> ExitCode {
+    let stdout = args.iter().any(|a| a == "--stdout");
+    let dir = init_dir(root, args);
+    if !dir.is_dir() {
+        eprintln!("sherd: {} is not a directory", dir.display());
+        return ExitCode::from(2);
+    }
+    let target = dir.join("SPEC.md");
+    if let Some(refusal) = (!stdout).then(|| init_refusal(&target)).flatten() {
+        return refusal;
+    }
+    match init_body(root, &dir) {
+        Err(e) => init_failed(&e),
+        Ok((body, n)) => init_emit(&target, &body, n, stdout),
+    }
+}
+
+fn init_failed(msg: &str) -> ExitCode {
+    eprintln!("{msg}");
+    ExitCode::from(1)
+}
+
+/// `--stdout` is the PREVIEW, so it must never write. Both paths go through
+/// one function, because a preview that diverged from the write would show
+/// something other than what lands.
+fn init_emit(
+    target: &Path,
+    body: &str,
+    children: usize,
+    stdout: bool,
+) -> ExitCode {
+    if stdout {
+        print!("{body}");
+        return ExitCode::SUCCESS;
+    }
+    init_write(target, body, children)
+}
+
+/// The scaffold text for a directory, and how many children it names.
+fn init_body(root: &Path, dir: &Path) -> Result<(String, usize), String> {
+    let children = child_dirs(dir)?;
+    // The node NAME is the path relative to root, so `§G`'s prompt names the
+    // node a reader is looking at rather than an absolute path only this
+    // machine has.
+    let name = dir
+        .strip_prefix(root)
+        .ok()
+        .and_then(|p| p.to_str())
+        .filter(|s| !s.is_empty())
+        .unwrap_or(".");
+    Ok((crate::spec::scaffold(name, &children), children.len()))
+}
+
+fn init_write(target: &Path, body: &str, children: usize) -> ExitCode {
+    match std::fs::write(target, body) {
+        Ok(()) => {
+            println!(
+                "{}: scaffolded, {children} child row(s). Fill the prompts, then `sherd check`.",
+                target.display()
+            );
+            ExitCode::SUCCESS
+        }
+        Err(e) => {
+            eprintln!("sherd: {}: {e}", target.display());
+            ExitCode::from(1)
+        }
+    }
 }
 
 /// `land`, shared by the verb and by `apply --land`.
@@ -1032,6 +1166,107 @@ mod tests {
         // `/tmp` has no `.git` above it, so the walk runs out of parents.
         assert_eq!(repo_root_from(&dir), dir);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// `init` REFUSES an existing spec, and the refusal is the feature. A
+    /// scaffold that can overwrite `SPEC.md` can erase every invariant a
+    /// repository has recorded, so there is no `--force` to test.
+    #[test]
+    fn init_refuses_to_overwrite_an_existing_spec() {
+        let Ok(repo) = crate::testrepo::TestRepo::new("cli-init-refuse") else {
+            unreachable!("a fixture repository is buildable")
+        };
+        // `TestRepo::new` writes a SPEC.md, so the root already has one.
+        assert_eq!(init_cmd(repo.path(), &argv(&["init"])), ExitCode::from(1));
+    }
+
+    /// A directory with children gets a row per child; one without gets no
+    /// `§F` table at all, because an empty table is a claim of no children
+    /// rather than an absence of information.
+    /// A repository with a `node/deep` directory: enough for one child row.
+    fn init_fixture(tag: &str) -> (crate::testrepo::TestRepo, PathBuf) {
+        let Ok(repo) = crate::testrepo::TestRepo::new(tag) else {
+            unreachable!("a fixture repository is buildable")
+        };
+        let node = repo.path().join("node");
+        let Ok(()) = std::fs::create_dir_all(node.join("deep")) else {
+            unreachable!("a nested dir is creatable")
+        };
+        (repo, node)
+    }
+
+    /// Idempotence here is REFUSAL, not a silent rewrite: the second run
+    /// finds the file the first one wrote and declines to touch it.
+    #[test]
+    fn init_run_twice_refuses_the_second_time() {
+        let (repo, _node) = init_fixture("cli-init-twice");
+        assert_eq!(
+            init_cmd(repo.path(), &argv(&["init", "node"])),
+            ExitCode::SUCCESS
+        );
+        assert_eq!(
+            init_cmd(repo.path(), &argv(&["init", "node"])),
+            ExitCode::from(1)
+        );
+    }
+
+    #[test]
+    fn init_writes_a_scaffold_with_a_row_per_child() {
+        let (repo, node) = init_fixture("cli-init-write");
+        assert_eq!(
+            init_cmd(repo.path(), &argv(&["init", "node"])),
+            ExitCode::SUCCESS
+        );
+        let Ok(body) = std::fs::read_to_string(node.join("SPEC.md")) else {
+            unreachable!("init wrote a spec")
+        };
+        assert!(body.contains("deep|WHAT IT OWNS"), "the child row: {body}");
+        assert!(
+            crate::spec::check(&body).is_empty(),
+            "our checker accepts it"
+        );
+    }
+
+    /// `--stdout` is the preview, and previewing must never write.
+    #[test]
+    fn init_stdout_writes_nothing() {
+        let Ok(repo) = crate::testrepo::TestRepo::new("cli-init-stdout") else {
+            unreachable!("a fixture repository is buildable")
+        };
+        let node = repo.path().join("preview");
+        let Ok(()) = std::fs::create_dir_all(&node) else {
+            unreachable!("a dir is creatable")
+        };
+        assert_eq!(
+            init_cmd(repo.path(), &argv(&["init", "preview", "--stdout"])),
+            ExitCode::SUCCESS
+        );
+        assert!(!node.join("SPEC.md").exists(), "preview wrote a file");
+    }
+
+    /// The failure path: a directory that cannot be read. `init` reports the
+    /// cause and exits 1 rather than scaffolding an empty `§F` table, which
+    /// would claim "no children" about a directory it never saw.
+    #[test]
+    fn init_reports_a_directory_it_cannot_read() {
+        let missing = std::env::temp_dir().join("sherd-no-such-dir-init");
+        let _ = std::fs::remove_dir_all(&missing);
+        let Err(msg) = init_body(Path::new("/"), &missing) else {
+            unreachable!("an unreadable directory is an error")
+        };
+        assert!(msg.contains("sherd-no-such-dir-init"), "names it: {msg}");
+        assert_eq!(init_failed(&msg), ExitCode::from(1));
+    }
+
+    #[test]
+    fn init_on_a_path_that_is_not_a_directory_is_usage() {
+        let Ok(repo) = crate::testrepo::TestRepo::new("cli-init-nodir") else {
+            unreachable!("a fixture repository is buildable")
+        };
+        assert_eq!(
+            init_cmd(repo.path(), &argv(&["init", "no-such-dir"])),
+            ExitCode::from(2)
+        );
     }
 
     #[test]

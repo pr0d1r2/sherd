@@ -39,7 +39,7 @@ dev|repo-maintaining tooling, `publish = false` — README generation|anything a
 
 ## §I INTERFACES
 
-- cmd: `sherd init [dir]` → scaffold `SPEC.md` @ dir, `§F` rows from child dirs (0.2)
+- cmd: `sherd init [dir] [--stdout]` → scaffold `SPEC.md` @ dir, `§F` rows from child dirs. REFUSES an existing file, exit 1, ⊥ `--force`
 - cmd: `sherd lens <dir> [--depth rule|why|all]` → context pack. default `rule`
 - cmd: `sherd lens <dir> --json` → `{chain:[],body:{},children:[],tokens:{},examined:{}}` (0.3)
 - cmd: `sherd route "<query>"` → dir + reason. 0 hit / 2 miss / 3 ambiguous (0.3)
