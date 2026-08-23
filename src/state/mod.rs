@@ -134,25 +134,74 @@ impl State {
             .collect()
     }
 
-    /// Keep at most `n` entries of a kind, dropping lowest keys first.
+    /// Append one entry to an ORDERED, capped log, deduplicated by `dedup`.
     ///
-    /// Bounds the file without timestamps, which would break idempotence --
-    /// a state file that changes when nothing changed is not a cache.
-    pub fn trim_kind(&mut self, kind: &str, n: usize) {
-        let mut keys: Vec<(String, String)> = self
-            .map
-            .keys()
-            .filter(|(k, _)| k == kind)
-            .cloned()
-            .collect();
-        let excess = keys.len().saturating_sub(n);
-        if excess == 0 {
+    /// The key carries a zero-padded sequence, so lexical order IS insertion
+    /// order and the cap drops the genuinely oldest. A plain key-order trim
+    /// cannot do that: its only ordering is the key's own, and the one real
+    /// caller keys by CONTENT HASH, which carries no time at all (B2).
+    ///
+    /// Idempotent, and that is what lets this avoid a timestamp: an entry
+    /// whose `dedup` is already present is not re-appended, so recording the
+    /// same observation twice leaves the file byte-identical. A clock would
+    /// change the file when nothing changed, which is not a cache.
+    pub fn push(&mut self, log: Log, dedup: &str, value: impl Into<String>) {
+        let kind = log.kind;
+        if self.find_key(kind, dedup).is_some() {
             return;
         }
-        keys.sort();
-        for k in keys.into_iter().take(excess) {
-            self.map.remove(&k);
+        self.set(kind, &format!("{:08}-{dedup}", self.next_seq(kind)), value);
+        let ordered = self.oldest_first(kind);
+        let over = ordered.len().saturating_sub(log.cap);
+        for k in ordered.into_iter().take(over) {
+            self.map.remove(&(kind.to_string(), k));
         }
+    }
+
+    /// The sequence the next entry of a kind gets.
+    ///
+    /// MAX, not the last key's: a file written before ordered keys existed
+    /// holds bare content hashes, and `ff78..` sorts after `00000000-..`, so
+    /// reading the last key's sequence found none and every append restarted
+    /// at zero. An unsequenced key is older than all of them, which is true --
+    /// it was written first.
+    fn next_seq(&self, kind: &str) -> u64 {
+        self.keys_of(kind)
+            .iter()
+            .filter_map(|k| seq_of(k))
+            .max()
+            .map_or(0, |n| n.saturating_add(1))
+    }
+
+    /// The full key an ordered entry was stored under, found by its `dedup`.
+    #[must_use]
+    pub fn find_key(&self, kind: &str, dedup: &str) -> Option<String> {
+        let suffix = format!("-{dedup}");
+        self.keys_of(kind)
+            .into_iter()
+            .find(|k| k.ends_with(&suffix))
+    }
+
+    /// Every key of one kind, oldest first.
+    ///
+    /// By SEQUENCE, not by the key's own bytes: a legacy bare hash like
+    /// `ff7833..` sorts after `00000000-..` lexically, so plain map order put
+    /// the oldest entries LAST and the cap evicted the newest. `None` orders
+    /// before `Some` in Rust, which is exactly right here -- an unsequenced
+    /// entry predates every sequenced one.
+    fn oldest_first(&self, kind: &str) -> Vec<String> {
+        let mut keys = self.keys_of(kind);
+        keys.sort_by_key(|k| (seq_of(k), k.clone()));
+        keys
+    }
+
+    /// Every key of one kind, in the map's order, which is lexical.
+    fn keys_of(&self, kind: &str) -> Vec<String> {
+        self.map
+            .keys()
+            .filter(|(k, _)| k == kind)
+            .map(|(_, key)| key.clone())
+            .collect()
     }
 
     #[must_use]
@@ -164,6 +213,32 @@ impl State {
     }
 }
 
+/// The log an ordered entry is appended to: which kind, and how many to keep.
+///
+/// A struct because `kind` and `cap` describe the LOG and travel together,
+/// while `dedup` and `value` describe the ENTRY. Passing all four positionally
+/// is the five-argument helper this repo has already written once and
+/// reverted -- one lint traded for a worse one.
+#[derive(Debug, Clone, Copy)]
+pub struct Log<'a> {
+    /// The kind these entries share.
+    pub kind: &'a str,
+    /// How many to keep; the oldest beyond this are evicted.
+    pub cap: usize,
+}
+
+impl<'a> Log<'a> {
+    /// One log: which kind, and how many to keep.
+    #[must_use]
+    pub const fn new(kind: &'a str, cap: usize) -> Self {
+        Self { kind, cap }
+    }
+}
+
+/// The sequence an ordered key opens with, if it has one.
+fn seq_of(key: &str) -> Option<u64> {
+    key.split_once('-').and_then(|(n, _)| n.parse().ok())
+}
 /// A key, safe to sit in the middle field of `kind key value`.
 ///
 /// V1: the VALUE may contain spaces -- an `obs` row carries a whole telemetry
@@ -374,34 +449,95 @@ mod tests {
         assert_eq!(a.get("pace", "prefill"), Some("900"));
     }
 
+    /// `B2`, on the numbers that row records: keyed by CONTENT HASH the
+    /// retained set was a hash-sampled slice of ALL history, not a recency
+    /// window. Measured before the fix -- of 700 observations capped at 200,
+    /// 62 survivors came from the FIRST two hundred and only 63 from the last.
+    ///
+    /// `push` makes the key carry a sequence, so the cap drops the
+    /// genuinely oldest and the window is the last `cap` appended.
     #[test]
-    fn trim_kind_bounds_the_file_and_leaves_others_alone() {
+    fn an_ordered_log_keeps_the_newest_not_a_hash_sample() {
         let mut a = State::default();
-        for i in 0..10 {
-            a.set("obs", &format!("{i:02}"), format!("row {i}"));
+        for i in 0..700 {
+            let line = format!("row {i}");
+            let k = content_hash(line.as_bytes());
+            a.push(Log::new("obs", 200), &k, line);
         }
-        a.set("pace", "prefill", "900");
-        a.trim_kind("obs", 4);
-        assert_eq!(a.all("obs").len(), 4, "must bound to n");
-        assert_eq!(
-            a.get("pace", "prefill"),
-            Some("900"),
-            "other kinds untouched"
+        let kept: Vec<usize> = a
+            .all("obs")
+            .iter()
+            .filter_map(|l| l.strip_prefix("row ")?.parse().ok())
+            .collect();
+        assert_eq!(kept.len(), 200, "the cap holds");
+        assert!(
+            kept.iter().all(|i| *i >= 500),
+            "every retained row is from the last 200 appended; oldest kept \
+             was {:?}",
+            kept.iter().min()
         );
-        assert!(a.get("obs", "09").is_some(), "newest kept");
-        assert!(a.get("obs", "00").is_none(), "oldest dropped");
     }
 
+    /// The dedup that lets an ordered log avoid a timestamp: re-recording the
+    /// same observation leaves the file byte-identical, so a state file that
+    /// changed when nothing changed cannot happen.
     #[test]
-    fn trim_kind_is_a_noop_under_the_limit() {
+    fn pushing_the_same_entry_twice_changes_nothing() {
         let mut a = State::default();
-        a.set("obs", "01", "x");
-        let before = a.serialise();
-        a.trim_kind("obs", 10);
+        a.push(Log::new("obs", 10), "deadbeef", "row");
+        let once = a.serialise();
+        a.push(Log::new("obs", 10), "deadbeef", "row");
+        assert_eq!(a.serialise(), once, "a repeat append is a no-op");
+        assert_eq!(a.all("obs").len(), 1);
+    }
+
+    /// A caller that only has the dedup key can still find what it stored,
+    /// which is what `record_obs_in`'s idempotence rests on.
+    #[test]
+    fn an_ordered_entry_is_findable_by_its_dedup_key() {
+        let mut a = State::default();
+        a.push(Log::new("obs", 10), "cafe", "first");
+        a.push(Log::new("obs", 10), "f00d", "second");
+        let k = a.find_key("obs", "f00d").unwrap_or_default();
+        assert!(k.ends_with("-f00d"), "the dedup key is the suffix: {k}");
+        assert_eq!(a.get("obs", &k), Some("second"));
+        assert_eq!(a.find_key("obs", "absent"), None);
+    }
+
+    /// A file written before ordered keys existed holds bare content hashes.
+    /// Appending to it must not restart the sequence at zero -- `ff78...`
+    /// sorts AFTER `00000000-...`, so reading the last key's sequence found
+    /// none every time.
+    ///
+    /// An unsequenced entry is older than every sequenced one, which is true:
+    /// it was written first, and it is evicted first.
+    #[test]
+    fn an_ordered_log_resumes_over_keys_written_before_it_existed() {
+        let mut a = State::default();
+        for legacy in ["00457224e0ad913c", "ff7833f252862eb6"] {
+            a.set("obs", legacy, format!("legacy {legacy}"));
+        }
+        a.push(Log::new("obs", 10), "aaaa", "new one");
+        a.push(Log::new("obs", 10), "bbbb", "new two");
+        let keys: Vec<Option<String>> = ["aaaa", "bbbb"]
+            .iter()
+            .map(|d| a.find_key("obs", d))
+            .collect();
         assert_eq!(
-            a.serialise(),
-            before,
-            "trimming under the limit must not change state"
+            keys,
+            vec![
+                Some("00000000-aaaa".to_string()),
+                Some("00000001-bbbb".to_string())
+            ],
+            "the sequence advances rather than restarting"
+        );
+        // And the legacy rows go FIRST when the cap bites.
+        a.push(Log::new("obs", 3), "cccc", "new three");
+        assert_eq!(a.all("obs").len(), 3);
+        assert!(
+            a.find_key("obs", "cccc").is_some()
+                && a.get("obs", "00457224e0ad913c").is_none(),
+            "an unsequenced row is the oldest and is dropped first"
         );
     }
 
