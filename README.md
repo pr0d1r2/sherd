@@ -10,7 +10,7 @@
 [![gate hk](https://img.shields.io/badge/gate-hk-6E4AFF)](hk.pkl)
 [![gate steps 27](https://img.shields.io/badge/gate_steps-27-6E4AFF)](hk.pkl)
 [![coverage floor 91.4%](https://img.shields.io/badge/coverage_floor-%E2%89%A591.4%25-brightgreen)](.coverage)
-[![lint debt 290](https://img.shields.io/badge/lint_debt-%E2%89%A4290-orange)](.lint-debt)
+[![lint debt 291](https://img.shields.io/badge/lint_debt-%E2%89%A4291-orange)](.lint-debt)
 [![federated nodes 17](https://img.shields.io/badge/federated_nodes-17-6E4AFF)](SPEC.md)
 
 [![nix flake](https://img.shields.io/badge/nix-flake-5277C3?logo=nixos&logoColor=white)](flake.nix)
