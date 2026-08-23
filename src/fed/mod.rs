@@ -33,16 +33,20 @@ pub fn edges(text: &str) -> Vec<Edge> {
         if !in_f {
             continue;
         }
+        // The pattern IS the row shape: exactly four cells, and the header
+        // row names its first column `dir`.
         let cells = split_row(line);
-        // Skip the header row and anything that is not a 4-cell row.
-        if cells.len() != 4 || cells[0] == "dir" {
+        let [dir, owns, not_owns, tokens] = cells.as_slice() else {
+            continue;
+        };
+        if dir == "dir" {
             continue;
         }
         out.push(Edge {
-            dir: cells[0].clone(),
-            owns: cells[1].clone(),
-            not_owns: cells[2].clone(),
-            tokens: cells[3].parse().ok(),
+            dir: dir.clone(),
+            owns: owns.clone(),
+            not_owns: not_owns.clone(),
+            tokens: tokens.parse().ok(),
         });
     }
     out

@@ -120,16 +120,16 @@ pub fn parse_decls(text: &str) -> Result<Vec<Decl>, String> {
             continue;
         }
         let f: Vec<&str> = l.split_whitespace().collect();
-        if f.len() != 3 {
+        let [output, source, rule] = f.as_slice() else {
             return Err(format!(
                 ".sherd-slices:{}: expected `<output> <source> <rule>`",
                 n + 1
             ));
-        }
+        };
         out.push(Decl {
-            output: PathBuf::from(f[0]),
-            source: f[1].to_string(),
-            rule: Rule::parse(f[2])
+            output: PathBuf::from(output),
+            source: (*source).to_string(),
+            rule: Rule::parse(rule)
                 .map_err(|e| format!(".sherd-slices:{}: {e}", n + 1))?,
         });
     }

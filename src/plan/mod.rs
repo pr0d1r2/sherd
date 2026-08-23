@@ -157,18 +157,18 @@ pub fn open_tasks(root: &Path) -> Vec<Task> {
                 continue;
             }
             let cells: Vec<&str> = line.split('|').collect();
-            if cells.len() < 3 || !cells[0].starts_with('T') {
+            let [id, state, text, ..] = cells.as_slice() else {
                 continue;
-            }
-            let status = cells[1].chars().next().unwrap_or(' ');
-            if status != '.' && status != '~' {
+            };
+            let status = state.chars().next().unwrap_or(' ');
+            if !id.starts_with('T') || (status != '.' && status != '~') {
                 continue;
             }
             out.push(Task {
                 node: node.strip_prefix(root).unwrap_or(&node).to_path_buf(),
-                id: cells[0].to_string(),
+                id: (*id).to_string(),
                 status,
-                text: cells[2].to_string(),
+                text: (*text).to_string(),
                 cites: cells.get(3).unwrap_or(&"-").to_string(),
             });
         }

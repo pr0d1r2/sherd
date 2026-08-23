@@ -101,10 +101,13 @@ pub fn unreflected_bugs(spec: &str) -> Vec<(String, String)> {
             continue;
         }
         let cells: Vec<&str> = line.split('|').collect();
-        if cells.len() < 4 || !cells[0].starts_with('B') || cells[0] == "id" {
+        let [id, _date, cause, fix @ ..] = cells.as_slice() else {
+            continue;
+        };
+        if !id.starts_with('B') || *id == "id" {
             continue;
         }
-        let fix = cells[3..].join("|");
+        let fix = fix.join("|");
         let names_invariant =
             fix.split(|c: char| !c.is_ascii_alphanumeric()).any(|w| {
                 w.len() > 1
@@ -112,10 +115,7 @@ pub fn unreflected_bugs(spec: &str) -> Vec<(String, String)> {
                     && w[1..].chars().all(|d| d.is_ascii_digit())
             });
         if !names_invariant {
-            out.push((
-                cells[0].to_string(),
-                cells[2].chars().take(58).collect(),
-            ));
+            out.push(((*id).to_string(), cause.chars().take(58).collect()));
         }
     }
     out
