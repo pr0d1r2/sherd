@@ -13,6 +13,7 @@ self|src/lens|pack assembly, depth `rule`|`why`, budget verdict
 sib|src/tokens|`itok` facade, counts w/ method label, entry cost, working budget
 sib|src/spec|`microlith` facade, §-section split, structural check, fmt
 sib|src/fed|`§F` parse, edges, chain root→node, `SPEC.md` discovery
+sib|src/adopt|foreign single-file spec → federation: row placement, citation rewrite, conservation
 sib|src/ollama|local endpoint client, `num_ctx`, fence extraction
 sib|src/tdd|red→judge→green→gate→repair loop, source region edits
 sib|src/plan|open `§T` rows, horizon, confidence, `apply` one step

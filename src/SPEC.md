@@ -10,6 +10,7 @@ dir|owns|⊥owns|tokens
 tokens|`itok` facade, counts w/ method label, entry cost, working budget|spec structure, federation edges|-
 spec|`microlith` facade, §-section split, structural check, fmt|token counts, `§F`/`§N`|-
 fed|`§F` parse, edges, chain root→node, `SPEC.md` discovery|counting, rendering|-
+adopt|foreign single-file spec → federation: row placement, citation rewrite, conservation|structure discovery (`fed`), parsing (`spec`), counting (`tokens`)|-
 lens|pack assembly, depth `rule`\|`why`, budget verdict|parsing, counting internals|-
 ollama|local endpoint client, `num_ctx`, fence extraction|prompt construction, loop control|-
 tdd|red→judge→green→gate→repair loop, source region edits|HTTP, token counting|-

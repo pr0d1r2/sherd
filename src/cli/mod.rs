@@ -25,6 +25,7 @@ sherd -- federated SPEC.md for small-context local models
   sherd coverage [--check|--record]  coverage floor vs .coverage
   sherd validate         DAG + ids + ceilings + slice drift, one verdict
   sherd split [dir]      propose a federation split. writes nothing
+  sherd adopt <dir> [--map FILE] [--check]  migrate a single-file SPEC.md onto a federation
   sherd sync [dir] [--check]  regenerate §N from §F. exit 1 if it wrote
   sherd route <query>    which node owns a question. 0 hit · 2 miss · 3 ambiguous
   sherd review [rev]     mechanical checks on what a commit added (default HEAD)
@@ -111,6 +112,10 @@ pub fn run_args(mut args: Vec<String>) -> ExitCode {
                 apply,
             )
         }
+        Some("adopt") => match args.get(1).filter(|a| !a.starts_with("--")) {
+            Some(_) => adopt_cmd(&root, &args),
+            None => usage("adopt needs a dir"),
+        },
         Some("sync") => {
             let check = args.iter().any(|a| a == "--check");
             let dir = args.get(1).filter(|a| !a.starts_with("--"));
@@ -386,6 +391,130 @@ fn split_cmd(root: &Path, dir: &Path, apply: bool) -> ExitCode {
     let spec = std::fs::read_to_string(dir.join("SPEC.md")).unwrap_or_default();
     print_structure(&proposed, &spec);
     ExitCode::SUCCESS
+}
+
+/// `sherd adopt <dir> [--map FILE] [--check]` -- a foreign single-file
+/// `SPEC.md` onto a federation.
+///
+/// Without `--map` this PROPOSES and writes nothing, exactly as `split` does
+/// and for the same reason: which node owns which rule is a judgement
+/// (`src/adopt:V2`). The proposal is printed AS the map file, so `sherd adopt
+/// <dir> > map`, edit, `sherd adopt <dir> --map map` is the whole workflow.
+///
+/// Exit 1 means a migration is PENDING or was WRITTEN, which is `sync`'s
+/// discipline one verb over: a tree that still has rows to move was not
+/// clean when it was committed. A rerun over a migrated tree finds nothing
+/// to move and exits 0 (`src/adopt:V6`).
+fn adopt_cmd(root: &Path, args: &[String]) -> ExitCode {
+    let dry = args.iter().any(|a| a == "--check");
+    match flag_value(args, "--map") {
+        None => adopt_propose(root),
+        Some(file) => adopt_with_map(root, file, dry),
+    }
+}
+
+/// The argument after a flag, e.g. the `FILE` of `--map FILE`.
+fn flag_value<'a>(args: &'a [String], flag: &str) -> Option<&'a String> {
+    let at = args.iter().position(|a| a == flag)?;
+    args.get(at.saturating_add(1))
+        .filter(|v| !v.starts_with("--"))
+}
+
+/// PROPOSE, and print the proposal in the map's own format.
+fn adopt_propose(root: &Path) -> ExitCode {
+    let proposal = match crate::adopt::propose(root) {
+        Ok(p) => p,
+        Err(e) => return adopt_failed(&e),
+    };
+    for p in &proposal.placements {
+        println!("{} {}\t# {}", p.id, p.home, p.why.join(" "));
+    }
+    adopt_summary(&proposal);
+    if proposal.placements.is_empty() {
+        return ExitCode::SUCCESS;
+    }
+    ExitCode::from(1)
+}
+
+/// What the proposal found, on stderr so stdout stays a usable map file.
+///
+/// The unplaced rows are NAMED (`src/adopt:V2`). A row nobody claims is a
+/// legitimate resting state at root, but it is a reader's decision to leave
+/// it there, and a count that hid them would make the decision for them.
+fn adopt_summary(p: &crate::adopt::Proposal) {
+    eprintln!(
+        "  {} rows read · {} placed · {} unplaced",
+        p.rows_in,
+        p.placements.len(),
+        p.unplaced.len()
+    );
+    if !p.unplaced.is_empty() {
+        eprintln!("  staying at root: {}", p.unplaced.join(" "));
+    }
+}
+
+/// Apply a map, or report what applying it would refuse.
+fn adopt_with_map(root: &Path, file: &str, dry: bool) -> ExitCode {
+    let map = match read_map_file(file) {
+        Ok(m) => m,
+        Err(e) => return adopt_failed(&e),
+    };
+    if dry {
+        return adopt_dry(root, &map);
+    }
+    match crate::adopt::apply(root, &map) {
+        Ok(r) => adopt_wrote(&r),
+        Err(e) => adopt_failed(&e),
+    }
+}
+
+/// Read and parse a map file.
+fn read_map_file(
+    file: &str,
+) -> Result<std::collections::BTreeMap<String, String>, String> {
+    let text = std::fs::read_to_string(file)
+        .map_err(|e| format!("adopt: {file}: {e}"))?;
+    crate::adopt::read_map(&text)
+}
+
+/// `--check`: every refusal, and nothing written.
+fn adopt_dry(
+    root: &Path,
+    map: &std::collections::BTreeMap<String, String>,
+) -> ExitCode {
+    let refused = crate::adopt::refusals(root, map);
+    for r in &refused {
+        eprintln!("{r}");
+    }
+    if refused.is_empty() {
+        eprintln!("  {} rows would move · nothing written", map.len());
+        return ExitCode::SUCCESS;
+    }
+    ExitCode::from(1)
+}
+
+/// The counts a migration is judged by (`src/adopt:V1`), then exit 1 because
+/// it WROTE.
+fn adopt_wrote(r: &crate::adopt::Report) -> ExitCode {
+    for f in &r.files {
+        println!("{f}");
+    }
+    for v in &r.carried {
+        eprintln!("  carried in, not caused here: {v}");
+    }
+    eprintln!(
+        "  {} rows read · {} moved · {} stayed at root · {} files written",
+        r.rows_in,
+        r.moved,
+        r.stayed,
+        r.files.len()
+    );
+    ExitCode::from(1)
+}
+
+fn adopt_failed(msg: &str) -> ExitCode {
+    eprintln!("{msg}");
+    ExitCode::from(1)
 }
 
 /// A node's path relative to root, with the root itself as `.` rather than
@@ -2661,5 +2790,48 @@ mod tests {
         assert!(USAGE.contains("0 clean"), "{USAGE}");
         assert!(USAGE.contains("1 violation"), "{USAGE}");
         assert!(USAGE.contains("2 usage"), "{USAGE}");
+    }
+
+    /// `adopt` writes into ANOTHER repository, so the dir is not optional and
+    /// defaulting it to the CWD is the shape `B5` records -- a verb answering
+    /// confidently about the wrong tree. Here it would answer by writing.
+    #[test]
+    fn adopt_without_a_dir_is_usage_rather_than_this_repo() {
+        assert_eq!(run_args(vec!["adopt".into()]), ExitCode::from(2));
+        assert_eq!(
+            run_args(vec!["adopt".into(), "--check".into()]),
+            ExitCode::from(2),
+            "a flag is not a dir"
+        );
+    }
+
+    /// A monolith with one movable rule, and a declared node to move it to.
+    fn adopt_fixture() -> Result<crate::testrepo::TestRepo, String> {
+        let r = crate::testrepo::TestRepo::new("cli-adopt")?;
+        r.write(
+            "SPEC.md",
+            "# SPEC\n\n## \u{a7}G GOAL\n\nx\n\n## \u{a7}F FEDERATION\n\n\
+             dir|owns|\u{22a5}owns|tokens\nsrc|parser input|the goal|-\n\n\
+             ## \u{a7}V INVARIANTS\n\nV1: the parser rejects bad input\n",
+        )?;
+        r.write("src/SPEC.md", &spec::scaffold("src", &[]))?;
+        Ok(r)
+    }
+
+    /// The proposal writes nothing and exits 1 while a migration is pending;
+    /// a tree with nothing left to move exits 0 (`src/adopt:V6`).
+    #[test]
+    fn adopt_proposes_then_reruns_clean() -> Result<(), String> {
+        let r = adopt_fixture()?;
+        let dir = r.path().display().to_string();
+        let args = vec!["adopt".to_string(), dir];
+        assert_eq!(run_args(args.clone()), ExitCode::from(1), "V1 can move");
+        let map = r.path().join("map");
+        std::fs::write(&map, "V1 src\n").map_err(|e| e.to_string())?;
+        let mut with = args.clone();
+        with.extend(["--map".to_string(), map.display().to_string()]);
+        assert_eq!(run_args(with), ExitCode::from(1), "it wrote");
+        assert_eq!(run_args(args), ExitCode::SUCCESS, "nothing left to move");
+        Ok(())
     }
 }

@@ -109,6 +109,7 @@
 SPEC.md        12200
 dev            13000
 src            12300
+src/adopt      14500
 src/assay      13600
 src/cli        13200
 src/code       13200
@@ -135,3 +136,9 @@ src/tokens     12800
 # and NOT §B or §R, so a bug row has never cost a chain a single token. Root
 # went 10,348 -> 10,350. What the promotion bought is one reading of the
 # gate's inputs and history filed where it happened -- not budget.
+#
+# `src/adopt` added 2026-08-25 at 14,500, ~22% over its measured 11,906 --
+# the slack the header asks for. It inherited `src` at 12,300 by longest
+# prefix, which IS checked (V104), and that left it 3%, which reads as
+# deliberate and was not: the node is new and its §V section is the whole
+# design, so the next legitimate row would have been a raise.
