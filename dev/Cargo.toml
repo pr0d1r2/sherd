@@ -1,0 +1,38 @@
+[package]
+name = "bbx-dev"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+license = "MIT"
+description = "development-only tooling for the blackbox repository -- never published"
+# THE POINT OF THIS CRATE. `bbx-dev` maintains files in THIS repository and is
+# meaningless to anyone who installs `bbx-cli`. A second `[[bin]]` in the main
+# package would have shipped in the tarball and landed on a consumer's PATH; a
+# separate, unpublished workspace member cannot, with no `cfg` gymnastics and
+# no `exclude` entry to keep in sync.
+publish = false
+
+[dependencies]
+# A PATH dep, and the one shape V101 does not forbid. That rule is about a
+# SIBLING REPOSITORY moving under us -- `../itok` did exactly that and cost a
+# day (B5). A workspace member shares this repo's commit, its lock and its
+# gate, so there is no independent thing to drift: the two are versioned by
+# the same sha or neither is.
+#
+# DEFAULT features, though this crate needs none of them. `default-features =
+# false` is what belongs here and it does not compile: `src/assay` and
+# `src/land` reach into `crate::tdd`, which is `ollama`-gated, so the
+# featureless build fails with four E0432/E0433 -- `.:B15`, found by writing
+# this line. `.:T99` moves the helpers to their owner and gates the build so
+# it cannot regress; this comment goes with it.
+bbx-cli = { path = ".." }
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+unwrap_used = "warn"
+expect_used = "warn"
+panic = "warn"
+indexing_slicing = "warn"
+arithmetic_side_effects = "warn"

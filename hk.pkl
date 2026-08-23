@@ -49,7 +49,7 @@ local fast = new Mapping<String, Step> {
   ["clippy"] {
     glob = List("**/*.rs")
     depends = List("fmt")
-    check = "cargo clippy --all-targets -- -D warnings -A clippy::too_many_lines -A clippy::cognitive_complexity -A clippy::excessive_nesting -A clippy::fn_params_excessive_bools -A clippy::struct_excessive_bools -A clippy::unwrap_used -A clippy::expect_used -A clippy::panic -A clippy::indexing_slicing -A clippy::arithmetic_side_effects -A clippy::todo -A clippy::unimplemented -A clippy::dbg_macro -A clippy::too_many_arguments -A clippy::type_complexity"
+    check = "cargo clippy --workspace --all-targets -- -D warnings -A clippy::too_many_lines -A clippy::cognitive_complexity -A clippy::excessive_nesting -A clippy::fn_params_excessive_bools -A clippy::struct_excessive_bools -A clippy::unwrap_used -A clippy::expect_used -A clippy::panic -A clippy::indexing_slicing -A clippy::arithmetic_side_effects -A clippy::todo -A clippy::unimplemented -A clippy::dbg_macro -A clippy::too_many_arguments -A clippy::type_complexity"
   }
   // THE RATCHET. The count may fall, never rise. `.lint-debt` carries the
   // number and the reasoning; `clippy.toml` carries the thresholds.
@@ -57,7 +57,7 @@ local fast = new Mapping<String, Step> {
     glob = List("**/*.rs", "clippy.toml", ".lint-debt")
     depends = List("clippy")
     check = """
-      now=$(cargo clippy --all-targets --message-format=short 2>&1 | grep -cE '^src/.*: warning')
+      now=$(cargo clippy --workspace --all-targets --message-format=short 2>&1 | grep -cE '^(src|dev)/.*: warning')
       was=$(awk '/^total /{print $2}' .lint-debt)
       [ "$now" -le "$was" ] || { echo "hk: lint debt ROSE, $was -> $now. The limits in clippy.toml are the shape the target model handles (.:R44); adding to the debt walks away from the §G TARGET. Fix the new sites, or record WHY in .lint-debt with the raise." >&2; exit 1; }
       [ "$now" -eq "$was" ] || echo "hk: lint debt fell $was -> $now. Run: hk run fix"
@@ -71,7 +71,7 @@ local fast = new Mapping<String, Step> {
     // `hk check --all` refused, and this step then rewrote 274 to 275 behind
     // the commit.
     fix = """
-      now=$(cargo clippy --all-targets --message-format=short 2>&1 | grep -cE '^src/.*: warning')
+      now=$(cargo clippy --workspace --all-targets --message-format=short 2>&1 | grep -cE '^(src|dev)/.*: warning')
       was=$(awk '/^total /{print $2}' .lint-debt)
       [ "$now" -le "$was" ] || { echo "hk: refusing to RECORD a raise, $was -> $now. A ratchet that writes down whatever it measures is not a ratchet. Fix the new sites, or edit .lint-debt by hand with the reason." >&2; exit 1; }
       awk -v n="$now" '/^total /{print "total " n; next} {print}' .lint-debt > .lint-debt.new
@@ -86,7 +86,7 @@ local fast = new Mapping<String, Step> {
     // is the spec.
     glob = List("**/*.rs", "**/SPEC.md", "Cargo.toml", ".context-limits")
     depends = List("clippy")
-    check = "cargo test"
+    check = "cargo test --workspace"
   }
   // THE DOGFOOD. blackbox checks its own federated spec with the binary being
   // built, so a rule this repo cannot pass is a rule it cannot ship.
@@ -255,6 +255,19 @@ local fast = new Mapping<String, Step> {
   // when its TARGET moves, and the target's referrer is usually not in the
   // changed set -- scoping this to changed files would make it pass on
   // exactly the commit that breaks the link.
+  // The badge block is GENERATED, by `bbx-dev` rather than by a shell
+  // script. A number typed into prose is true the day it is typed and
+  // quietly wrong after -- `.:B4` in a README instead of a commit message --
+  // and the generator that prevents it is itself code, so it is gated,
+  // typed and unit-tested like everything else here. The first draft WAS a
+  // shell script, and it had two parser defects within ten minutes of
+  // existing; `dev/SPEC.md:V4` is one of them, kept as a test.
+  ["readme-badges"] {
+    glob = List("README.md", "dev/src/**", "Cargo.toml", "hk.pkl", ".coverage", ".lint-debt", "flake.lock", ".github/workflows/ci.yml")
+    depends = List("test")
+    check = "cargo run -q -p bbx-dev -- badges --check"
+    fix = "cargo run -q -p bbx-dev -- badges"
+  }
   ["links"] {
     glob = List("**/*")
     check = "command -v lychee >/dev/null 2>&1 || { echo 'hk: lychee is not on PATH -- re-enter the dev shell (`nix develop`, or `direnv reload`). This is a MISSING TOOL, not a finding.' >&2; exit 1; }; lychee --offline --no-progress . || { echo 'hk: a relative link does not resolve. Fix the path, or the file it points at.' >&2; exit 1; }"
@@ -275,7 +288,7 @@ local all = (fast) {
     glob = List("**/*.rs", ".coverage")
     depends = List("budget")
     check = """
-      out=$(cargo llvm-cov --summary-only 2>&1) || { echo "$out" >&2; exit 1; }
+      out=$(cargo llvm-cov --workspace --summary-only 2>&1) || { echo "$out" >&2; exit 1; }
       now=$(printf '%s' "$out" | awk '/^TOTAL/{gsub("%","",$10); print $10}')
       was=$(awk '/^lines /{print $2}' .coverage)
       [ -n "$now" ] || { echo 'hk: could not read a coverage total -- that is an ERROR, not a floor breach (.:tdd:V26)' >&2; exit 1; }
@@ -285,7 +298,7 @@ local all = (fast) {
       """
     // Same rule as `lint-debt`, mirrored: this one may only RAISE.
     fix = """
-      out=$(cargo llvm-cov --summary-only 2>&1) || { echo "$out" >&2; exit 1; }
+      out=$(cargo llvm-cov --workspace --summary-only 2>&1) || { echo "$out" >&2; exit 1; }
       now=$(printf '%s' "$out" | awk '/^TOTAL/{gsub("%","",$10); print $10}')
       was=$(awk '/^lines /{print $2}' .coverage)
       [ -n "$now" ] || exit 1
