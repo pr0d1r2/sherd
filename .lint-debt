@@ -266,7 +266,7 @@
 #     counters; `saturating_add` on a line counter is noise, not safety.
 #   98 too_many_lines is the SHAPE ratchet's business, not this one.
 density 14.6
-shape 9.3
-count 254
-excess 1617
-loc 17375
+shape 9.2
+count 255
+excess 1620
+loc 17454
