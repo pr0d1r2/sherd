@@ -31,9 +31,9 @@
 >
 > **Two of the functions here were written by the 20B this project is about.** `src/fed/` contains work authored by gpt-oss:20b through `bbx tdd`, kept with its defects recorded in that node's `§B` rather than smoothed over — because a tool that claims small models can build software has to show what happens when one does.
 >
-> **The method is spec-driven development, federated.** [`SPEC.md`](SPEC.md) is the law rather than a description written afterwards, and there are sixteen of them: one per node, each owning the rules for its own directory. 88 `§B` rows across the tree record every defect found so far paired with the rule that now catches it. A rule and its checker land in the same commit, because a rule with no runner is a comment (§V74).
+> **The method is spec-driven development, federated.** [`SPEC.md`](SPEC.md) is the law rather than a description written afterwards, and there are seventeen of them: one per node, each owning the rules for its own directory. 88 `§B` rows across the tree record every defect found so far paired with the rule that now catches it. A rule and its checker land in the same commit, because a rule with no runner is a comment (§V74).
 >
-> **The guardrails are git hooks that also run on CI.** Entering the dev shell (`nix develop`, or `direnv allow`) installs `pre-commit` and `pre-push`, which run [hk](https://github.com/jdx/hk) against one definition of the gate in [`hk.pkl`](hk.pkl) — 7 steps on commit, 8 on push, the slow one being coverage. [`ci.yml`](.github/workflows/ci.yml) calls that same definition on three platforms, so a laptop and a runner cannot disagree. The architecture diagram below is `bbx graph` output for the same reason: generated from the `§F` tables, so it cannot drift from what the specs declare.
+> **The guardrails are git hooks that also run on CI.** Entering the dev shell (`nix develop`, or `direnv allow`) installs `pre-commit` and `pre-push`, which run [hk](https://github.com/jdx/hk) against one definition of the gate in [`hk.pkl`](hk.pkl) — 23 steps on commit, 24 on push, the slow one being coverage. [`ci.yml`](.github/workflows/ci.yml) calls that same definition on three platforms, so a laptop and a runner cannot disagree. The architecture diagram below is `bbx graph` output for the same reason: generated from the `§F` tables, so it cannot drift from what the specs declare.
 >
 > **The record is deliberately unflattering.** `§B12` records that `AGENTS.md` says "never commit to `main`", that nothing enforced it, and that ~20 commits landed on `main` in one session anyway — the rule was read by the agent it governs and still lost to convenience. `§B4` records a "95x" improvement claimed across six commit messages that measured 2.1x against a denominator anyone would actually use.
 >
@@ -151,6 +151,21 @@ Hardware, measured on both boxes:
 Capability is identical; the M1 Pro is ~3x slower at prefill and ~2x at
 decode. Federation is worth *more* on the slower machine.
 
+## Install
+
+Not on crates.io yet, and this section will say `cargo install bbx-cli` the
+day it is. Until then:
+
+```sh
+nix develop            # the pinned toolchain, hk, and bbx on PATH
+cargo build --release  # or build it yourself; every dep is from crates.io
+```
+
+`bbx` needs no endpoint for the deterministic verbs — `budget`, `lens`,
+`fed`, `graph`, `check`, `review`, `slice`, `plan` are pure functions of your
+tree and never call a model. Only `ask`, `tdd` and `oneshot` do, and they
+need an Ollama-compatible endpoint you point at yourself.
+
 ## Use
 
 ```sh
@@ -173,6 +188,57 @@ bbx oneshot src/fed V2 "<task>"  # the monolith arm, for comparison
 3. **green** — the failing test + signatures + the *call contract* extracted from the test.
 4. **gate** — `cargo test` + structural check. Local, deterministic, **zero tokens**.
 5. **repair** — capped, and structurally unable to touch the test.
+
+## Exit codes
+
+A contract, because scripts read them, and the same three for every verb:
+
+| code | meaning |
+|---|---|
+| `0` | clean — nothing to report |
+| `1` | a violation: a chain over its ceiling, a structural finding, a drifted slice |
+| `2` | usage — a verb, flag or argument that does not exist |
+
+A refusal is not a crash. `bbx budget` exiting `1` is the gate working.
+
+## Use it as a library
+
+The binary is a shim over a lib, and the lib is what a hook or another tool
+should call rather than parsing our output:
+
+```rust
+use std::path::Path;
+
+let root = Path::new(".");
+let pack = bbx::lens::pack(root, &root.join("src/fed"), bbx::lens::Depth::Rule)?;
+let ceiling = bbx::lens::ceiling_for(root, &root.join("src/fed"))?;
+let nodes = bbx::fed::discover(root);
+# Ok::<(), Box<dyn std::error::Error>>(())
+```
+
+`bbx-dev`, this repository's own tooling, is the first consumer of that lib —
+it counts nodes with `fed::discover` rather than walking the tree a second
+time.
+
+## Guarantees
+
+- **The deterministic core never calls a model.** Parsing, the DAG, budgets
+  and ceilings are pure Rust. `--no-default-features` is meant to prove it by
+  building without the endpoint at all — and `§B15` records that this
+  configuration is currently broken, which is exactly the kind of claim this
+  section is supposed to be checkable against.
+- **Generated output is generated, not maintained.** The architecture diagram
+  comes from `bbx graph`, the badge block from `bbx-dev badges`, the
+  distilled slices from `bbx slice --check`. A drifted slice fails the gate.
+- **The gate is one definition.** [`hk.pkl`](hk.pkl) declares every step;
+  hooks and [CI](.github/workflows/ci.yml) both run that file, on three
+  platforms.
+- **Ratchets have a direction.** Coverage may only rise, lint debt may only
+  fall, and the gate refuses a commit that records a raise rather than paying
+  it.
+- **What it cannot do is written down.** The Status section below names the
+  verbs that are specced and unbuilt, and `§B` names every defect found so
+  far. Neither list is curated for how it reads.
 
 ## What was learned the hard way
 
@@ -202,6 +268,23 @@ Two LLM-authored functions live in `src/fed/`, written by gpt-oss:20b through
 `bbx tdd`, with their defects recorded in that node's `§B` rather than smoothed
 over.
 
+## The name
+
+A **black box** is the thing you cannot see inside. That is the ordinary
+complaint about a language model, and it is not the sense meant here.
+
+A flight recorder is also a black box, and it is the opposite: the one
+component built so that afterwards you can say exactly what happened. It
+survives the crash on purpose. `§B` in every `SPEC.md` is that recorder —
+fourteen entries at the root, each a defect paired with the rule that now
+catches it, kept whether or not it flatters the project.
+
+The third sense is the working one. In control theory a black box is a system
+you can only characterise from outside, by what you feed it and what comes
+back. A 20B model with a 131,072-token window is precisely that: you cannot
+inspect its reasoning, so the only thing you can engineer is what goes in.
+This tool engineers what goes in.
+
 ## Reading the specs
 
 `SPEC.md` files are caveman-encoded — symbols are load-bearing. The key is in
@@ -215,6 +298,12 @@ over.
 Sections run `§G` goal · `§C` constraints · `§I` interfaces · `§R` research ·
 `§V` invariants · `§T` tasks · `§B` bugs. `§R` and `§B` are where the evidence
 lives.
+
+## Changelog
+
+[CHANGELOG.md](CHANGELOG.md), in [Keep a Changelog](https://keepachangelog.com)
+form. Pre-`1.0` a minor bump may change behaviour; what is built and what is
+merely specced is in Status above rather than implied by the version number.
 
 ## Contributing
 
