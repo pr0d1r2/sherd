@@ -1,3 +1,8 @@
+#![cfg(feature = "ollama")]
+//! Gated with the loop it measures: every titration here needs a live 20B,
+//! and the corpora it reads live in `bbx::assay`, which the `ollama` feature
+//! carries (`.:B15`).
+
 //! T83, run against a live endpoint: one implementation, graded twice.
 //!
 //! The implementation is written BLIND in both arms, so the ONLY variable is

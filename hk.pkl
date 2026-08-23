@@ -295,6 +295,20 @@ local all = (fast) {
     fix = "cargo run -q -p bbx-dev -- readme"
   }
 
+  // The FEATURELESS build, which §C claims and nothing checked. `.:B15`:
+  // `src/assay` and `src/land` both reached into the `ollama`-gated `tdd`,
+  // so `--no-default-features` had not compiled since the feature split
+  // while `Cargo.toml` documented that configuration as the deterministic,
+  // networkless core. A claim in a manifest is still a claim (V74).
+  //
+  // On PUSH rather than on commit: it is a second full compile with a
+  // different feature set, so cargo shares nothing with the step above it.
+  ["no-default-features"] {
+    glob = List("**/*.rs", "Cargo.toml")
+    depends = List("test")
+    check = "cargo build --no-default-features || { echo 'hk: the featureless build is RED. §C says --no-default-features yields the deterministic, networkless core; a module that reaches into an `ollama`-gated one breaks that claim (.:B15).' >&2; exit 1; }"
+  }
+
   // Coverage is ~60s, so it runs on PUSH and in `hk check`, never on commit:
   // a hook you are tempted to bypass is worse than no hook.
   //

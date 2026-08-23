@@ -1,3 +1,8 @@
+#![cfg(feature = "ollama")]
+//! Gated with the loop it measures: every titration here needs a live 20B,
+//! and the corpora it reads live in `bbx::assay`, which the `ollama` feature
+//! carries (`.:B15`).
+
 //! T77 and T82, run against a live endpoint.
 //!
 //! `generation_titration` — does invariant PRECISION drive writing? R42 and

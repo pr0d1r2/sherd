@@ -5,7 +5,9 @@
 //! evidence about it is strong enough to move onto the trunk, and refuses
 //! with the number when it is not.
 
+use crate::{fed, spec};
 use std::path::Path;
+use std::process::Command;
 
 /// Believability a node must reach before its work lands unattended.
 ///
@@ -238,7 +240,7 @@ pub fn land_with(
 ) -> Result<String, String> {
     let branch = current_branch(root)?;
     refuse_unlandable_state(root, &branch)?;
-    let gate_ok = crate::tdd::gate_with(root, cargo)?.0;
+    let gate_ok = gate_with(root, cargo)?.0;
     let e = evidence(root, &branch, gate_ok)?;
     eprintln!(
         "land: {} commit(s) on {branch} · gate {} · {} finding(s) · {} node(s) · believability {:.2}",
@@ -288,7 +290,7 @@ fn merge_ff(root: &Path, branch: &str, push: bool) -> Result<String, String> {
 /// # Errors
 /// Refusal reason, or git failure.
 pub fn land(root: &Path, push: bool) -> Result<String, String> {
-    land_with(root, push, &crate::tdd::cargo_bin())
+    land_with(root, push, &cargo_bin())
 }
 
 #[cfg(test)]
@@ -767,4 +769,182 @@ mod git_tests {
         assert!(git(r.path(), &["rev-parse", "nonexistent-ref"]).is_err());
         Ok(())
     }
+}
+
+/// Step 3 of the loop, and the gate `bbx land` runs before it's allowed to
+/// fast-forward. Local, deterministic, zero tokens. Reports what RAN, not
+/// only what failed (`.:V48`).
+///
+/// Lives HERE rather than in `src/tdd` (`.:T99`). `land` is the node whose
+/// whole job is deciding whether work earned its merge, and it was calling
+/// `crate::tdd::gate_with` to do that -- so a module gated behind the
+/// `ollama` feature was load-bearing for a command that never calls a
+/// model. `cargo build --no-default-features` therefore did not compile,
+/// while `Cargo.toml` documented that configuration as the networkless
+/// core §C demands (`.:B15`).
+///
+/// # Errors
+/// The toolchain could not be RUN. That is not a red gate: a gate that did
+/// not execute has said nothing, and returning `false` for it made a missing
+/// `cargo` indistinguishable from a failing test. In `drive_from` that
+/// mattered -- step 1 requires the gate to be RED, so an absent toolchain
+/// read as "red as required" and the loop would have written code against a
+/// gate that never ran. `.:V48` for a subprocess (`.:tdd:B24`).
+pub fn gate(root: &Path) -> Result<(bool, String), String> {
+    gate_with(root, &cargo_bin())
+}
+
+/// The same gate, with an explicit toolchain.
+///
+/// # Errors
+/// See [`gate`].
+pub fn gate_with(root: &Path, cargo: &str) -> Result<(bool, String), String> {
+    // Plain `cargo test`, exactly `hk`'s test step. NOT `RUSTFLAGS=-D
+    // warnings`: RUSTFLAGS reaches every path dep, so `itok`'s own two
+    // `dead_code` warnings turned this gate red for code blackbox does not
+    // own -- and then every candidate and every repair was judged against a
+    // gate that could not go green whatever the model wrote (B26).
+    //
+    // `.:B6` found this and fixed `hk.pkl` by moving `-D warnings` after `--`
+    // on the CLIPPY step, where it scopes to this crate. The loop kept the
+    // old mechanism, which is `src/fed:B9`: fixing a shared rule must be
+    // followed by finding who does not use it.
+    //
+    // BOUNDED: warnings are now clippy's job and clippy is `hk`'s step, not
+    // this one. The loop's gate no longer catches a warnings-only regression;
+    // the commit gate still does, and `bbx apply` cannot commit without it.
+    let out = Command::new(cargo)
+        .args(["test", "--offline"])
+        .current_dir(root)
+        .output();
+    let (tests_ok, mut report) = match out {
+        Ok(o) => {
+            let s = format!(
+                "{}{}",
+                String::from_utf8_lossy(&o.stdout),
+                String::from_utf8_lossy(&o.stderr)
+            );
+            (
+                o.status.success(),
+                format!(
+                    "=== cargo test: {} ===\n{}",
+                    if o.status.success() { "PASS" } else { "FAIL" },
+                    tail(&s, 2500)
+                ),
+            )
+        }
+        Err(e) => {
+            return Err(format!(
+                "the gate could not RUN: `{cargo}` -- {e}. set BBX_CARGO or enter the \
+             dev shell. a gate that did not execute is not a gate that passed \
+             or failed"
+            ));
+        }
+    };
+    // spec::check runs in-process -- no subprocess, no stdout scraping.
+    let mut viol = 0;
+    let nodes = fed::discover(root);
+    for n in &nodes {
+        if let Ok(t) = std::fs::read_to_string(n.join("SPEC.md")) {
+            viol += spec::check(&t).len();
+        }
+    }
+    report.push_str(&format!(
+        "\n=== bbx check: {} === {} nodes examined, {viol} violations\n",
+        if viol == 0 { "PASS" } else { "FAIL" },
+        nodes.len()
+    ));
+    // Slice drift, by the same function `bbx slice --check` calls.
+    let drift = crate::slice::drifted(root)?;
+    report.push_str(&format!(
+        "=== slice: {} === {} drifted\n",
+        if drift.is_empty() { "PASS" } else { "FAIL" },
+        drift.len()
+    ));
+    // The loop's gate and the commit's gate are ONE rule, which is what the
+    // header claims and what B30 measured as false: MERGEABLE was declared
+    // for code `hk` refuses on fmt and on the lint ratchet.
+    let (fmt, fmt_r) = fmt_ok(root, cargo);
+    let (debt, debt_r) = lint_debt_ok(root, cargo);
+    report.push_str(&fmt_r);
+    report.push_str(&debt_r);
+    Ok((
+        tests_ok && viol == 0 && drift.is_empty() && fmt && debt,
+        report,
+    ))
+}
+
+/// The toolchain, from `BBX_CARGO` or the default. The EDGES read the env;
+/// the loop carries it in `Run` so a test can point at a scripted one
+/// without mutating process-global state that other tests share.
+#[must_use]
+pub fn cargo_bin() -> String {
+    std::env::var("BBX_CARGO").unwrap_or_else(|_| "cargo".into())
+}
+
+/// `cargo fmt --check`, as `hk`'s first step runs it.
+///
+/// The model's insertion is not formatted -- the generated test landed at
+/// column 0 inside a module -- so this refuses a candidate the commit gate
+/// would refuse (B30).
+pub(crate) fn fmt_ok(root: &Path, cargo: &str) -> (bool, String) {
+    let out = Command::new(cargo)
+        .args(["fmt", "--check"])
+        .current_dir(root)
+        .output();
+    let ok = out.is_ok_and(|o| o.status.success());
+    (
+        ok,
+        format!("=== fmt: {} ===\n", if ok { "PASS" } else { "FAIL" }),
+    )
+}
+
+/// THE RATCHET, as `hk` runs it: the count may fall, never rise.
+///
+/// `.lint-debt` carries the number. Without this the loop called code
+/// MERGEABLE that raised the debt 271 -> 276, which `hk` then refuses --
+/// so the loop's verdict did not predict the commit (B30).
+pub(crate) fn lint_debt_ok(root: &Path, cargo: &str) -> (bool, String) {
+    let Some(was) = recorded_debt(root) else {
+        return (true, String::new());
+    };
+    let Some(now) = clippy_warnings(root, cargo) else {
+        return (true, String::new());
+    };
+    let ok = now <= was;
+    let word = if ok { "PASS" } else { "ROSE" };
+    (
+        ok,
+        format!("=== lint debt: {word} === {now} (recorded {was})\n"),
+    )
+}
+
+/// How many warnings clippy reports for THIS crate's own sources.
+///
+/// `None` when clippy could not run: `.lint-debt` was read first, so there is
+/// simply nothing to compare, and refusing would block every candidate on a
+/// bench problem. The TEST step is what fails a broken toolchain (V26).
+fn clippy_warnings(root: &Path, cargo: &str) -> Option<usize> {
+    let o = Command::new(cargo)
+        .args(["clippy", "--all-targets", "--message-format=short"])
+        .current_dir(root)
+        .output()
+        .ok()?;
+    Some(
+        String::from_utf8_lossy(&o.stderr)
+            .lines()
+            .filter(|l| l.starts_with("src/") && l.contains(": warning"))
+            .count(),
+    )
+}
+
+/// The `total` line of `.lint-debt`, if the file is there.
+pub(crate) fn recorded_debt(root: &Path) -> Option<usize> {
+    let text = std::fs::read_to_string(root.join(".lint-debt")).ok()?;
+    text.lines()
+        .find_map(|l| l.strip_prefix("total ")?.trim().parse().ok())
+}
+
+pub(crate) fn tail(s: &str, n: usize) -> &str {
+    if s.len() <= n { s } else { &s[s.len() - n..] }
 }

@@ -1,3 +1,8 @@
+#![cfg(feature = "ollama")]
+//! Gated with the loop it measures: every titration here needs a live 20B,
+//! and the corpora it reads live in `bbx::assay`, which the `ollama` feature
+//! carries (`.:B15`).
+
 //! The mutation sweep, run against a live endpoint.
 //!
 //! Can a self-authored test kill a known-wrong implementation? `.:V111` says
