@@ -15,6 +15,7 @@ pub mod cli;
 pub mod code;
 
 // Test-only: a scratch git repo. Compiled into no binary.
+pub mod debt;
 pub mod fed;
 pub mod land;
 pub mod lens;

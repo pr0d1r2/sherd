@@ -10,8 +10,8 @@
 [![gate hk](https://img.shields.io/badge/gate-hk-6E4AFF)](hk.pkl)
 [![gate steps 27](https://img.shields.io/badge/gate_steps-27-6E4AFF)](hk.pkl)
 [![coverage floor 92.0%](https://img.shields.io/badge/coverage_floor-%E2%89%A592.0%25-brightgreen)](.coverage)
-[![lint debt 14.6/KLoC](https://img.shields.io/badge/lint_debt-%E2%89%A414.6%2FKLoC-orange)](.lint-debt)
-[![federated nodes 17](https://img.shields.io/badge/federated_nodes-17-6E4AFF)](SPEC.md)
+[![lint debt 14.4/KLoC](https://img.shields.io/badge/lint_debt-%E2%89%A414.4%2FKLoC-orange)](.lint-debt)
+[![federated nodes 18](https://img.shields.io/badge/federated_nodes-18-6E4AFF)](SPEC.md)
 
 [![nix flake](https://img.shields.io/badge/nix-flake-5277C3?logo=nixos&logoColor=white)](flake.nix)
 [![nixpkgs 26.05 (2026-08-20 - 5880666)](https://img.shields.io/badge/nixpkgs-26.05_(2026--08--20_--_5880666)-5277C3?logo=nixos&logoColor=white)](flake.lock)
@@ -97,6 +97,7 @@ nodes it was missing while this sentence claimed otherwise.
 |   |-- land
 |   |-- cli
 |   |-- code
+|   |-- debt
 |   `-- assay
 `-- dev
 ```
@@ -123,6 +124,7 @@ graph TD
     src_land[land]
     src_cli[cli]
     src_code[code]
+    src_debt[debt]
     src_assay[assay]
     root --> src
     root --> dev
@@ -139,6 +141,7 @@ graph TD
     src --> src_land
     src --> src_cli
     src --> src_code
+    src --> src_debt
     src --> src_assay
 ```
 <!-- END graph-mermaid -->
@@ -164,6 +167,7 @@ knows when to stop looking. Also generated, by `sherd graph --table`:
 | `src/land` | run branch → `main` when believability earns it | writing code, judging it, reading the diff |
 | `src/cli` | arg dispatch, usage, exit codes | every verb's logic |
 | `src/code` | read Rust source as text — split, public fns, call detection, signatures | judging what it reads, `SPEC.md` structure |
+| `src/debt` | a ratchet — measure, compare to a recorded floor, refuse the wrong way | deciding WHAT to measure, running the gate |
 | `src/assay` | a corpus + a compiler grader — measure WHETHER the model can, ⊥ make it | writing code with a model, judging a diff |
 <!-- END graph-table -->
 

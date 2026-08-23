@@ -25,6 +25,7 @@ sib|src/slice|distil a document to the part needed to ACT, generated
 sib|src/land|run branch → `main` when believability earns it
 sib|src/cli|arg dispatch, usage, exit codes
 sib|src/code|read Rust source as text — split, public fns, call detection, signatures
+sib|src/debt|a ratchet — measure, compare to a recorded floor, refuse the wrong way
 
 ## §C CONSTRAINTS
 

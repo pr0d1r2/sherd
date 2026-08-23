@@ -265,8 +265,8 @@
 #   48 arithmetic are index expressions (`i + 1` for a 1-indexed line) and
 #     counters; `saturating_add` on a line counter is noise, not safety.
 #   98 too_many_lines is the SHAPE ratchet's business, not this one.
-density 14.6
+density 14.4
 shape 9.2
-count 255
-excess 1620
-loc 17454
+count 253
+excess 1614
+loc 17472

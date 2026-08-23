@@ -63,19 +63,6 @@ pub struct Ceilings {
 /// skipped and a gate that then checked nothing.
 pub const DEFAULT_NODE: u64 = 2_000;
 
-/// Ceiling for the CODE half of one `.rs` file (`.:V50`).
-///
-/// Per FILE, not per node: a node may hold a second `.rs` beside `mod.rs`
-/// (`.:V119`), and each is measured on its own.
-pub const CEILING_FILE: u64 = 4_000;
-
-/// Ceiling for the TEST half of one `.rs` file (`.:V50`).
-///
-/// Counted SEPARATELY, never as one ceiling over both: a module with a large
-/// suite and a small implementation is a different thing from the reverse,
-/// and one number over the pair cannot tell them apart.
-pub const CEILING_TEST: u64 = 2_000;
-
 impl Ceilings {
     /// Parse the format. An unparsable limit is an ERROR, never a skipped
     /// row: itok's B7 skipped `SPEC.md 20.5k`, reported "checked: 1 of 2",

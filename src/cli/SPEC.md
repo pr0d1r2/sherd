@@ -22,6 +22,7 @@ sib|src/state|one idempotent cached store — pace, telemetry, applied rows
 sib|src/slice|distil a document to the part needed to ACT, generated
 sib|src/land|run branch → `main` when believability earns it
 sib|src/code|read Rust source as text — split, public fns, call detection, signatures
+sib|src/debt|a ratchet — measure, compare to a recorded floor, refuse the wrong way
 sib|src/assay|a corpus + a compiler grader — measure WHETHER the model can, ⊥ make it
 
 ## §C CONSTRAINTS
