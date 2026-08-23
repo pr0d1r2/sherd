@@ -359,6 +359,54 @@ pub fn cited_invariant(t: &Task) -> Option<(std::path::PathBuf, String)> {
     None
 }
 
+/// One proposal with the spec weight that ranks it.
+#[derive(Debug, Clone)]
+pub struct Ranked<'a> {
+    pub node: &'a Proposed,
+    /// Spec rows in the parent naming this module.
+    pub rows: usize,
+    /// What those rows cost.
+    pub tokens: u64,
+}
+
+/// Proposals HEAVIEST first.
+///
+/// The evidence grade discriminates in ONE of six repositories measured --
+/// `itok`. In the other five every module carries the same grade, which
+/// leaves the spec rows as the only signal present, and alphabetical order
+/// threw it away: `metope` spans 0 to 58 rows and led with its 58-row node
+/// by luck of the letter (`B17`).
+///
+/// Grade breaks ties, then name, so the order is stable between runs.
+#[must_use]
+pub fn rank<'a>(proposed: &'a [Proposed], spec: &str) -> Vec<Ranked<'a>> {
+    let mut out: Vec<Ranked<'a>> = proposed
+        .iter()
+        .map(|node| {
+            let (rows, tokens) = row_weight(spec, &node.name);
+            Ranked { node, rows, tokens }
+        })
+        .collect();
+    out.sort_by(|a, b| {
+        b.rows
+            .cmp(&a.rows)
+            .then_with(|| a.node.evidence.cmp(&b.node.evidence))
+            .then_with(|| a.node.name.cmp(&b.node.name))
+    });
+    out
+}
+
+/// Do ALL proposals carry the same grade? Then it ranks nothing, and a reader
+/// who takes the order for a verdict is reading spec rows, not structure.
+#[must_use]
+pub fn uniform_evidence(proposed: &[Proposed]) -> bool {
+    let mut grades = proposed.iter().map(|p| p.evidence);
+    let Some(first) = grades.next() else {
+        return false;
+    };
+    proposed.len() > 1 && grades.all(|g| g == first)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -480,7 +528,7 @@ mod tests {
         );
     }
 
-    /// `B16`: `plan` recommended `src/ollama` T3 as a step while `.:V117`
+    /// `B17`: `plan` recommended `src/ollama` T3 as a step while `.:V117`
     /// freezes that node until rung 0.7. The freeze is root POLICY, so no
     /// amount of reading the row's text can reach it.
     ///
@@ -1572,7 +1620,7 @@ fn naming_rows(spec: &str, name: &str) -> Vec<String> {
 /// CASE-SENSITIVE, because the earlier lowercasing split the filename
 /// `SPEC.md` into `spec` and counted every row naming the FILE as a row about
 /// the NODE: 54 rows against 27 real ones, half the column a filename
-/// (`B15`). Node names are directory names and directories here are
+/// (`B17`). Node names are directory names and directories here are
 /// lowercase, so the case carries the distinction for free.
 fn names_word(line: &str, name: &str) -> bool {
     line.split(|c: char| !c.is_alphanumeric() && c != '_')
@@ -1588,6 +1636,62 @@ mod split_tests {
         let spec = "## \u{a7}V INVARIANTS\n\nV1: the ledger counts fires\n";
         assert!(naming_rows(spec, "ledger").len() == 1);
         assert!(naming_rows(spec, "corpus").is_empty());
+    }
+
+    /// `B17`: the evidence grade discriminates in ONE of six repositories
+    /// measured. Everywhere else every module carries the same grade, which
+    /// leaves the spec rows as the only signal -- and alphabetical order
+    /// threw it away.
+    #[test]
+    fn proposals_lead_with_the_heaviest_not_the_alphabetically_first() {
+        let spec = "## \u{a7}V INVARIANTS\n\
+                    V1: `heavy` does a thing\nV2: `heavy` does another\n\
+                    V3: `heavy` again\nV4: `light` once\n";
+        let p = |name: &str, e: Evidence| Proposed {
+            name: name.to_string(),
+            evidence: e,
+            members: vec![name.to_string()],
+            shared: Vec::new(),
+            split_layout: false,
+        };
+        let nodes = [
+            p("light", Evidence::Published),
+            p("heavy", Evidence::Published),
+        ];
+        let order: Vec<&str> = rank(&nodes, spec)
+            .iter()
+            .map(|r| r.node.name.as_str())
+            .collect();
+        assert_eq!(order, vec!["heavy", "light"], "heaviest first");
+        assert_eq!(rank(&nodes, spec).first().map(|r| r.rows), Some(3));
+    }
+
+    /// A grade every module shares ranks nothing, and a reader who takes the
+    /// order for a verdict is reading spec rows rather than structure.
+    ///
+    /// MEASURED: 4 of 6 repositories are perfectly uniform -- `sherd` all
+    /// directory, `ashlar` and `metope` all `pub mod`, `microlith` all
+    /// declared -- and only `itok` carries a mixed profile.
+    #[test]
+    fn a_grade_every_module_shares_is_reported_as_ranking_nothing() {
+        let p = |name: &str, e: Evidence| Proposed {
+            name: name.to_string(),
+            evidence: e,
+            members: vec![name.to_string()],
+            shared: Vec::new(),
+            split_layout: false,
+        };
+        assert!(uniform_evidence(&[
+            p("a", Evidence::Published),
+            p("b", Evidence::Published)
+        ]));
+        assert!(!uniform_evidence(&[
+            p("a", Evidence::Drawn),
+            p("b", Evidence::Published)
+        ]));
+        // One node ranks nothing either way, and saying so would be noise.
+        assert!(!uniform_evidence(&[p("a", Evidence::Drawn)]));
+        assert!(!uniform_evidence(&[]));
     }
 
     /// Whole-word, or every module matches every row: `plan` inside

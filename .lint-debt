@@ -287,8 +287,20 @@
 # splitting the claim it makes. Two WERE split -- the missing-ratchet case
 # and the broken-build case each earned their own name -- and the rest is
 # recorded. Coverage went 92.07 -> 92.14 buying it.
-density 14.5
-shape 9.4
-count 265
-excess 1728
-loc 18226
+#
+# RAISED 14.5 -> 14.6 on 2026-08-24 for `src/plan:B17` -- `rank()` and
+# `uniform_evidence()`, plus their tests. The finding they answer was
+# measured across SIX repositories: the evidence ladder ranks nothing in five
+# of them, and `split` was ordering alphabetically, throwing away the only
+# signal present.
+#
+# SHAPE FELL 9.4 -> 9.3 in the same commit, paid rather than recorded:
+# `cli::check` had grown to five independent check families in one loop and
+# became `check_node` + `check_federation`. That trade -- one warning for
+# twenty-five excess lines -- is `src/debt:B3` from the other side, and it is
+# why the two ratchets are separate numbers.
+density 14.6
+shape 9.3
+count 269
+excess 1726
+loc 18369
