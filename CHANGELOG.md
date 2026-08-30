@@ -21,8 +21,8 @@ rendering, because a consumer arriving from crates.io never opens our spec.
 | `0.1` | odd | the deterministic core runs on any repository — `budget`, `lens`, `fed`, `graph`, `check`, `slice`, `review`, `plan` — gated on three platforms and built with its tests in a sandbox | reached |
 | `0.2` | even | `§I` is what ships: `init` scaffolds a `SPEC.md`, and a runner closes the interface-vs-binary drift in both directions | reached |
 | `0.3` | odd | the DAG answers questions — `route` resolves a query to a node, `validate` gives one verdict over the federation | reached |
-| `0.4` | even | the federation is maintainable rather than only readable — `split` proposes a split, `sync` regenerates `§N` | next |
-| `0.5` | odd | **first public artifact.** Every verb that never calls a model is correct and reusable as a library, exercised on a repository that is neither `itok` nor this one | planned |
+| `0.4` | even | the federation is maintainable rather than only readable — `split` proposes a split, `sync` regenerates `§N`, `adopt` migrates a single-file spec onto one | reached |
+| `0.5` | odd | **first public artifact.** Every verb that never calls a model is correct and reusable as a library, exercised on a repository that is neither `itok` nor this one | **this release** |
 | `0.6` | even | that surface settles: what the first users found, and `§F`/`§N` upstreamed rather than forked | planned |
 | `0.7` | odd | the model half resumes — `ask`, `tdd`, `oneshot`, and the loop's verdict meaning what the gate's verdict means, measured over more than one attempt | planned |
 | `1.0` | — | the contract freezes; every minor after is stable by definition, and the parity retires | planned |
@@ -49,24 +49,41 @@ select by default.
 
 ## [Unreleased]
 
-### Changed
+## [0.5.0-rc.1] - 2026-08-30
 
-- **Default features are empty.** `cargo install sherd` now builds the
-  deterministic core and nothing else -- no HTTP client, no TLS stack, no
-  network code in the binary. `ollama` adds `ask`, `tdd` and `oneshot`, and
-  the binary names the missing feature rather than reporting an unknown
-  command. The default was `["ollama"]` on the reasoning that the loop is the
-  point of installing; the ladder says otherwise now, and a default that
-  carried an endpoint client into every install made the featureless build
-  the corner case for a tool whose §C says the core may never call a model.
-- **The project is `sherd`.** One name for the package, the binary and the
-  repository — `cargo install sherd` installs `sherd`. The crate was
-  `bbx-cli` with a `bbx` binary because both `bbx` and `blackbox` are taken
-  on crates.io, so no spelling of the old name could be shared by the package
-  and the command. Environment variables are `SHERD_*`, state files are
-  `.sherd-*`, and the dev crate is `sherd-dev`.
+The first artifact published to crates.io, and a release candidate rather
+than a release: pre-`1.0` SemVer lets a minor break, crates.io is immutable
+— yanking hides a version, it does not delete it — and a pre-release version
+is one cargo does not select by default. What the rung claims is the
+deterministic core: every verb that never calls a model, reusable as a
+library as well as a binary.
+
+`0.1` through `0.4` were rungs reached and left unpublished, so this entry
+carries their verbs as well. Four rungs of work reaching a reader as a
+version number with no content is the thing a changelog exists to prevent.
 
 ### Added
+
+- **`sherd init [dir]`** scaffolds a `SPEC.md`, deriving its `§F` rows from
+  the child directories already present. The `0.2` rung.
+- **`sherd route <query>`** answers which node owns a question, in its exit
+  code and not only in prose: `0` hit, `2` miss, `3` ambiguous. A query no
+  node owns and a query two nodes own are different failures, and a caller
+  that cannot tell them apart cannot act on either.
+- **`sherd validate`** gives one verdict over the whole federation — DAG
+  shape, id uniqueness, token ceilings, slice drift — so a repository has a
+  single question to ask before it trusts its own spec. With `route`, the
+  `0.3` rung.
+- **`sherd split [dir]`** proposes a federation split for a node that has
+  outgrown its ceiling, and **writes nothing**: the proposal is output, the
+  edit stays a human's.
+- **`sherd sync [dir]`** regenerates `§N` from `§F` and exits `1` when it
+  wrote, which is what makes it usable as a gate op rather than only as a
+  fixer.
+- **`sherd adopt <dir>`** migrates a foreign single-file `SPEC.md` onto a
+  federation, with `--map` for an explicit section-to-node mapping and
+  `--check` for the dry run. Every repository but this one now has a path
+  in. With `split` and `sync`, the `0.4` rung.
 
 - **`nix build .#default`, with `doCheck` on** (`T71`, `src/cli:T9`). The
   package builds in a sandbox that copies the source without `.git`, which is
@@ -97,11 +114,26 @@ select by default.
   definition of what "green" means. `x86_64-linux`, `aarch64-linux` and
   `aarch64-darwin` each pay the whole gate; `x86_64-darwin` is declared in
   the flake and named in the workflow as ungated rather than left to look
-  covered. There is no `nix build` job yet, because `src/cli:B1` would make
-  a sandboxed build fail for a reason that has nothing to do with the
-  package.
+  covered. The `nix build` job named above joined it once
+  `src/cli:B1` was fixed; before that, a sandboxed build would have failed
+  for a reason that had nothing to do with the package.
 
 ### Changed
+
+- **Default features are empty.** `cargo install sherd` now builds the
+  deterministic core and nothing else -- no HTTP client, no TLS stack, no
+  network code in the binary. `ollama` adds `ask`, `tdd` and `oneshot`, and
+  the binary names the missing feature rather than reporting an unknown
+  command. The default was `["ollama"]` on the reasoning that the loop is the
+  point of installing; the ladder says otherwise now, and a default that
+  carried an endpoint client into every install made the featureless build
+  the corner case for a tool whose §C says the core may never call a model.
+- **The project is `sherd`.** One name for the package, the binary and the
+  repository — `cargo install sherd` installs `sherd`. The crate was
+  `bbx-cli` with a `bbx` binary because both `bbx` and `blackbox` are taken
+  on crates.io, so no spelling of the old name could be shared by the package
+  and the command. Environment variables are `SHERD_*`, state files are
+  `.sherd-*`, and the dev crate is `sherd-dev`.
 
 - **`itok` is a registry dependency**, `0.3` from crates.io with a lock
   checksum, and the last path dep in the tree is gone. A clean clone now
@@ -133,6 +165,16 @@ select by default.
 
 ### Packaging
 
+- **`result` is no longer tracked by git.** `nix build` leaves it as a
+  symlink into `/nix/store`, so the committed entry pointed at a path that
+  exists on one machine. `.gitignore` had listed it since before it was
+  committed, and an ignore rule does not apply to an already-tracked path.
+  The crate's `exclude` list already kept it out of the tarball; this is the
+  repository half of the same fix.
+- **`*.profraw` moved from `.git/info/exclude` into `.gitignore`.** The
+  coverage op drops them in the working tree, and `.git/info/exclude` is not
+  cloned, so every contributor but the one who wrote it saw the droppings as
+  untracked files.
 - `hk.pkl` and `pkl/` are excluded from the published crate. They gate this
   working tree and mean nothing in a tarball.
 
