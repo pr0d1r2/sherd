@@ -112,24 +112,27 @@ mod tests {
 
     #[test]
     fn a_node_ceiling_comes_from_the_file_not_a_constant() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-        // .context-limits names src/tdd; the value is read, not assumed.
-        let tdd = ceiling_for(root, &root.join("src/tdd")).unwrap();
-        assert!(
-            tdd > tokens::DEFAULT_NODE,
-            "src/tdd is listed and should not fall back to the default: {tdd}"
-        );
-        // A new node under src inherits src's ceiling -- prefix matching, so
-        // adding a node does not silently drop it to the global default.
-        assert_eq!(
-            ceiling_for(root, &root.join("src/nope")).unwrap(),
-            ceiling_for(root, &root.join("src")).unwrap()
-        );
-        // A path sharing no listed prefix falls back, which is NOT "no limit".
-        assert_eq!(
-            ceiling_for(root, &root.join("docs")).unwrap(),
-            tokens::DEFAULT_NODE
-        );
+        // Reads a file this repo has and the published crate excludes.
+        crate::testrepo::dogfood(|| {
+            let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+            // .context-limits names src/tdd; the value is read, not assumed.
+            let tdd = ceiling_for(root, &root.join("src/tdd")).unwrap();
+            assert!(
+                tdd > tokens::DEFAULT_NODE,
+                "src/tdd is listed and should not fall back to the default: {tdd}"
+            );
+            // A new node under src inherits src's ceiling -- prefix matching, so
+            // adding a node does not silently drop it to the global default.
+            assert_eq!(
+                ceiling_for(root, &root.join("src/nope")).unwrap(),
+                ceiling_for(root, &root.join("src")).unwrap()
+            );
+            // A path sharing no listed prefix falls back, which is NOT "no limit".
+            assert_eq!(
+                ceiling_for(root, &root.join("docs")).unwrap(),
+                tokens::DEFAULT_NODE
+            );
+        });
     }
 
     #[test]
@@ -140,16 +143,19 @@ mod tests {
 
     #[test]
     fn the_root_ceiling_comes_from_its_spec_row_not_the_default() {
-        // `.context-limits` names the root `SPEC.md`, while a node is
-        // addressed as `.` -- so the lookup has to bridge those two spellings
-        // or the root silently falls to DEFAULT_NODE and reads as 5x over
-        // (`.:V104`: absence must never read as a verdict).
-        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let c = ceiling_for(root, root).unwrap();
-        assert!(
-            c > tokens::DEFAULT_NODE,
-            "root must resolve to its SPEC.md row, got the default: {c}"
-        );
+        // Reads a file this repo has and the published crate excludes.
+        crate::testrepo::dogfood(|| {
+            // `.context-limits` names the root `SPEC.md`, while a node is
+            // addressed as `.` -- so the lookup has to bridge those two spellings
+            // or the root silently falls to DEFAULT_NODE and reads as 5x over
+            // (`.:V104`: absence must never read as a verdict).
+            let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+            let c = ceiling_for(root, root).unwrap();
+            assert!(
+                c > tokens::DEFAULT_NODE,
+                "root must resolve to its SPEC.md row, got the default: {c}"
+            );
+        });
     }
 
     #[test]
@@ -184,22 +190,25 @@ mod tests {
 
     #[test]
     fn every_node_resolves_to_a_real_ceiling() {
-        // V104's second half, made mechanical: absence must never read as
-        // permission. DEFAULT_NODE is 2,000 -- a NODE budget, impossible as a
-        // CHAIN ceiling -- so a node landing on it means no row covers it,
-        // directly or by prefix, and it would be gated against a number
-        // nobody chose.
-        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-        for node in fed::discover(root) {
-            let c = ceiling_for(root, &node).unwrap();
-            assert_ne!(
-                c,
-                tokens::DEFAULT_NODE,
-                "{} fell back to the node default -- give it a row in \
+        // Reads a file this repo has and the published crate excludes.
+        crate::testrepo::dogfood(|| {
+            // V104's second half, made mechanical: absence must never read as
+            // permission. DEFAULT_NODE is 2,000 -- a NODE budget, impossible as a
+            // CHAIN ceiling -- so a node landing on it means no row covers it,
+            // directly or by prefix, and it would be gated against a number
+            // nobody chose.
+            let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+            for node in fed::discover(root) {
+                let c = ceiling_for(root, &node).unwrap();
+                assert_ne!(
+                    c,
+                    tokens::DEFAULT_NODE,
+                    "{} fell back to the node default -- give it a row in \
                  .context-limits, or a prefix that covers it",
-                node.display()
-            );
-        }
+                    node.display()
+                );
+            }
+        });
     }
 
     #[test]

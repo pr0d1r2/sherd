@@ -180,6 +180,13 @@
           # `cargo-llvm-cov` looks these up by name and gives up if they are
           # absent, which is what "failed to find llvm-tools-preview" means on
           # a nixpkgs toolchain.
+          # Opts a bare `cargo test` in the dev shell in to the dogfood tests,
+          # matching the gate. Without it a local run silently skips six
+          # tests that CI runs, and "green here, red in the gate" is the
+          # confusion this repo spends real effort avoiding. See
+          # `src/testrepo.rs` for why the gate is an env var.
+          SHERD_DOGFOOD = "1";
+
           LLVM_COV = "${pkgs.llvmPackages.llvm}/bin/llvm-cov";
           LLVM_PROFDATA = "${pkgs.llvmPackages.llvm}/bin/llvm-profdata";
 

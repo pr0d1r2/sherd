@@ -9,6 +9,29 @@
 //!
 //! Compiled only under `cfg(test)`, so it ships in no binary.
 
+/// Run `body` only when the suite is running against THIS repository.
+///
+/// Some tests assert facts about our own tree -- the ceilings in
+/// `.context-limits`, the rows in `.sherd-slices` -- and those files are
+/// `exclude`d from the published crate on purpose. On registry source they
+/// are absent, so the assertion is unanswerable rather than false, and a
+/// test that cannot be answered must not fail: it must not run.
+///
+/// Set in the dev shell and by the gate, so it is on wherever the repo is.
+/// It is an env var and not a `cfg` because the same compiled test binary
+/// runs in both places (`itok` reached the same shape for the same reason).
+///
+/// It TAKES the body rather than returning a bool, and that is a coverage
+/// decision: `if !dogfood() { return; }` puts a `return` in every caller
+/// that never executes while the variable is set -- six tests, six lines
+/// the gate can never cover, and `sherd/debt:V9` is a floor that may only
+/// rise. Here the skip lives on one line, in one place, and that line runs.
+pub fn dogfood(body: impl FnOnce()) {
+    if std::env::var_os("SHERD_DOGFOOD").is_some() {
+        body();
+    }
+}
+
 use std::path::{Path, PathBuf};
 use std::process::Command;
 

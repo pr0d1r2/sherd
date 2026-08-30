@@ -50,6 +50,22 @@ exclude = [
   "result-*",
 ]
 
+# THE FILES THE TARBALL MUST CARRY, checked by the `package` gate step.
+#
+# An `exclude` list is a blunt instrument: it is written against the tree as
+# it looks today, and the day a path moves under a prefix it already names,
+# the file stops shipping and NOTHING here goes red -- the repo still has it,
+# so every test stays green. This list is the other half, and it fails when a
+# named path would not be in the `.crate`.
+[package.metadata.sherd]
+must-package = [
+  "README.md",
+  "LICENSE",
+  "SPEC.md",
+  "src/tdd/notation.txt",
+  "src/tdd/principles.txt",
+]
+
 [[bin]]
 name = "sherd"
 path = "src/main.rs"
