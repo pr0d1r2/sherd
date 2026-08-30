@@ -118,9 +118,7 @@ pub fn landable(e: &Evidence) -> Result<(), String> {
 }
 
 fn git(root: &Path, args: &[&str]) -> Result<String, String> {
-    let o = std::process::Command::new("git")
-        .args(args)
-        .current_dir(root)
+    let o = crate::git::at(root, args)
         .output()
         .map_err(|e| e.to_string())?;
     if o.status.success() {
@@ -511,8 +509,7 @@ mod git_tests {
     }
 
     fn init_bare(target: &str) -> Result<(), String> {
-        let out = std::process::Command::new("git")
-            .args(["init", "-q", "--bare", target])
+        let out = crate::git::anywhere(&["init", "-q", "--bare", target])
             .output()
             .map_err(|e| format!("init bare: {e}"))?;
         assert!(out.status.success(), "the bare repo must init");
@@ -520,8 +517,7 @@ mod git_tests {
     }
 
     fn branches_at(target: &str) -> Result<String, String> {
-        let ls = std::process::Command::new("git")
-            .args(["--git-dir", target, "branch"])
+        let ls = crate::git::anywhere(&["--git-dir", target, "branch"])
             .output()
             .map_err(|e| format!("ls: {e}"))?;
         Ok(String::from_utf8_lossy(&ls.stdout).into_owned())

@@ -18,6 +18,9 @@ pub mod code;
 // Test-only: a scratch git repo. Compiled into no binary.
 pub mod debt;
 pub mod fed;
+/// One shape for every git invocation, so nine call sites cannot each be
+/// wrong in the same way (`.:B25`).
+pub mod git;
 pub mod land;
 pub mod lens;
 pub mod plan;

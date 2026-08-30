@@ -247,10 +247,7 @@ pub type AddedFns = Vec<(std::path::PathBuf, Vec<String>)>;
 /// the spawn result made `git show <unknown rev>` look like an empty diff,
 /// and the review then printed a clean bill (B5, V7).
 fn diff_of(root: &Path, rev: &str) -> std::io::Result<String> {
-    let out = std::process::Command::new("git")
-        .args(["show", "--unified=0", rev])
-        .current_dir(root)
-        .output()?;
+    let out = crate::git::at(root, &["show", "--unified=0", rev]).output()?;
     if !out.status.success() {
         return Err(std::io::Error::other(format!(
             "cannot read revision `{rev}`: {}",
