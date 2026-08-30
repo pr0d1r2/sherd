@@ -347,6 +347,19 @@ local all = (fast) {
     check = "cargo build --no-default-features || { echo 'hk: the featureless build is RED. §C says --no-default-features yields the deterministic, networkless core; a module that reaches into an `ollama`-gated one breaks that claim (.:B15).' >&2; exit 1; }"
   }
 
+  // DOC EXAMPLES, compiled and run. STATED PLAINLY: there are ZERO of them
+  // today, so this step exercises nothing yet, and a check that cannot fail
+  // is `.:B6` wearing a green tick. It is here anyway because it is ARMED
+  // rather than vacuous -- it fires the moment a `///` example exists, and
+  // the alternative is that the FIRST example this repo ever writes ships
+  // having never been run. `semver` below is in the same state for the same
+  // kind of reason, and says so too.
+  ["doctest"] {
+    glob = List("**/*.rs")
+    depends = List("test")
+    check = "cargo test --doc --all-features"
+  }
+
   // AN `exclude` LIST IS ONLY HALF THE RULE. It names what must NOT ship;
   // nothing named what MUST, so a path that moves under a prefix already
   // excluded stops shipping and no test goes red -- the repo still has the
@@ -396,6 +409,21 @@ local all = (fast) {
       find "$src" -type f -exec touch {} + 2>/dev/null || true
       ( cd "$src" && env -u SHERD_DOGFOOD CARGO_TARGET_DIR="$target" cargo test --offline ) || { echo 'hk: the published .crate FAILS ITS OWN TESTS outside this repo -- exactly what a consumer, vendorer or distro packager runs on registry source. `cargo package --verify` cannot see this: it only compiles. A test that needs this repo'"'"'s own files must be gated on SHERD_DOGFOOD (see src/testrepo.rs), not left to depend on where it happens to be unpacked.' >&2; exit 1; }
       """
+  }
+
+  // THE RENDERED DOCS, which is what a consumer reads on docs.rs and what no
+  // other step compiles. `-D warnings` is the point: a broken intra-doc link
+  // is a warning by default, so without it this builds a page with a dead
+  // reference on it and reports success. Runs with `--all-features`, because
+  // the default feature set is empty and the `ollama` half would otherwise
+  // be documented by nobody.
+  ["rustdoc"] {
+    glob = List("**/*.rs")
+    depends = List("package-suite")
+    env {
+      ["RUSTDOCFLAGS"] = "-D warnings"
+    }
+    check = "cargo doc --no-deps --all-features"
   }
 
   // Coverage is ~60s, so it runs on PUSH and in `hk check`, never on commit:
