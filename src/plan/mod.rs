@@ -2090,7 +2090,7 @@ mod weight_tests {
     /// The same, on the tree that measured it: `src/tdd/SPEC.md` names five
     /// siblings and every one of those mentions is a generated `§N` row.
     #[test]
-    fn a_leaf_spec_weighs_nothing_for_the_siblings_its_nav_lists() {
+    fn a_leaf_spec_weighs_nothing_for_its_siblings() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
         let Ok(text) = std::fs::read_to_string(root.join("src/tdd/SPEC.md"))
         else {

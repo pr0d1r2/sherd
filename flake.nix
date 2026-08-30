@@ -170,6 +170,11 @@
             # changed set -- so this is the one check that must see files
             # nobody staged.
             pkgs.lychee
+            # Secret shapes `no-private-key` does not match: tokens, by entropy
+            # and by known prefix. Here rather than nowhere because a leaked
+            # credential in a PUBLIC history is irreversible, and this remote
+            # is now public.
+            pkgs.ripsecrets
           ];
 
           # `cargo-llvm-cov` looks these up by name and gives up if they are

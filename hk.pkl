@@ -152,6 +152,35 @@ local fast = new Mapping<String, Step> {
     glob = List("**/*")
     check = "hk util detect-private-key {{files}}"
   }
+  // `no-private-key` above matches KEY BLOCKS -- `-----BEGIN ... PRIVATE
+  // KEY-----` and little else. The shape that actually reaches a public
+  // history from a repo like this one is a TOKEN: a crates.io key, a GitHub
+  // PAT, an endpoint credential pasted into a fixture. `ripsecrets` matches
+  // those by entropy and by known prefix, so the two are complements rather
+  // than a duplicate.
+  //
+  // Here now rather than later, because the cost is asymmetric and the
+  // deadline has passed: the repository is PUBLIC as of this week, and a
+  // token in a public history outlives its deletion -- rotation is the only
+  // remedy, and it is one that has to be noticed first. Propagated from
+  // `itok`, which added it for the same reason before its own remote went
+  // public.
+  //
+  // `pkl/` is excluded because it is a vendored schema, and its 1,014 lines
+  // of someone else's config are not ours to annotate with `.secretsignore`
+  // entries.
+  ["ripsecrets"] {
+    glob = List("**/*")
+    exclude = List("pkl/**")
+    // `||` alone would report a LEAK when the tool is merely missing --
+    // `command not found` is also a non-zero exit. A check that names the
+    // wrong cause is worse than one that misses, so absence is distinguished
+    // from a finding before either is announced.
+    check = """
+      command -v ripsecrets >/dev/null 2>&1 || { echo 'hk: ripsecrets is not on PATH -- re-enter the dev shell (`nix develop`, or `direnv reload`). This is a MISSING TOOL, not a finding.' >&2; exit 1; }
+      ripsecrets {{files}} || { echo 'hk: a possible secret is staged. If it is real it must never be committed -- a token in git history outlives its deletion, and this remote is public. If it is a false positive, add it to .secretsignore.' >&2; exit 1; }
+      """
+  }
   ["no-large-files"] {
     glob = List("**/*")
     check = "hk util check-added-large-files {{files}}"
