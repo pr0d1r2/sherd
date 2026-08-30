@@ -175,6 +175,10 @@
             # credential in a PUBLIC history is irreversible, and this remote
             # is now public.
             pkgs.ripsecrets
+            # The version ladder (`.:V114`), checked instead of remembered.
+            # Vacuous until the first `v*` tag, and it says so rather than
+            # reporting a green it did not earn.
+            pkgs.cargo-semver-checks
           ];
 
           # `cargo-llvm-cov` looks these up by name and gives up if they are

@@ -426,6 +426,42 @@ local all = (fast) {
     check = "cargo doc --no-deps --all-features"
   }
 
+  // THE VERSION LADDER, checked rather than remembered. `.:V114` makes a
+  // minor a level of GUARANTEE, and crates.io is immutable -- a wrong rung
+  // cannot be corrected, only yanked, which hides a version without deleting
+  // it. So the public API is diffed against the last release tag.
+  //
+  // TWO WAYS IT DECLINES TO ANSWER, both reported as "examined nothing"
+  // rather than "found nothing", because those read identically in a log and
+  // only one of them is a check (`.:B6`):
+  //
+  //   * NO BASELINE -- no `v*` tag exists. That is the state TODAY, before
+  //     the first release, so this step is armed and unexercised.
+  //   * BASELINE UNBUILDABLE -- the tag declares a `rust-version` above this
+  //     toolchain, so cargo refuses to build its rustdoc. A published tag's
+  //     manifest is frozen while the toolchain moves under it.
+  //
+  // `v<x.y.z>` is assumed for the tag shape, which is what `release.toml`
+  // configures. Publishing under any other shape leaves this step green
+  // against the wrong baseline, or against nothing at all.
+  ["semver"] {
+    glob = List("src/**/*.rs", "Cargo.toml")
+    depends = List("coverage")
+    check = """
+      cargo semver-checks --version >/dev/null 2>&1 || { echo 'hk: cargo-semver-checks is not on PATH -- re-enter the dev shell (`nix develop`, or `direnv reload`). This is a MISSING TOOL, not a finding.' >&2; exit 1; }
+      baseline=$(git -c versionsort.suffix=- tag --list 'v*' --sort=-v:refname | head -1)
+      [ -n "$baseline" ] || { echo 'hk: semver: NO BASELINE -- no release tag exists yet, so there is no prior API to diff against. This step arms itself at the first `v*` tag; it is reporting that it examined nothing, not that it found nothing.' >&2; exit 0; }
+      want=$(git show "$baseline:Cargo.toml" 2>/dev/null | awk -F'"' '/^rust-version/{print $2; exit}')
+      have=$(rustc --version | awk '{print $2}')
+      lowest=$({ echo "$want"; echo "$have"; } | sort -V | head -1)
+      if [ -n "$want" ] && [ "$lowest" != "$want" ]; then
+        echo "hk: semver: BASELINE UNBUILDABLE -- $baseline declares rust-version $want and this toolchain is $have, so cargo refuses to build the baseline's rustdoc and NOTHING was compared. This clears itself at the first tag cut on the current toolchain. Reporting that it examined nothing, not that it found nothing." >&2
+        exit 0
+      fi
+      cargo semver-checks check-release --baseline-rev "$baseline" || { echo "hk: the pub API broke against $baseline. Either restore it, or take the version bump semver requires -- `.:V114`'s ladder is a promise to consumers, and crates.io is immutable, so a wrong rung cannot be corrected." >&2; exit 1; }
+      """
+  }
+
   // Coverage is ~60s, so it runs on PUSH and in `hk check`, never on commit:
   // a hook you are tempted to bypass is worse than no hook.
   //
