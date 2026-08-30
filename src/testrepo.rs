@@ -9,6 +9,29 @@
 //!
 //! Compiled only under `cfg(test)`, so it ships in no binary.
 
+/// Run `body` only when the suite is running against THIS repository.
+///
+/// Some tests assert facts about our own tree -- the ceilings in
+/// `.context-limits`, the rows in `.sherd-slices` -- and those files are
+/// `exclude`d from the published crate on purpose. On registry source they
+/// are absent, so the assertion is unanswerable rather than false, and a
+/// test that cannot be answered must not fail: it must not run.
+///
+/// Set in the dev shell and by the gate, so it is on wherever the repo is.
+/// It is an env var and not a `cfg` because the same compiled test binary
+/// runs in both places (`itok` reached the same shape for the same reason).
+///
+/// It TAKES the body rather than returning a bool, and that is a coverage
+/// decision: `if !dogfood() { return; }` puts a `return` in every caller
+/// that never executes while the variable is set -- six tests, six lines
+/// the gate can never cover, and `sherd/debt:V9` is a floor that may only
+/// rise. Here the skip lives on one line, in one place, and that line runs.
+pub fn dogfood(body: impl FnOnce()) {
+    if std::env::var_os("SHERD_DOGFOOD").is_some() {
+        body();
+    }
+}
+
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -51,14 +74,21 @@ impl TestRepo {
         Ok(r)
     }
 
+    /// A git command aimed at THIS repo and no other.
+    ///
+    /// Delegates to `crate::git`, which owns the rule. A fixture carrying its
+    /// own copy would be a second reading of it (`.:B25`).
+    fn command(&self, args: &[&str]) -> Command {
+        crate::git::at(&self.root, args)
+    }
+
     /// Run git in the repo, returning stdout.
     ///
     /// # Errors
     /// The command's stderr when it exits non-zero.
     pub fn git(&self, args: &[&str]) -> Result<String, String> {
-        let out = Command::new("git")
-            .args(args)
-            .current_dir(&self.root)
+        let out = self
+            .command(args)
             .output()
             .map_err(|e| format!("git {args:?}: {e}"))?;
         if out.status.success() {
@@ -94,5 +124,60 @@ impl TestRepo {
     #[must_use]
     pub fn path(&self) -> &Path {
         &self.root
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::TestRepo;
+
+    /// The regression this file exists to prevent from recurring.
+    ///
+    /// git exports an ABSOLUTE `GIT_DIR` to hooks when the checkout is a
+    /// worktree, and every child the hook spawns inherits it. A fixture that
+    /// honoured it ran `init`, `add -A` and `commit` against the developer's
+    /// own repository.
+    #[test]
+    fn the_fixture_refuses_the_git_environment_a_hook_exports() {
+        let Ok(r) = TestRepo::new("env") else {
+            unreachable!("the fixture builds")
+        };
+        let c = r.command(&["status"]);
+        for k in crate::git::INHERITED {
+            let removed = c
+                .get_envs()
+                .any(|(name, value)| name == k && value.is_none());
+            assert!(
+                removed,
+                "`{k}` is still inherited -- an exported one aims this \
+                 fixture's git at the repository the suite is running in"
+            );
+        }
+    }
+
+    /// The fixture's own repository is the one its commits reach.
+    #[test]
+    fn the_fixture_commits_land_in_its_own_repo() {
+        let Ok(r) = TestRepo::new("own") else {
+            unreachable!("the fixture builds")
+        };
+        let Ok(dir) = r.git(&["rev-parse", "--absolute-git-dir"]) else {
+            unreachable!("the fixture is a repository")
+        };
+        // macOS hands out `/var/folders/...` and git reports the resolved
+        // `/private/var/folders/...`, so both sides are canonicalised before
+        // being compared.
+        let Ok(root) = std::fs::canonicalize(&r.root) else {
+            unreachable!("the fixture root exists")
+        };
+        let Ok(dir) = std::fs::canonicalize(&dir) else {
+            unreachable!("the git dir exists")
+        };
+        assert!(
+            dir.starts_with(&root),
+            "the fixture's git dir is {}, outside its own root {}",
+            dir.display(),
+            root.display()
+        );
     }
 }

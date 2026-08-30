@@ -23,6 +23,7 @@ cli|arg dispatch, usage, exit codes|every verb's logic|-
 code|read Rust source as text — split, public fns, call detection, signatures|judging what it reads, `SPEC.md` structure|-
 debt|a ratchet — measure, compare to a recorded floor, refuse the wrong way|deciding WHAT to measure, running the gate|-
 assay|a corpus + a compiler grader — measure WHETHER the model can, ⊥ make it|writing code with a model, judging a diff|-
+git|one git invocation shape — the repo a command acts on, & the env it refuses|what any verb DOES with git, reading its output|-
 
 ## §N NAV
 

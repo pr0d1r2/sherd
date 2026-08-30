@@ -25,6 +25,7 @@ sib|src/land|run branch → `main` when believability earns it
 sib|src/cli|arg dispatch, usage, exit codes
 sib|src/debt|a ratchet — measure, compare to a recorded floor, refuse the wrong way
 sib|src/assay|a corpus + a compiler grader — measure WHETHER the model can, ⊥ make it
+sib|src/git|one git invocation shape — the repo a command acts on, & the env it refuses
 
 ## §C CONSTRAINTS
 

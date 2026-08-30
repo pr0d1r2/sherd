@@ -170,11 +170,32 @@
             # changed set -- so this is the one check that must see files
             # nobody staged.
             pkgs.lychee
+            # Secret shapes `no-private-key` does not match: tokens, by entropy
+            # and by known prefix. Here rather than nowhere because a leaked
+            # credential in a PUBLIC history is irreversible, and this remote
+            # is now public.
+            pkgs.ripsecrets
+            # The version ladder (`.:V114`), checked instead of remembered.
+            # Vacuous until the first `v*` tag, and it says so rather than
+            # reporting a green it did not earn.
+            pkgs.cargo-semver-checks
+            # THE RELEASE, which is a tool and not a script. Everything the
+            # prose described -- clean tree, allowed branch, tag scheme,
+            # dry-run first, verify, publish, push -- this already does, and
+            # `release.toml` configures it.
+            pkgs.cargo-release
           ];
 
           # `cargo-llvm-cov` looks these up by name and gives up if they are
           # absent, which is what "failed to find llvm-tools-preview" means on
           # a nixpkgs toolchain.
+          # Opts a bare `cargo test` in the dev shell in to the dogfood tests,
+          # matching the gate. Without it a local run silently skips six
+          # tests that CI runs, and "green here, red in the gate" is the
+          # confusion this repo spends real effort avoiding. See
+          # `src/testrepo.rs` for why the gate is an env var.
+          SHERD_DOGFOOD = "1";
+
           LLVM_COV = "${pkgs.llvmPackages.llvm}/bin/llvm-cov";
           LLVM_PROFDATA = "${pkgs.llvmPackages.llvm}/bin/llvm-profdata";
 

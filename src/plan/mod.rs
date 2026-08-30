@@ -870,9 +870,7 @@ pub fn triage(root: &Path) -> Vec<(Task, Kind, Proposal)> {
 /// was clean beforehand and the branch is not the trunk.
 fn preflight(root: &Path) -> Result<String, String> {
     let git = |args: &[&str]| {
-        std::process::Command::new("git")
-            .args(args)
-            .current_dir(root)
+        crate::git::at(root, args)
             .output()
             .ok()
             .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
@@ -900,9 +898,7 @@ fn preflight(root: &Path) -> Result<String, String> {
         .as_secs();
     let want = crate::land::run_branch(&branch, secs);
     if want != branch {
-        std::process::Command::new("git")
-            .args(["checkout", "-q", "-b", &want])
-            .current_dir(root)
+        crate::git::at(root, &["checkout", "-q", "-b", &want])
             .status()
             .map_err(|e| e.to_string())?;
         eprintln!("apply: on {branch} -- generated code goes to {want}");
@@ -983,16 +979,12 @@ pub fn apply(root: &Path, max_repair: usize) -> Result<String, String> {
     );
 
     let git = |args: &[&str]| {
-        std::process::Command::new("git")
-            .args(args)
-            .current_dir(root)
+        crate::git::at(root, args)
             .status()
             .map_err(|e| e.to_string())
     };
     git(&["add", "-A"])?;
-    let st = std::process::Command::new("git")
-        .args(["commit", "-q", "-m", &body])
-        .current_dir(root)
+    let st = crate::git::at(root, &["commit", "-q", "-m", &body])
         .status()
         .map_err(|e| e.to_string())?;
     if !st.success() {
@@ -1002,9 +994,7 @@ pub fn apply(root: &Path, max_repair: usize) -> Result<String, String> {
                 .into(),
         );
     }
-    let sha = std::process::Command::new("git")
-        .args(["rev-parse", "--short", "HEAD"])
-        .current_dir(root)
+    let sha = crate::git::at(root, &["rev-parse", "--short", "HEAD"])
         .output()
         .map_err(|e| e.to_string())?;
     let sha = String::from_utf8_lossy(&sha.stdout).trim().to_string();
@@ -2100,7 +2090,7 @@ mod weight_tests {
     /// The same, on the tree that measured it: `src/tdd/SPEC.md` names five
     /// siblings and every one of those mentions is a generated `§N` row.
     #[test]
-    fn a_leaf_spec_weighs_nothing_for_the_siblings_its_nav_lists() {
+    fn a_leaf_spec_weighs_nothing_for_its_siblings() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
         let Ok(text) = std::fs::read_to_string(root.join("src/tdd/SPEC.md"))
         else {
