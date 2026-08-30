@@ -269,17 +269,20 @@ mod tests {
     /// `drifted` reports which outputs no longer match their source.
     #[test]
     fn drift_is_reported_per_output_and_a_regenerated_tree_is_clean() {
-        // This repo's gate runs `sherd slice --check` on every commit and
-        // requires it clean, so the empty answer here is independently held
-        // true rather than merely asserted.
-        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-        let d = drifted(root);
-        assert!(d.is_ok(), "this repo's own declarations must parse");
-        assert_eq!(
-            d.unwrap_or_default().len(),
-            0,
-            "the gate keeps this tree regenerated"
-        );
+        // Reads a file this repo has and the published crate excludes.
+        crate::testrepo::dogfood(|| {
+            // This repo's gate runs `sherd slice --check` on every commit and
+            // requires it clean, so the empty answer here is independently held
+            // true rather than merely asserted.
+            let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+            let d = drifted(root);
+            assert!(d.is_ok(), "this repo's own declarations must parse");
+            assert_eq!(
+                d.unwrap_or_default().len(),
+                0,
+                "the gate keeps this tree regenerated"
+            );
+        });
     }
 
     #[test]

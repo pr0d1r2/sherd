@@ -1,0 +1,80 @@
+# The release, configured rather than scripted.
+#
+# The mechanics were carried as PROSE -- eight commands in an order that was
+# remembered rather than enforced -- which is a rule with no runner (`.:V74`),
+# the defect this repo records more often than any other. The runner is
+# `cargo-release`, and it already does the whole list: clean tree, allowed
+# branch, tag scheme, dry-run first, verify, publish, push. A shell script
+# re-implementing that would be a second implementation of one rule set, and
+# it does not stop being one because we wrote it.
+#
+# Propagated from `itok` and `microlith`, which reached this shape first;
+# `microlith` deleted the script it had started.
+#
+# HOW IT IS RUN. Dry-run is `cargo-release`'s DEFAULT, and it reports every
+# problem in one pass rather than the first one it hits:
+#
+#     cargo release patch                 # verify everything, change nothing
+#     cargo release patch --execute       # act
+#
+# but NOT for the version bump here -- see below.
+#
+# THE BUMP DOES NOT HAPPEN HERE. cargo-release's default flow bumps the
+# version, COMMITS it, and pushes that commit to the release branch. This
+# repo's `main` forbids exactly that: a pull request is required, with SIX
+# passing checks (`gate` and `nix-build` across three systems). So the
+# version is bumped in a PR like any other change, and only the TAIL runs
+# from `main` once it merges:
+#
+#     cargo release hook                  # the gate; dry-run is enough
+#     cargo release tag --execute
+#     cargo release publish --execute
+#     cargo release push --execute
+#
+# `hook` IS FIRST ON PURPOSE, and it is the one thing here that must not be
+# assumed. `tag`, `publish` and `push` do NOT run `pre-release-hook` -- only
+# the full flow does, and `cargo release hook` on its own. On a repo that
+# bumps in a PR, a sequence starting at `tag` therefore publishes whatever
+# the tree happens to hold. Running it dry is enough: the hook executes, and
+# a non-zero return aborts.
+#
+# ADMIN BYPASS IS OFF here, which is where this repo differs from `itok`.
+# `enforce_admins` is true on `main`, so the discipline above is enforced by
+# the server rather than chosen by the releaser. This file still writes it
+# down, because a rule that holds only while a setting holds is worth stating
+# next to the thing it governs.
+
+# The branch a release may happen from. The `.crate` records the commit it
+# was built from (`.cargo_vcs_info.json`), and a squash merge ORPHANS the
+# branch sha -- so publishing off a PR branch leaves the artifact naming a
+# commit that is on no branch. `main` is also the only branch whose tree has
+# passed all six checks.
+allow-branch = ["main"]
+
+# THE GATE, called rather than re-checked. A non-zero return ABORTS the
+# release, which makes the gate a PRECONDITION of publishing rather than
+# something the releaser is trusted to have run. That matters more here than
+# it did before: `package` and `package-suite` are gate steps, so the tarball
+# is checked for what it ships AND run outside this repo, on the way out.
+#
+# `--check` because the fix commands would rewrite a tree cargo-release has
+# just asserted is clean. `--no-fail-fast` because a release is the one
+# moment where a complete list beats an early one -- nobody is iterating.
+pre-release-hook = ["hk", "check", "--all", "--check", "--no-fail-fast"]
+
+# `v<x.y.z>`, because the `semver` gate step diffs the pub API against the
+# last `v*` tag. Publishing under any other tag shape leaves that step green
+# against the wrong baseline, or against nothing at all -- and with no tag
+# yet, this file is what decides which shape it will be looking for.
+tag-name = "v{{version}}"
+
+# `verify` builds the packaged tarball before upload. It is the default; it
+# is written down because it is the check that catches a `.crate` which
+# cannot compile from what it actually ships, and a default nobody wrote down
+# is a default somebody eventually turns off.
+#
+# It is NOT sufficient on its own: `verify` only COMPILES the tarball. The
+# `package-suite` gate step is what runs the tarball's own suite, and it
+# found six failing tests on its first run against this crate.
+publish = true
+verify = true

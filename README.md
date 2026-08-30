@@ -8,10 +8,10 @@
 [![unsafe forbidden](https://img.shields.io/badge/unsafe-forbidden-brightgreen)](Cargo.toml)
 
 [![gate hk](https://img.shields.io/badge/gate-hk-6E4AFF)](hk.pkl)
-[![gate steps 27](https://img.shields.io/badge/gate_steps-27-6E4AFF)](hk.pkl)
-[![coverage floor 92.2%](https://img.shields.io/badge/coverage_floor-%E2%89%A592.2%25-brightgreen)](.coverage)
+[![gate steps 33](https://img.shields.io/badge/gate_steps-33-6E4AFF)](hk.pkl)
+[![coverage floor 92.3%](https://img.shields.io/badge/coverage_floor-%E2%89%A592.3%25-brightgreen)](.coverage)
 [![lint debt 14.7/KLoC](https://img.shields.io/badge/lint_debt-%E2%89%A414.7%2FKLoC-orange)](.lint-debt)
-[![federated nodes 19](https://img.shields.io/badge/federated_nodes-19-6E4AFF)](SPEC.md)
+[![federated nodes 20](https://img.shields.io/badge/federated_nodes-20-6E4AFF)](SPEC.md)
 
 [![nix flake](https://img.shields.io/badge/nix-flake-5277C3?logo=nixos&logoColor=white)](flake.nix)
 [![nixpkgs 26.05 (2026-08-20 - 5880666)](https://img.shields.io/badge/nixpkgs-26.05_(2026--08--20_--_5880666)-5277C3?logo=nixos&logoColor=white)](flake.lock)
@@ -99,7 +99,8 @@ nodes it was missing while this sentence claimed otherwise.
 |   |-- cli
 |   |-- code
 |   |-- debt
-|   `-- assay
+|   |-- assay
+|   `-- git
 `-- dev
 ```
 <!-- END graph-tree -->
@@ -128,6 +129,7 @@ graph TD
     src_code[code]
     src_debt[debt]
     src_assay[assay]
+    src_git[git]
     root --> src
     root --> dev
     src --> src_tokens
@@ -146,6 +148,7 @@ graph TD
     src --> src_code
     src --> src_debt
     src --> src_assay
+    src --> src_git
 ```
 <!-- END graph-mermaid -->
 
@@ -173,6 +176,7 @@ knows when to stop looking. Also generated, by `sherd graph --table`:
 | `src/code` | read Rust source as text — split, public fns, call detection, signatures | judging what it reads, `SPEC.md` structure |
 | `src/debt` | a ratchet — measure, compare to a recorded floor, refuse the wrong way | deciding WHAT to measure, running the gate |
 | `src/assay` | a corpus + a compiler grader — measure WHETHER the model can, ⊥ make it | writing code with a model, judging a diff |
+| `src/git` | one git invocation shape — the repo a command acts on, & the env it refuses | what any verb DOES with git, reading its output |
 <!-- END graph-table -->
 
 ## What is measured

@@ -405,25 +405,28 @@ mod tests {
     /// still be two things.
     #[test]
     fn the_gate_calls_this_rather_than_restating_it() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let pkl =
-            std::fs::read_to_string(root.join("hk.pkl")).unwrap_or_default();
-        assert!(!pkl.is_empty(), "this repository has a gate");
-        let step = pkl
-            .split_once("[\"lint-debt\"]")
-            .map(|(_, r)| r.split_once("\n  }").map_or(r, |(s, _)| s))
-            .unwrap_or_default();
-        assert!(
-            step.contains("sherd -- debt --check")
-                && step.contains("sherd -- debt --record"),
-            "the ratchet step calls the verb: {step}"
-        );
-        for restated in ["10000/l", "too many lines", "grep -cE"] {
+        // Reads a file this repo has and the published crate excludes.
+        crate::testrepo::dogfood(|| {
+            let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+            let pkl = std::fs::read_to_string(root.join("hk.pkl"))
+                .unwrap_or_default();
+            assert!(!pkl.is_empty(), "this repository has a gate");
+            let step = pkl
+                .split_once("[\"lint-debt\"]")
+                .map(|(_, r)| r.split_once("\n  }").map_or(r, |(s, _)| s))
+                .unwrap_or_default();
             assert!(
-                !step.contains(restated),
-                "the gate restated `{restated}`, which is `B6` again"
+                step.contains("sherd -- debt --check")
+                    && step.contains("sherd -- debt --record"),
+                "the ratchet step calls the verb: {step}"
             );
-        }
+            for restated in ["10000/l", "too many lines", "grep -cE"] {
+                assert!(
+                    !step.contains(restated),
+                    "the gate restated `{restated}`, which is `B6` again"
+                );
+            }
+        });
     }
 
     /// The mirror is honest in both directions.
@@ -534,14 +537,20 @@ mod tests {
     /// The denominator is the gate's, and it is not zero on this tree.
     #[test]
     fn the_denominator_counts_both_measured_directories() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let all = measured_lines(root);
-        let src_only = crate::fed::rust_files(&root.join("src"))
-            .iter()
-            .filter_map(|p| std::fs::read_to_string(p).ok())
-            .map(|t| t.lines().count())
-            .sum::<usize>();
-        assert!(all > src_only, "`dev` is measured too: {all} vs {src_only}");
+        // Reads a file this repo has and the published crate excludes.
+        crate::testrepo::dogfood(|| {
+            let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+            let all = measured_lines(root);
+            let src_only = crate::fed::rust_files(&root.join("src"))
+                .iter()
+                .filter_map(|p| std::fs::read_to_string(p).ok())
+                .map(|t| t.lines().count())
+                .sum::<usize>();
+            assert!(
+                all > src_only,
+                "`dev` is measured too: {all} vs {src_only}"
+            );
+        });
     }
 
     /// `V1`: the two ratios are computed from ONE measurement, so they cannot
