@@ -179,6 +179,11 @@
             # Vacuous until the first `v*` tag, and it says so rather than
             # reporting a green it did not earn.
             pkgs.cargo-semver-checks
+            # THE RELEASE, which is a tool and not a script. Everything the
+            # prose described -- clean tree, allowed branch, tag scheme,
+            # dry-run first, verify, publish, push -- this already does, and
+            # `release.toml` configures it.
+            pkgs.cargo-release
           ];
 
           # `cargo-llvm-cov` looks these up by name and gives up if they are
