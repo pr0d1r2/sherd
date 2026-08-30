@@ -10,7 +10,7 @@ members = ["dev"]
 
 [package]
 name = "sherd"
-version = "0.1.0"
+version = "0.5.0-rc.1"
 edition = "2024"
 # MSRV tracks the FLEET PIN, which is what actually compiles this: nixpkgs-lock
 # follows nixos-26.05, and that ships rustc 1.95.0. The siblings pin 1.96 --
