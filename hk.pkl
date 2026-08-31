@@ -344,7 +344,23 @@ local all = (fast) {
   ["no-default-features"] {
     glob = List("**/*.rs", "Cargo.toml")
     depends = List("test")
-    check = "cargo build --no-default-features || { echo 'hk: the featureless build is RED. §C says --no-default-features yields the deterministic, networkless core; a module that reaches into an `ollama`-gated one breaks that claim (.:B15).' >&2; exit 1; }"
+    // `-D warnings`, and that is the half `.:B26` was missing. `clippy` above
+    // runs `--all-features`, so it never compiles this configuration; this
+    // step compiled it and accepted warnings. The DEFAULT build is the one
+    // that ships, and two warnings rode in it through eleven gate steps, the
+    // published `.crate` and its verify -- all green. A build that is allowed
+    // to warn is a build nobody is holding to a standard (`.:V74`).
+    //
+    // RUSTFLAGS IS SAFE HERE NOW, and was not when the comment at the head of
+    // this file rejected it. That objection was about `../itok` as a PATH dep:
+    // cargo caps lints for registry dependencies (`--cap-lints=allow`) and
+    // does NOT cap them for path deps, so `-D warnings` used to reach a
+    // sibling working tree and turn this gate red for code sherd does not own.
+    // `V101` made `itok` a registry dep, which is what removed the hazard.
+    env {
+      ["RUSTFLAGS"] = "-D warnings"
+    }
+    check = "cargo build --no-default-features || { echo 'hk: the featureless build is RED. §C says --no-default-features yields the deterministic, networkless core; a module that reaches into an `ollama`-gated one breaks that claim (.:B15) -- and `-D warnings` means a WARNING fails here too, because the default build is the one that ships (.:B26).' >&2; exit 1; }"
   }
 
   // DOC EXAMPLES, compiled and run. STATED PLAINLY: there are ZERO of them

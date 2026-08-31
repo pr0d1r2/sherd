@@ -58,7 +58,12 @@ pub fn run() -> ExitCode {
 /// untestable entry point is why. Exit codes and usage are real contracts
 /// per this module's own header; a contract nothing can call is a comment.
 #[must_use]
-pub fn run_args(mut args: Vec<String>) -> ExitCode {
+pub fn run_args(args: Vec<String>) -> ExitCode {
+    // `mut` ONLY under `ollama`: the sole mutation is the `-v` removal below,
+    // so a `mut` on the parameter is an unused-mut warning in the DEFAULT
+    // build -- which is the build that ships (`.:B26`).
+    #[cfg(feature = "ollama")]
+    let mut args = args;
     // -v / --verbose is positional-agnostic: it is a mode, not an argument.
     #[cfg(feature = "ollama")]
     if let Some(i) = args.iter().position(|a| a == "-v" || a == "--verbose") {

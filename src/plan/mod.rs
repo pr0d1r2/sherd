@@ -868,6 +868,9 @@ pub fn triage(root: &Path) -> Vec<(Task, Kind, Proposal)> {
 ///
 /// `apply` writes source AND commits. Both are recoverable only if the tree
 /// was clean beforehand and the branch is not the trunk.
+/// Gated with `apply`, its only caller: ungated it is dead code in the
+/// default build (`.:B26`).
+#[cfg(feature = "ollama")]
 fn preflight(root: &Path) -> Result<String, String> {
     let git = |args: &[&str]| {
         crate::git::at(root, args)
@@ -1046,6 +1049,7 @@ mod git_tests {
     use super::*;
     use crate::testrepo::TestRepo;
 
+    #[cfg(feature = "ollama")]
     #[test]
     fn preflight_refuses_a_tree_that_is_not_a_repo() {
         // `apply` COMMITS, so it needs a repo. Saying so beats failing later
@@ -1057,6 +1061,7 @@ mod git_tests {
         assert!(r.is_err(), "a non-repo must be refused");
     }
 
+    #[cfg(feature = "ollama")]
     #[test]
     fn preflight_refuses_a_dirty_tree() {
         assert_eq!(check_dirty(), Ok(()));
@@ -1064,6 +1069,7 @@ mod git_tests {
 
     /// A dirty tree means the generated diff would not be the only thing in
     /// the commit, which is the whole point of the branch `apply` makes.
+    #[cfg(feature = "ollama")]
     fn check_dirty() -> Result<(), String> {
         let r = TestRepo::new("plan-dirty")?;
         r.write("stray.txt", "uncommitted\n")?;
@@ -1345,6 +1351,7 @@ mod git_tests {
         );
     }
 
+    #[cfg(feature = "ollama")]
     #[test]
     fn preflight_on_a_clean_repo_names_a_run_branch() {
         assert_eq!(check_clean(), Ok(()));
@@ -1352,6 +1359,7 @@ mod git_tests {
 
     /// Generated code never lands on the trunk directly: `preflight` puts the
     /// run on its own branch, and `sherd land` is what moves it, on evidence.
+    #[cfg(feature = "ollama")]
     fn check_clean() -> Result<(), String> {
         let r = TestRepo::new("plan-clean")?;
         let branch = preflight(r.path())?;
