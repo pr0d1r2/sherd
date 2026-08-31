@@ -117,6 +117,30 @@ jobs:
             extra-substituters = https://pr0d1r2.cachix.org
             extra-trusted-public-keys = pr0d1r2.cachix.org-1:NfWjbhgAj41byXhCKiaE+av3Vnphm1fTezHXEGsiQIM=
 
+      # PUSH, not just read. `hk` comes from the `nix-hk` flake, so it is on
+      # no upstream cache, and this cache only ever held what was pushed by
+      # hand from a laptop -- which is aarch64. x86_64-linux therefore had no
+      # source for it and BUILT IT FROM SOURCE on every run: 398s of a 493s
+      # gate, measured, while the same gate on aarch64 took 95s. The work was
+      # never slower on x86_64; the substitution was missing.
+      #
+      # The store cache below did not save it either. `gc-max-store-size`
+      # prunes before saving, the x86_64 closure is over the cap, and the run
+      # that built `hk` deleted it again in its post step -- 350 paths dropped
+      # on x86_64 against 31 on aarch64. So the cache HIT and was incomplete,
+      # which reads exactly like a cache that works.
+      #
+      # SKIPPED FOR FORK PRs, which do not receive secrets. A fork still READS
+      # the cache; it just cannot populate it. Without this guard the step
+      # fails on an outside contributor's PR, turning a caching optimisation
+      # into a gate that only members can pass.
+      - uses: cachix/cachix-action@5f2d7c5294214f71b873db4b969586b980625e71 # v17
+        with:
+          name: pr0d1r2
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          skipPush:
+            ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
+
       # Keyed on `runner.os`-AND-`runner.arch`, not `runner.os` alone:
       # `ubuntu-latest` and `ubuntu-24.04-arm` both report `Linux`, so an
       # os-only key would be one entry holding two different closures, each
@@ -133,6 +157,16 @@ jobs:
           # the cargo cache below, times three platforms. Capping the store
           # keeps one job from evicting another's entry and turning a cache
           # into a coin flip.
+          #
+          # THE CAP IS KEPT, and is now safe rather than merely tolerated. It
+          # prunes before SAVING, so on x86_64 -- whose closure is over the cap
+          # -- 350 paths are dropped against 31 on aarch64, and `hk` was among
+          # them. The cache HIT and was incomplete, which is why the x86_64
+          # gate rebuilt `hk` for 398s of its 493s while aarch64 took 95s total.
+          # With cachix now PUSHED to, a pruned path is re-substituted in
+          # seconds instead of recompiled, so the cap costs a download rather
+          # than a build. Raising it would only move the eviction: the budget is
+          # 10 GB shared across three platforms and the cargo cache.
           gc-max-store-size-linux: 4G
           gc-max-store-size-macos: 4G
 
@@ -205,6 +239,17 @@ jobs:
           extra_nix_config: |
             extra-substituters = https://pr0d1r2.cachix.org
             extra-trusted-public-keys = pr0d1r2.cachix.org-1:NfWjbhgAj41byXhCKiaE+av3Vnphm1fTezHXEGsiQIM=
+
+      # PUSH, for the reason the `gate` job states at length: `hk` is on no
+      # upstream cache, and x86_64-linux had no source for it. This job builds
+      # the package rather than entering the shell, so what it contributes is
+      # the `sherd` derivation itself. Same fork guard, same reason.
+      - uses: cachix/cachix-action@5f2d7c5294214f71b873db4b969586b980625e71 # v17
+        with:
+          name: pr0d1r2
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          skipPush:
+            ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
 
       # RESTORE ONLY. The `gate` job for each system is the one writer; six
       # jobs each saving a multi-gigabyte store would exhaust the 10 GB
