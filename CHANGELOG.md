@@ -22,8 +22,8 @@ rendering, because a consumer arriving from crates.io never opens our spec.
 | `0.2` | even | `§I` is what ships: `init` scaffolds a `SPEC.md`, and a runner closes the interface-vs-binary drift in both directions | reached |
 | `0.3` | odd | the DAG answers questions — `route` resolves a query to a node, `validate` gives one verdict over the federation | reached |
 | `0.4` | even | the federation is maintainable rather than only readable — `split` proposes a split, `sync` regenerates `§N`, `adopt` migrates a single-file spec onto one | reached |
-| `0.5` | odd | **first public artifact.** Every verb that never calls a model is correct and reusable as a library, exercised on a repository that is neither `itok` nor this one | **this release** |
-| `0.6` | even | that surface settles: what the first users found, and `§F`/`§N` upstreamed rather than forked | planned |
+| `0.5` | odd | **first public artifact.** Every verb that never calls a model is correct and reusable as a library, exercised on a repository that is neither `itok` nor this one | reached |
+| `0.6` | even | that surface settles: what the first users found, and `§F`/`§N` upstreamed rather than forked | next |
 | `0.7` | odd | the model half resumes — `ask`, `tdd`, `oneshot`, and the loop's verdict meaning what the gate's verdict means, measured over more than one attempt | planned |
 | `1.0` | — | the contract freezes; every minor after is stable by definition, and the parity retires | planned |
 
@@ -44,10 +44,43 @@ can reuse.
 Pre-`1.0` SemVer permits a minor to break, and here each rung *is* a
 behaviour change, so that permission is used honestly rather than worked
 around. crates.io is immutable — yanking hides a version, it does not delete
-it — so the first public artifact will be `0.5.0-rc.1`, which cargo does not
-select by default.
+it — so the first artifact uploaded was `0.5.0-rc.1`, a pre-release cargo
+does not select by default. It did what a release candidate is for: the
+publish run surfaced two warnings that eleven gate steps had read past
+(`.:B26`). `0.5.0` is that rung as a release.
 
 ## [Unreleased]
+
+## [0.5.0] - 2026-08-31
+
+The `0.5` rung as a release. Identical in surface to `0.5.0-rc.1` -- the
+`semver` gate diffs the two and finds no public API change -- and different
+in one thing the candidate existed to find.
+
+### Fixed
+
+- **The featureless build warned, and every gate step read green** (`.:B26`).
+  `cargo build --no-default-features` emitted two warnings -- an unused `mut`
+  in `run_args` and a dead `preflight` -- and the default feature set is
+  empty, so that is the build a consumer gets. They rode through eleven gate
+  steps, through `cargo release hook`, and into the published `0.5.0-rc.1`
+  `.crate` and its own verify. Every one of those exited 0.
+
+  `preflight`'s only non-test caller is `apply`, which is `ollama`-gated, and
+  the `mut` exists solely for the gated `-v` removal; both are now gated with
+  the code that uses them.
+
+  The fix that matters is the gate, not the two lines. `clippy` denies
+  warnings but runs `--all-features`, so it never compiles this
+  configuration; `no-default-features` compiled it and accepted warnings. The
+  configuration that SHIPS was the one no step held to a standard.
+  `no-default-features` now carries `RUSTFLAGS=-D warnings`, verified against
+  a planted violation.
+
+### Changed
+
+- **The release ladder's `0.5` rung is marked reached**, and `0.6` becomes
+  next. `0.1` through `0.4` remain rungs reached without an artifact.
 
 ## [0.5.0-rc.1] - 2026-08-30
 
