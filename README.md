@@ -25,19 +25,7 @@
 [![built with SDD](https://img.shields.io/badge/built_with-spec--driven_development-D97757)](SPEC.md)
 <!-- END badges -->
 
-> ### Built by an LLM, deliberately and in the open
->
-> This repository — code, spec, tests and prose — was written by [Claude Code](https://claude.com/claude-code) running Anthropic's **Claude Opus 5**. 189 of 215 commits carry a `Co-Authored-By: Claude Opus 5` trailer. A human owns every decision, reviews every diff, and is accountable for what ships.
->
-> **Two of the functions here were written by the 20B this project is about.** `src/fed/` contains work authored by gpt-oss:20b through `sherd tdd`, kept with its defects recorded in that node's `§B` rather than smoothed over — because a tool that claims small models can build software has to show what happens when one does.
->
-> **The method is spec-driven development, federated.** [`SPEC.md`](SPEC.md) is the law rather than a description written afterwards, and there are seventeen of them: one per node, each owning the rules for its own directory. 88 `§B` rows across the tree record every defect found so far paired with the rule that now catches it. A rule and its checker land in the same commit, because a rule with no runner is a comment (§V74).
->
-> **The guardrails are git hooks that also run on CI.** Entering the dev shell (`nix develop`, or `direnv allow`) installs `pre-commit` and `pre-push`, which run [hk](https://github.com/jdx/hk) against one definition of the gate in [`hk.pkl`](hk.pkl) — 23 steps on commit, 24 on push, the slow one being coverage. [`ci.yml`](.github/workflows/ci.yml) calls that same definition on three platforms, so a laptop and a runner cannot disagree. The architecture diagram below is `sherd graph` output for the same reason: generated from the `§F` tables, so it cannot drift from what the specs declare.
->
-> **The record is deliberately unflattering.** `§B12` records that `AGENTS.md` says "never commit to `main`", that nothing enforced it, and that ~20 commits landed on `main` in one session anyway — the rule was read by the agent it governs and still lost to convenience. `§B4` records a "95x" improvement claimed across six commit messages that measured 2.1x against a denominator anyone would actually use.
->
-> Deeper: [`AGENTS.md`](AGENTS.md) is the working guide · [`CONTRIBUTING.md`](docs/CONTRIBUTING.md) is the loop · [`SPEC.md`](SPEC.md) is the law and the backlog.
+Read [LLM-DISCLAIMER](docs/LLM-DISCLAIMER.md) first.
 
 Federated `SPEC.md` for spec-driven development on **local** models — a 20B
 running on your own hardware, not a frontier API.
