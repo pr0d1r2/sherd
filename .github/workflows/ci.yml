@@ -54,6 +54,15 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# The token this workflow gets is the token it can leak. Nothing here writes
+# to the repository -- no tag, no comment, no commit -- so read is the whole
+# requirement, and stating it means a future step that needs more has to ask
+# for it in the diff rather than inherit it from a settings page nobody reads.
+# `zizmor` gates this: without the block it reports whatever the repository
+# default grants today.
+permissions:
+  contents: read
+
 jobs:
   # Everything hk declares, in hk's own order -- fmt, clippy, lint-debt, test,
   # slice, check, budget, coverage -- on every system the flake declares and
@@ -70,6 +79,14 @@ jobs:
   # tokens, so a tokenizer or a path rule behaving differently per platform
   # would move a ceiling rather than crash.
   gate:
+    # The name REPEATS the id, which is the point rather than an oversight.
+    # `zizmor` reports an unnamed job, and GitHub builds each status context
+    # from this name plus the matrix values -- so a name that differs from
+    # the id renames every context the job reports, and any branch protection
+    # naming the old ones strands `main` unmergeable until someone edits a
+    # settings page by hand. Naming it after itself satisfies the audit and
+    # leaves `gate (ubuntu-latest)` and its two siblings byte-identical.
+    name: gate
     runs-on: ${{ matrix.os }}
     strategy:
       # Every platform reports. Cancelling the others would hide whether a
@@ -98,9 +115,16 @@ jobs:
       # fetch-depth: 0 -- `sherd review` reads a real revision and its test
       # asserts the verb succeeds against one, so a shallow clone would fail
       # it for having no history rather than for anything about the code.
+      #
+      # persist-credentials: false -- checkout writes the job token into
+      # `.git/config` as an extraheader by default, where every later step in
+      # the job can read it. Nothing here pushes, so after the clone the token
+      # is only a liability, and the history the dogfood tests read needs no
+      # credential to sit on disk.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       # The fleet's binary cache. `hk` is not in nixos-26.05 at all -- it
       # landed on nixpkgs master after the branch-off -- so without this
@@ -202,9 +226,19 @@ jobs:
       # signal; on a push to main nobody is waiting, and the complete list is
       # worth the extra minutes. The ops are `depends`-chained cheapest-first,
       # so a failing `fmt` otherwise reports nothing about coverage.
-      - run: >
-          nix develop --command hk check --all --check
-          ${{ github.event_name == 'push' && '--no-fail-fast' || '' }}
+      #
+      # The expression evaluates into `env:` and the shell reads a VARIABLE,
+      # rather than having its own source assembled around the expansion by
+      # the template engine. `github.event_name` is workflow-authored and
+      # cannot carry anything hostile today -- the shape is what stops being
+      # safe when an input later changes, which is what `zizmor` reports.
+      # `${FAIL_FAST:+"$FAIL_FAST"}` expands to one quoted argument when set
+      # and to NOTHING when empty; a bare `$FAIL_FAST` does the same here only
+      # by relying on word splitting, and a construct correct by accident is
+      # one a later edit breaks silently.
+      - env:
+          FAIL_FAST: ${{ github.event_name == 'push' && '--no-fail-fast' || '' }}
+        run: nix develop --command hk check --all --check ${FAIL_FAST:+"$FAIL_FAST"}
 
   # The sandbox build. A SEPARATE job from the gate, because it shares nothing
   # with it: no cargo artifact crosses between them, so running it after the
@@ -220,6 +254,8 @@ jobs:
   # clone builds and its tests pass", and that claim is per-platform or it is
   # not a claim.
   nix-build:
+    # Named after itself, for the reason the `gate` job states above.
+    name: nix-build
     runs-on: ${{ matrix.os }}
     # PROVISIONAL, like the gate's. Locally this build takes about three
     # minutes warm; nothing is timed on a runner yet, and the rule for
@@ -233,7 +269,11 @@ jobs:
       matrix:
         os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest]
     steps:
+      # No `fetch-depth` and no credentials: this job builds the package,
+      # reads no history, and pushes nothing.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: cachix/install-nix-action@630ae543ea3a38a9a4166f03376c02c50f408342 # v31.11.0
         with:
           extra_nix_config: |

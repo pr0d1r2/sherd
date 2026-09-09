@@ -40,15 +40,28 @@ concurrency:
   group: links-${{ github.ref }}
   cancel-in-progress: true
 
+# This job reads URLs and reports. It writes nothing to the repository, so
+# read is the whole requirement -- and a scheduled workflow is exactly where
+# an unstated scope goes unnoticed, because nobody is watching a Monday run.
+permissions:
+  contents: read
+
 jobs:
   online:
+    # Named after itself: the status context stays `online`, and `zizmor`
+    # gets the name it asks for. See `ci.yml` for the full reasoning.
+    name: online
     runs-on: ubuntu-latest
     # One platform, because a URL does not resolve differently per
     # architecture. The gate's matrix exists for code; this checks the
     # internet.
     timeout-minutes: 15
     steps:
+      # No credentials persisted: this job clones, reads links and pushes
+      # nothing, so the job token has no business in `.git/config`.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: cachix/install-nix-action@630ae543ea3a38a9a4166f03376c02c50f408342 # v31.11.0
         with:
           extra_nix_config: |

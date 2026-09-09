@@ -28,8 +28,9 @@ The hooks in `.githooks` delegate to [`hk`](https://hk.jdx.dev); the ops they
 run are declared in `hk.pkl` and nowhere else. `hk` comes from the `nix-hk`
 flake input, because nixos-26.05 ships no `hk` of its own — so **commit and
 push from inside the dev shell**. Outside it the hooks refuse rather than
-skip: this repo has no CI, so they are the gate of record, and a gate that
-cannot run has not passed.
+skip: CI runs this same set through the same dev shell, so the hooks are
+the first place it reports rather than the only one, and a gate that cannot
+run has not passed.
 
 `flake.nix` declares a substituter for the prebuilt `hk`. Nix only honours it
 for users in `trusted-users`; everyone else gets a source build, which works
