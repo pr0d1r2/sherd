@@ -248,6 +248,31 @@ local fast = new Mapping<String, Step> {
     glob = List(".github/workflows/*.yml", ".github/workflows/*.yaml")
     check = "command -v actionlint >/dev/null 2>&1 || { echo 'hk: actionlint is not on PATH -- re-enter the dev shell (`nix develop`, or `direnv reload`). This is a MISSING TOOL, not a finding.' >&2; exit 1; }; actionlint {{files}}"
   }
+  // The SECURITY half of the same file. actionlint asks whether the workflow
+  // is CORRECT -- expression types, `run:` bodies through shellcheck, runner
+  // labels, cron -- and knows nothing about what the workflow can REACH.
+  // zizmor asks only that: token scope, credential persistence, an
+  // expression pasted into a `run:` block by the template engine, an action
+  // reference that is not pinned. The two findings sets do not overlap, so
+  // one cannot stand in for the other -- swapping them trades a blind spot
+  // for a blind spot.
+  //
+  // `--persona=pedantic` ON PURPOSE, and it is the stricter setting rather
+  // than the default. Pedantic reports code SMELLS -- claims about how the
+  // file will age, not about what it does today -- and conforming to that
+  // stricter reading is what produces the more pristine workflow. MEASURED
+  // when it landed: nine findings across `ci.yml` and `links.yml`, on two
+  // files actionlint had passed on every commit of their lives.
+  //
+  // `-c` is passed explicitly rather than left to zizmor's own discovery, so
+  // the ledger's PATH is visible in the step that depends on it. What
+  // pedantic reports and this repo declines to fix is written down there,
+  // with the reason and the condition that would retire it. The ledger is
+  // empty today; the mechanism is what the flag installs.
+  ["zizmor"] {
+    glob = List(".github/workflows/*.yml", ".github/workflows/*.yaml")
+    check = "command -v zizmor >/dev/null 2>&1 || { echo 'hk: zizmor is not on PATH -- re-enter the dev shell (`nix develop`, or `direnv reload`). This is a MISSING TOOL, not a finding.' >&2; exit 1; }; zizmor --no-progress --persona=pedantic -c .github/zizmor.yml {{files}} || { echo 'hk: zizmor found a workflow security finding. Fix it, or -- if it is understood and deliberately accepted -- record it in .github/zizmor.yml with the reason AND the condition that would retire it. An ignore with no exit is a rule nobody revisits.' >&2; exit 1; }"
+  }
   // `.envrc` is shell without a `.sh` name, and it runs on every shell
   // entry -- exactly where a silent mistake costs most.
   ["shellcheck"] {

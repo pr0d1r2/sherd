@@ -157,6 +157,17 @@
             # workflow is a file nothing else here parses, and its failure
             # mode is a run that never starts.
             pkgs.actionlint
+            # `zizmor` AUDITS the same file `actionlint` CHECKS, and it is
+            # not a replacement for the line above: zizmor does no syntax or
+            # type checking at all, and actionlint knows nothing about token
+            # scope. MEASURED on this tree the day it arrived -- nine findings
+            # against two workflows actionlint had passed on every commit of
+            # their lives, and not one of them typographic. A workflow with no
+            # `permissions:` block runs at whatever the repository default
+            # grants, and a checkout that keeps its credentials leaves the job
+            # token in `.git/config` for every later step to read. Neither is a
+            # mistake actionlint is built to see.
+            pkgs.zizmor
             # `.envrc` is shell without a `.sh` name, and it runs on every
             # shell entry, which is where a silent mistake costs most.
             pkgs.shellcheck
