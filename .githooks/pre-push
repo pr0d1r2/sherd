@@ -18,4 +18,55 @@ if ! command -v hk >/dev/null 2>&1; then
   exit 1
 fi
 
-exec hk run pre-push --from-hook "$@"
+# A TAG PUSH IS NOT A CODE PUSH, and hk cannot read one (`.:B27`).
+#
+# git hands this hook `<local ref> <local sha> <remote ref> <remote sha>` on
+# stdin. For a tag it supplies the ANNOTATED TAG OBJECT's sha, not a commit,
+# and hk 1.55.0 feeds that straight into a merge-base computation without
+# peeling it: `object is no commit object`, at hk's own src/git.rs:1678. So
+# `cargo release push` could not push a tag at all -- the release stopped one
+# step from done, twice.
+#
+# The rule: a push carrying ONLY tags, each already reachable from the remote
+# trunk, has nothing new to gate. That commit passed this hook when it was
+# pushed and passed CI on the branch that merged it. A tag is a pointer to it.
+#
+# This is a SKIP with a precondition, not a bypass. A tag pointing at a commit
+# the trunk does not contain is exactly the case worth stopping, so it falls
+# through to the gate. Any branch ref in the same push does too.
+refs=$(cat)
+
+only_tags=1
+have_ref=0
+while read -r local_ref local_sha _remote_ref _remote_sha; do
+  [ -n "$local_ref" ] || continue
+  have_ref=1
+  case "$local_ref" in
+  refs/tags/*) ;;
+  *)
+    only_tags=0
+    ;;
+  esac
+  # A deletion sends an all-zero local sha and has no object to peel.
+  case "$local_sha" in
+  *[!0]*) ;;
+  *) continue ;;
+  esac
+  # `^{commit}` peels an annotated tag to what it points at. If that commit
+  # is not on the remote trunk, this push is publishing something the gate
+  # has not seen.
+  if ! commit=$(git rev-parse --quiet --verify "${local_sha}^{commit}"); then
+    only_tags=0
+  elif ! git merge-base --is-ancestor "$commit" refs/remotes/origin/main; then
+    only_tags=0
+  fi
+done <<EOF
+$refs
+EOF
+
+if [ "$have_ref" = 1 ] && [ "$only_tags" = 1 ]; then
+  echo "pre-push: tags only, each already on origin/main -- gate skipped." >&2
+  exit 0
+fi
+
+printf '%s\n' "$refs" | exec hk run pre-push --from-hook "$@"
