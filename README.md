@@ -393,6 +393,7 @@ line fails the gate (`src/cli:V7`, after `src/cli:B2`).
 | `sherd coverage [--check\|--record]` | coverage floor vs .coverage |
 | `sherd validate` | DAG + ids + ceilings + slice drift, one verdict |
 | `sherd split [dir]` | propose a federation split. writes nothing |
+| `sherd seam [dir]` | the public types each node declares. writes nothing |
 | `sherd adopt <dir> [--map FILE] [--check]` | migrate a single-file SPEC.md onto a federation |
 | `sherd sync [dir] [--check]` | regenerate §N from §F. exit 1 if it wrote |
 | `sherd route <query>` | which node owns a question. 0 hit · 2 miss · 3 ambiguous |

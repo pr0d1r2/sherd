@@ -25,7 +25,7 @@ self|.|-
 - lang: Rust **edition 2024**. stable. MSRV **1.95** = the FLEET PIN (`nixpkgs-lock` → nixos-26.05). ⊥ a number copied from a sibling: `itok`/`microlith` declare 1.96 & MEASURED compile clean on 1.95 ∴ their floor is a mirror of an old pin, ⊥ a minimum.
 - nixpkgs rev FOLLOWED from `nixpkgs-lock`, ⊥ spelled here. one rev, ~80 repos.
 - target model: `gpt-oss:20b`, 131,072 ctx, local. ⊥ cloud fallback.
-- inference: local HTTP (Ollama) only. ⊥ network otherwise.
+- inference: local HTTP (Ollama) only. ⊥ network otherwise. the CODE-WRITING executor is an ADAPTER (V123): named & swappable, ⊥ in the deterministic core ∴ a wave ? be driven by the local model | an external command, & the core stays offline either way.
 - deterministic core: parse/DAG/budget/ceiling = pure Rust, ⊥ model. model ? prose gen & drift judgement only. DEFAULT features are EMPTY ∴ the installed binary carries ⊥ HTTP client, ⊥ TLS, ⊥ network code; `ollama` is 1 flag away & named when a verb needs it.
 - separator = **directory**. dir tree ! source of truth. ⊥ manifest, ⊥ name-encoded grouping (`core-parse` ⊥ imply parent).
 - federation edge = parent dir → child dir, depth **+1 exactly**. ⊥ skip.
@@ -58,6 +58,8 @@ self|.|-
 - cmd: `sherd graph [--dot|--json|--mermaid]` → federation DAG. `--mermaid` = the generated architecture diagram
 - cmd: `sherd lens <dir> [--facet set|setting|human|all]` → default `set`
 - cmd: `sherd budget [dir]` → node/chain/lens/file token table. exit 1 over
+- cmd: `sherd seam [dir]` → PROPOSE the SEAM a parallel build needs: per node, the public types its siblings ! name before any node is written. report-only, writes ⊥ — WHICH types are shared is a JUDGEMENT (R57)
+- cmd: `sherd wave [dir]` → fan the READY nodes of the code DAG out to N workers, 1 worktree each, merge in topological order. the executor is NAMED, ⊥ assumed (V123) (0.7)
 - cmd: `sherd validate` → structural + edges + ceilings + slice drift, & REPORTS what it examined. exit 1 fail
 - cmd: `sherd fed [dir]` → the federation edges a node DECLARES, ⊥ the ones it has
 - cmd: `sherd review [rev]` → mechanical checks on what a commit ADDED (default `HEAD`). ADVISORY: a finding ⊥ fail the cmd, ∵ intent is the reader's call
@@ -142,6 +144,7 @@ R53|the mutation remedy is REFUTED|33/33 authored tests KILLED a known-wrong stu
 R54|the failure is OVER-specification|`escape_cell`'s authored test demands `" a | b "` → `"a\\|b"` (spaces round the PIPE gone, where the row trims the CELL) & that an already-escaped pipe stays. NEITHER is in the invariant ∴ a correct impl FAILS it 3/3. the model fills an underspecified row w/ plausible unstated rules; the impl — blind, same text — fills them differently|`target/authored-tests.txt`
 R55|the detector re-found R54's row, BLIND & mechanically|T97, 11 rows × 3 runs, 66 calls, every run IDENTICAL. ONE row flagged — `escape_cell` 3/3 — & it is R54's row, which a HUMAN found by reading raw output after the fact. the GAP: the row says pipe → `\|` & cell trimmed, & is SILENT on an ALREADY-escaped pipe ∴ the impl escapes it twice, the test demands it stay, & BOTH readings are in the row (`FORMAT.md`'s own rule is silent identically). the invented rule MOVES — R54's test demanded 2, this one demands 1 — & the row is flagged either way. ⊥ reproduced: R52's `for_path`, 0/3 here ∴ that was pooled, ⊥ per-item. 2 of 11 rows yield NO verdict, deterministically: `sign` 3/3 ⊥ compiled (`[i64; 10]` holding 9 elements — an ordinary compile error, ⊥ a `.:src/tdd:B12` name mismatch) & `abort_budget_ms` 3/3 HUNG ∴ `src/assay:B2` was ⊥ a one-off & `src/assay:V6` paid for itself on run 1|`cargo test --test ambiguity -- --ignored`, 66 calls @ .24
 R56|an ignored body reads as uncovered|MEASURED `.coverage` 75.50 → 75.11 when the `#[ignore]`d titrations moved from `src/assay` inline tests to `tests/`. an ignored test body counts in the coverage DENOMINATOR & never runs ∴ every experiment added inline LOWERS the number & a better instrument reads worse. carried out of `T96` when that row went — the row was history, the measurement is not|`tests/`, `cargo llvm-cov`
+R57|seam-first beats dep-order|a sibling repo built 7 federated nodes in PARALLEL, 1 worker per node, after ONE commit declared every node's public TYPES: 27 commits, 277 tests, 7,003 lines, 1 integration break (a type gained a field after a consumer had written fixtures against it). scheduling the SAME DAG by dependency instead = 5 deep, ≤3 nodes ever in flight|measured 2026-09-17, repo anonymous
 
 ## §V INVARIANTS
 
@@ -264,6 +267,7 @@ V121: agentic debt resolution splits in 2 & only 1 half is a PIPELINE. the MECHA
 V122: a workflow ! be AUDITED, ⊥ merely PARSED — & the audit runs at the STRICTER persona w/ a LEDGER for what it declines. `actionlint` type-checks (expr types, `run:` via shellcheck, runner labels, cron) & knows ⊥ about token SCOPE; `zizmor` audits scope · credential persistence · template injection · pinning & does NO syntax check ∴ neither substitutes for the other & swapping them trades a blind spot for a blind spot. MEASURED: 9 pedantic findings across 2 files `actionlint` had passed on EVERY commit of their lives (B28). `--persona=pedantic` reports SMELLS — claims about how a file AGES, ⊥ about what it does today — & conforming to the stricter reading is what produces the pristine file. ∀ DECLINED finding lands in `.github/zizmor.yml` w/ its reason AND its EXIT CONDITION, ∵ an ignore w/ no exit ≡ one nobody revisits (V74 pointing the other way), & line numbers are part of the match ∴ drift RE-OPENS it. the ledger is empty here by MEASUREMENT (`sherd` has no required status checks ∴ naming a job costs nothing), ⊥ by having no rule to write down
 
 V73: dir promotion has 2 triggers — (a) V50 code ceiling, (b) module owns SPEC worth its own node even under ceiling. vendor facades are (b): few hundred lines carrying V17/V24/V25. ⊥ promote every `.rs` — 30 files → 60 is ceremony
+V123: the EXECUTOR is an ADAPTER & sherd owns everything AROUND it: the code DAG, ready set, worktrees, ceilings, gate & merge order stay DETERMINISTIC & offline (V18). WHO writes the code is NAMED — local model | external command — & swapping it changes ⊥ about scheduling. hardcoding the writer ships 2 decisions as 1 ∴ neither measures alone.
 
 ## §T TASKS
 
@@ -300,6 +304,7 @@ T101|.|move the scripted-toolchain fixtures (`scratch`·`scripted_cargo`·`write
 T103|~|LADDER rungs as work: 0.4 = `split`+`sync` DONE · 0.5 = the MECHANICAL surface correct & reusable, measured on a foreign repo · 0.6 = settle · 0.7 = the model half resumes (V117) — & @ 0.7 the 1st question is `src/assay:T6`, whether a FIX SHAPE beats a `§V` ROW: the 4th variable of the `.:R44` gap & the only one untried (V121). 0.1-0.3 reached|V114,V117,V121
 T104|.|lint ratchet ! also count `--no-default-features` — 131 warnings on the SHIPPED binary are uncounted today|V118,B20
 T105|x|BUILD the `V50` check — per-`.rs` code & test ceilings, kind `judgment`. cited 5x as the rule that did the design work & computed nowhere|V119,B23
+T106|.|`wave` — ready set over the code DAG, N workers, 1 worktree each, topological merge; executor named per V123|V123,R57,`src/plan:T15`,`src/ollama:T13`
 
 ## §B BUGS
 

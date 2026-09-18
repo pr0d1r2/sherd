@@ -4,7 +4,7 @@
 //! contracts and every §T row about them was unreachable while this file had
 //! no `SPEC.md` to hold them.
 
-use crate::{fed, lens, plan, slice, spec, state, tokens};
+use crate::{code, fed, lens, plan, slice, spec, state, tokens};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
@@ -25,6 +25,7 @@ sherd -- federated SPEC.md for small-context local models
   sherd coverage [--check|--record]  coverage floor vs .coverage
   sherd validate         DAG + ids + ceilings + slice drift, one verdict
   sherd split [dir]      propose a federation split. writes nothing
+  sherd seam [dir]       the public types each node declares. writes nothing
   sherd adopt <dir> [--map FILE] [--check]  migrate a single-file SPEC.md onto a federation
   sherd sync [dir] [--check]  regenerate §N from §F. exit 1 if it wrote
   sherd route <query>    which node owns a question. 0 hit · 2 miss · 3 ambiguous
@@ -117,6 +118,7 @@ pub fn run_args(args: Vec<String>) -> ExitCode {
                 apply,
             )
         }
+        Some("seam") => seam_cmd(&root, &arg_dir(&args, &root)),
         Some("adopt") => match args.get(1).filter(|a| !a.starts_with("--")) {
             Some(_) => adopt_cmd(&root, &args),
             None => usage("adopt needs a dir"),
@@ -396,6 +398,99 @@ fn split_cmd(root: &Path, dir: &Path, apply: bool) -> ExitCode {
     let spec = std::fs::read_to_string(dir.join("SPEC.md")).unwrap_or_default();
     print_structure(&proposed, &spec);
     ExitCode::SUCCESS
+}
+
+/// `sherd seam [dir]` -- the vocabulary a parallel build needs.
+///
+/// Per node, the PUBLIC TYPES it declares: the names a sibling can spell
+/// before either node is written. `.:R57` is the measurement -- a sibling
+/// repo built seven federated nodes in parallel, one worker each, after ONE
+/// commit declared every node's types, and scheduling the same DAG by
+/// dependency instead was five deep with at most three nodes ever in flight.
+///
+/// Report-only, like `split` and for the same reason: WHICH of these names
+/// are shared is a judgement a reader makes.
+fn seam_cmd(root: &Path, dir: &Path) -> ExitCode {
+    println!("seam -- the public types a node declares\n");
+    let nodes = fed::discover(root);
+    let mut examined = 0usize;
+    let mut declared = 0usize;
+    for node in nodes.iter().filter(|n| n.starts_with(dir)) {
+        let types = node_types(node, &nodes);
+        examined = examined.saturating_add(1);
+        declared = declared.saturating_add(types.len());
+        print_seam(&node_label(root, node), &types);
+    }
+    seam_summary(examined, declared);
+    // Examining NOTHING is not passing, the same shape `budget` records:
+    // an empty table and a repo with no types read identically (`B5`).
+    if examined == 0 {
+        eprintln!("sherd: {} matched no node", dir.display());
+        return ExitCode::from(2);
+    }
+    ExitCode::SUCCESS
+}
+
+/// What was examined, not only what was found (`.:V48`).
+fn seam_summary(examined: usize, declared: usize) {
+    println!("\n  {examined} node(s) examined · {declared} public type(s)");
+    println!(
+        "  A parallel build needs these names BEFORE any node is written. \
+         WHICH of them are shared is a judgement this does not make."
+    );
+}
+
+/// One node's row, and its vocabulary beneath it.
+///
+/// A node declaring nothing is still PRINTED: absence is an answer -- this
+/// node adds no name a sibling has to know -- and a silent row would be the
+/// conflation `V12` records (`B6`).
+fn print_seam(label: &str, types: &[code::PubType]) {
+    if types.is_empty() {
+        println!("  {label:<24} no public types");
+        return;
+    }
+    println!("  {label:<24} {} type(s)", types.len());
+    for t in types {
+        println!("      {} {}", t.kind, t.name);
+    }
+}
+
+/// The public types one node declares, sorted and deduplicated.
+fn node_types(node: &Path, nodes: &[PathBuf]) -> Vec<code::PubType> {
+    let mut out: Vec<code::PubType> = Vec::new();
+    for f in owned_files(node, nodes) {
+        let Ok(text) = std::fs::read_to_string(&f) else {
+            continue;
+        };
+        for t in code::public_types(&text) {
+            if !out.contains(&t) {
+                out.push(t);
+            }
+        }
+    }
+    out.sort_by(|a, b| a.name.cmp(&b.name));
+    out
+}
+
+/// The `.rs` files a node OWNS: everything under it that no DEEPER node
+/// claims.
+///
+/// `fed::rust_files` recurses, and the nodes nest -- `src` contains every
+/// other one -- so without this every type would be reported by each of its
+/// ancestors and the root row would be the whole crate. Attributing a file
+/// to the NEAREST node instead reports it exactly once, and a file in an
+/// unfederated subdirectory still reaches the node above it rather than
+/// vanishing (`.:V16`).
+fn owned_files(node: &Path, nodes: &[PathBuf]) -> Vec<PathBuf> {
+    fed::rust_files(node)
+        .into_iter()
+        .filter(|f| {
+            !nodes
+                .iter()
+                .any(|n| n != node && n.starts_with(node) && f.starts_with(n))
+        })
+        .collect()
 }
 
 /// `sherd adopt <dir> [--map FILE] [--check]` -- a foreign single-file
@@ -1748,6 +1843,7 @@ mod tests {
             vec!["plan"],
             vec!["plan", "--triage"],
             vec!["slice", "--check"],
+            vec!["seam"],
         ] {
             assert_eq!(
                 run_args(argv(&verb)),
@@ -2574,6 +2670,59 @@ mod tests {
         assert_eq!(split_cmd(repo.path(), &bare, false), ExitCode::from(2));
     }
 
+    /// A node declaring one public type and one private one, beside a
+    /// sibling node that declares none.
+    fn seam_fixture() -> crate::testrepo::TestRepo {
+        let repo = routing_fixture("cli-seam");
+        let Ok(()) = std::fs::write(
+            repo.path().join("alpha").join("lib.rs"),
+            "pub struct Shared {}\nstruct Hidden;\n",
+        ) else {
+            unreachable!("a module file is writable")
+        };
+        repo
+    }
+
+    /// The vocabulary a sibling can NAME. A private type is not one: a
+    /// parallel worker cannot write against a name it cannot spell.
+    #[test]
+    fn seam_names_a_public_type_and_not_a_private_one() {
+        let repo = seam_fixture();
+        let nodes = fed::discover(repo.path());
+        let t = node_types(&repo.path().join("alpha"), &nodes);
+        let named: Vec<&str> = t.iter().map(|p| p.name.as_str()).collect();
+        assert_eq!(named, vec!["Shared"], "a private type is not vocabulary");
+    }
+
+    /// Absence is an answer, not a failure (`V12`): a node with no types
+    /// adds no name a sibling has to know, and the verb still exits 0.
+    #[test]
+    fn a_node_declaring_no_types_reports_rather_than_erroring() {
+        let repo = seam_fixture();
+        let root = repo.path();
+        let nodes = fed::discover(root);
+        assert!(node_types(&root.join("beta"), &nodes).is_empty());
+        assert_eq!(seam_cmd(root, root), ExitCode::SUCCESS, "absence is legal");
+    }
+
+    /// A file belongs to the NEAREST node. `fed::rust_files` recurses and
+    /// the nodes nest, so without that the root row would be the whole
+    /// crate and every type would be counted once per ancestor.
+    #[test]
+    fn a_type_belongs_to_the_nearest_node_not_to_every_ancestor() {
+        let repo = seam_fixture();
+        let nodes = fed::discover(repo.path());
+        let at_root = node_types(repo.path(), &nodes);
+        assert!(at_root.is_empty(), "alpha owns Shared: {at_root:?}");
+    }
+
+    /// A dir naming no node is a usage error rather than an empty report,
+    /// the shape `B5` records one verb over.
+    #[test]
+    fn seam_on_a_dir_matching_no_node_is_usage() {
+        assert_eq!(run_args(argv(&["seam", "no-such-dir"])), ExitCode::from(2));
+    }
+
     /// `sync` is idempotent, `--check` never writes, and a stale `§N` is
     /// reported by both. The exit code inverts on purpose: writing means the
     /// committed tree WAS stale, which CI has to hear about.
@@ -2755,7 +2904,7 @@ mod tests {
     /// the same thing the gate does and covers the dispatch that reaches
     /// them. `.:V27` -- this repo must be a valid federation -- is exactly
     /// the claim being exercised.
-    const VERBS: [&[&str]; 8] = [
+    const VERBS: [&[&str]; 9] = [
         &["graph"],
         &["graph", "--dot"],
         &["graph", "--table"],
@@ -2764,6 +2913,7 @@ mod tests {
         &["check"],
         &["budget"],
         &["slice", "--list"],
+        &["seam"],
     ];
 
     #[test]

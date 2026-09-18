@@ -40,6 +40,7 @@ sib|src/git|one git invocation shape — the repo a command acts on, & the env i
 - lib: `is_called(&str, name) -> bool` — called outside its own declaration
 - lib: `expected_calls(test, existing) -> Vec<String>` — calls a test makes that ⊥ exist yet
 - lib: `signatures(&str) -> String` — public surface, docs kept, bodies dropped
+- lib: `public_types(&str) -> Vec<PubType>` — `pub` struct|enum|trait|type, the names a sibling can spell
 
 ## §R RESEARCH
 
@@ -58,6 +59,7 @@ V4: a heuristic here ! carry the case that broke it as a TEST. the fn is 10 line
 id|status|task|cites
 T2|.|audit `.:review` for parse logic still hiding in a FINDING builder — `unwired` gave up `is_called` & may ⊥ be the only one|V2,V3
 T4|.|relocate the OWNING rows: `.:src/tdd:V7` (split_module) · `.:src/tdd:B13`/`B18` (expected_calls) · `.:src/review:B1`/`B2` (call detection). they constrain code that lives HERE now, & a reader of this node cannot see why `expected_calls` is 75 lines without them (V4). NOTE this LOWERS `.:tdd` & raises this chain — measure both (`.:V110`)|V4,`.:V110`
+T5|x|`seam` — per node dir, the `pub` types a sibling names; emit the vocabulary a parallel build needs, report-only|`.:R57`
 
 ## §B BUGS
 

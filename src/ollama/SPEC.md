@@ -64,6 +64,7 @@ id|status|task|cites
 T3|.|`post_with_retry(&dyn Transport, url, body, timeout, attempts)` — a NEW fn that retries a failing post w/ bounded backoff. ⊥ touch `generate_via`|V18,V16
 T8|.|probe the endpoint's tier and warn when falling back|V3
 T12|.|wire `generate_via` → `post_with_retry`. REPLACES a call site ∴ ⊥ drivable by the loop (`src/plan:V13`)|V16,T3
+T13|.|generalize the endpoint client into a NAMED executor: local model | external command, one interface, local stays default|`.:V123`
 
 ## §B BUGS
 
