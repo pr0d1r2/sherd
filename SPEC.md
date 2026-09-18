@@ -58,6 +58,7 @@ self|.|-
 - cmd: `sherd graph [--dot|--json|--mermaid]` → federation DAG. `--mermaid` = the generated architecture diagram
 - cmd: `sherd lens <dir> [--facet set|setting|human|all]` → default `set`
 - cmd: `sherd budget [dir]` → node/chain/lens/file token table. exit 1 over
+- cmd: `sherd seam [dir]` → PROPOSE the SEAM a parallel build needs: per node, the public types its siblings ! name before any node is written. report-only, writes ⊥ — WHICH types are shared is a JUDGEMENT (R57) (0.5)
 - cmd: `sherd validate` → structural + edges + ceilings + slice drift, & REPORTS what it examined. exit 1 fail
 - cmd: `sherd fed [dir]` → the federation edges a node DECLARES, ⊥ the ones it has
 - cmd: `sherd review [rev]` → mechanical checks on what a commit ADDED (default `HEAD`). ADVISORY: a finding ⊥ fail the cmd, ∵ intent is the reader's call
@@ -142,6 +143,7 @@ R53|the mutation remedy is REFUTED|33/33 authored tests KILLED a known-wrong stu
 R54|the failure is OVER-specification|`escape_cell`'s authored test demands `" a | b "` → `"a\\|b"` (spaces round the PIPE gone, where the row trims the CELL) & that an already-escaped pipe stays. NEITHER is in the invariant ∴ a correct impl FAILS it 3/3. the model fills an underspecified row w/ plausible unstated rules; the impl — blind, same text — fills them differently|`target/authored-tests.txt`
 R55|the detector re-found R54's row, BLIND & mechanically|T97, 11 rows × 3 runs, 66 calls, every run IDENTICAL. ONE row flagged — `escape_cell` 3/3 — & it is R54's row, which a HUMAN found by reading raw output after the fact. the GAP: the row says pipe → `\|` & cell trimmed, & is SILENT on an ALREADY-escaped pipe ∴ the impl escapes it twice, the test demands it stay, & BOTH readings are in the row (`FORMAT.md`'s own rule is silent identically). the invented rule MOVES — R54's test demanded 2, this one demands 1 — & the row is flagged either way. ⊥ reproduced: R52's `for_path`, 0/3 here ∴ that was pooled, ⊥ per-item. 2 of 11 rows yield NO verdict, deterministically: `sign` 3/3 ⊥ compiled (`[i64; 10]` holding 9 elements — an ordinary compile error, ⊥ a `.:src/tdd:B12` name mismatch) & `abort_budget_ms` 3/3 HUNG ∴ `src/assay:B2` was ⊥ a one-off & `src/assay:V6` paid for itself on run 1|`cargo test --test ambiguity -- --ignored`, 66 calls @ .24
 R56|an ignored body reads as uncovered|MEASURED `.coverage` 75.50 → 75.11 when the `#[ignore]`d titrations moved from `src/assay` inline tests to `tests/`. an ignored test body counts in the coverage DENOMINATOR & never runs ∴ every experiment added inline LOWERS the number & a better instrument reads worse. carried out of `T96` when that row went — the row was history, the measurement is not|`tests/`, `cargo llvm-cov`
+R57|seam-first beats dep-order|a sibling repo built 7 federated nodes in PARALLEL, 1 worker per node, after ONE commit declared every node's public TYPES: 27 commits, 277 tests, 7,003 lines, 1 integration break (a type gained a field after a consumer had written fixtures against it). scheduling the SAME DAG by dependency instead = 5 deep, ≤3 nodes ever in flight|measured 2026-09-17, repo anonymous
 
 ## §V INVARIANTS
 
