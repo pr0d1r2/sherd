@@ -25,7 +25,7 @@ self|.|-
 - lang: Rust **edition 2024**. stable. MSRV **1.95** = the FLEET PIN (`nixpkgs-lock` → nixos-26.05). ⊥ a number copied from a sibling: `itok`/`microlith` declare 1.96 & MEASURED compile clean on 1.95 ∴ their floor is a mirror of an old pin, ⊥ a minimum.
 - nixpkgs rev FOLLOWED from `nixpkgs-lock`, ⊥ spelled here. one rev, ~80 repos.
 - target model: `gpt-oss:20b`, 131,072 ctx, local. ⊥ cloud fallback.
-- inference: local HTTP (Ollama) only. ⊥ network otherwise.
+- inference: local HTTP (Ollama) only. ⊥ network otherwise. the CODE-WRITING executor is an ADAPTER (V123): named & swappable, ⊥ in the deterministic core ∴ a wave ? be driven by the local model | an external command, & the core stays offline either way.
 - deterministic core: parse/DAG/budget/ceiling = pure Rust, ⊥ model. model ? prose gen & drift judgement only. DEFAULT features are EMPTY ∴ the installed binary carries ⊥ HTTP client, ⊥ TLS, ⊥ network code; `ollama` is 1 flag away & named when a verb needs it.
 - separator = **directory**. dir tree ! source of truth. ⊥ manifest, ⊥ name-encoded grouping (`core-parse` ⊥ imply parent).
 - federation edge = parent dir → child dir, depth **+1 exactly**. ⊥ skip.
@@ -59,6 +59,7 @@ self|.|-
 - cmd: `sherd lens <dir> [--facet set|setting|human|all]` → default `set`
 - cmd: `sherd budget [dir]` → node/chain/lens/file token table. exit 1 over
 - cmd: `sherd seam [dir]` → PROPOSE the SEAM a parallel build needs: per node, the public types its siblings ! name before any node is written. report-only, writes ⊥ — WHICH types are shared is a JUDGEMENT (R57) (0.5)
+- cmd: `sherd wave [dir]` → fan the READY nodes of the code DAG out to N workers, 1 worktree each, merge in topological order. the executor is NAMED, ⊥ assumed (V123) (0.7)
 - cmd: `sherd validate` → structural + edges + ceilings + slice drift, & REPORTS what it examined. exit 1 fail
 - cmd: `sherd fed [dir]` → the federation edges a node DECLARES, ⊥ the ones it has
 - cmd: `sherd review [rev]` → mechanical checks on what a commit ADDED (default `HEAD`). ADVISORY: a finding ⊥ fail the cmd, ∵ intent is the reader's call
@@ -266,6 +267,7 @@ V121: agentic debt resolution splits in 2 & only 1 half is a PIPELINE. the MECHA
 V122: a workflow ! be AUDITED, ⊥ merely PARSED — & the audit runs at the STRICTER persona w/ a LEDGER for what it declines. `actionlint` type-checks (expr types, `run:` via shellcheck, runner labels, cron) & knows ⊥ about token SCOPE; `zizmor` audits scope · credential persistence · template injection · pinning & does NO syntax check ∴ neither substitutes for the other & swapping them trades a blind spot for a blind spot. MEASURED: 9 pedantic findings across 2 files `actionlint` had passed on EVERY commit of their lives (B28). `--persona=pedantic` reports SMELLS — claims about how a file AGES, ⊥ about what it does today — & conforming to the stricter reading is what produces the pristine file. ∀ DECLINED finding lands in `.github/zizmor.yml` w/ its reason AND its EXIT CONDITION, ∵ an ignore w/ no exit ≡ one nobody revisits (V74 pointing the other way), & line numbers are part of the match ∴ drift RE-OPENS it. the ledger is empty here by MEASUREMENT (`sherd` has no required status checks ∴ naming a job costs nothing), ⊥ by having no rule to write down
 
 V73: dir promotion has 2 triggers — (a) V50 code ceiling, (b) module owns SPEC worth its own node even under ceiling. vendor facades are (b): few hundred lines carrying V17/V24/V25. ⊥ promote every `.rs` — 30 files → 60 is ceremony
+V123: the EXECUTOR is an ADAPTER & sherd owns everything AROUND it: the code DAG, ready set, worktrees, ceilings, gate & merge order stay DETERMINISTIC & offline (V18). WHO writes the code is NAMED — local model | external command — & swapping it changes ⊥ about scheduling. hardcoding the writer ships 2 decisions as 1 ∴ neither measures alone.
 
 ## §T TASKS
 
@@ -302,6 +304,7 @@ T101|.|move the scripted-toolchain fixtures (`scratch`·`scripted_cargo`·`write
 T103|~|LADDER rungs as work: 0.4 = `split`+`sync` DONE · 0.5 = the MECHANICAL surface correct & reusable, measured on a foreign repo · 0.6 = settle · 0.7 = the model half resumes (V117) — & @ 0.7 the 1st question is `src/assay:T6`, whether a FIX SHAPE beats a `§V` ROW: the 4th variable of the `.:R44` gap & the only one untried (V121). 0.1-0.3 reached|V114,V117,V121
 T104|.|lint ratchet ! also count `--no-default-features` — 131 warnings on the SHIPPED binary are uncounted today|V118,B20
 T105|x|BUILD the `V50` check — per-`.rs` code & test ceilings, kind `judgment`. cited 5x as the rule that did the design work & computed nowhere|V119,B23
+T106|.|`wave` — ready set over the code DAG, N workers, 1 worktree each, topological merge; executor named per V123|V123,R57,`src/plan:T15`,`src/ollama:T13`
 
 ## §B BUGS
 
