@@ -58,7 +58,7 @@ self|.|-
 - cmd: `sherd graph [--dot|--json|--mermaid]` → federation DAG. `--mermaid` = the generated architecture diagram
 - cmd: `sherd lens <dir> [--facet set|setting|human|all]` → default `set`
 - cmd: `sherd budget [dir]` → node/chain/lens/file token table. exit 1 over
-- cmd: `sherd seam [dir]` → PROPOSE the SEAM a parallel build needs: per node, the public types its siblings ! name before any node is written. report-only, writes ⊥ — WHICH types are shared is a JUDGEMENT (R57) (0.5)
+- cmd: `sherd seam [dir]` → PROPOSE the SEAM a parallel build needs: per node, the public types its siblings ! name before any node is written. report-only, writes ⊥ — WHICH types are shared is a JUDGEMENT (R57)
 - cmd: `sherd wave [dir]` → fan the READY nodes of the code DAG out to N workers, 1 worktree each, merge in topological order. the executor is NAMED, ⊥ assumed (V123) (0.7)
 - cmd: `sherd validate` → structural + edges + ceilings + slice drift, & REPORTS what it examined. exit 1 fail
 - cmd: `sherd fed [dir]` → the federation edges a node DECLARES, ⊥ the ones it has

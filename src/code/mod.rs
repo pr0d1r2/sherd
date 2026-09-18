@@ -804,6 +804,63 @@ pub fn crate_uses(src: &str) -> Vec<String> {
     out
 }
 
+/// One public TYPE, and the word that declared it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PubType {
+    /// The declared name -- `Edge` in `pub struct Edge {`.
+    pub name: String,
+    /// `struct`, `enum`, `trait` or `type`.
+    pub kind: String,
+}
+
+/// The words that open a type declaration. `fn` and `const` are deliberately
+/// absent: `public_fns` and `signatures` answer those, and this question is
+/// about the VOCABULARY -- the names a sibling's signature can spell before
+/// either node is written (`.:R57`).
+const TYPE_KINDS: [&str; 4] = ["struct", "enum", "trait", "type"];
+
+/// The public types a source declares.
+///
+/// `pub` only, and `pub(crate)` is NOT one, for the reason [`mod_decls`]
+/// already gives: visibility inside the crate is what a bare declaration
+/// carries anyway, and reading it as API calls an internal boundary a shared
+/// one.
+///
+/// Over the WHOLE file rather than [`split_module`]'s impl half: that cut
+/// lands at the first column-0 `#[cfg(test)]`, and this very file declares
+/// `ModDecl` below one. Splitting first would drop a real type from the
+/// report while the report still read clean (`.:V48`).
+///
+/// A declaration inside a STRING LITERAL is counted, which is the trade §C
+/// states for the whole node. It is not theoretical: the first fixture
+/// written for this function was a block literal of declarations, and the
+/// report named four types `src/code` does not have. The fixtures here are
+/// written with `\n` escapes for the same reason `V1` matches at column 0.
+#[must_use]
+pub fn public_types(src: &str) -> Vec<PubType> {
+    src.lines().filter_map(|l| one_type(l.trim())).collect()
+}
+
+/// One `pub struct Foo`, or nothing.
+///
+/// The keyword is matched with the space after it, so `pub structure` -- or
+/// any name merely beginning with a keyword -- declares no type.
+fn one_type(line: &str) -> Option<PubType> {
+    let rest = line.strip_prefix("pub ")?;
+    let kind = TYPE_KINDS
+        .iter()
+        .find(|k| rest.strip_prefix(**k).is_some_and(|r| r.starts_with(' ')))?;
+    let name: String = rest
+        .get(kind.len().saturating_add(1)..)?
+        .chars()
+        .take_while(|c| c.is_alphanumeric() || *c == '_')
+        .collect();
+    (!name.is_empty()).then(|| PubType {
+        name,
+        kind: (*kind).to_string(),
+    })
+}
+
 #[cfg(test)]
 mod structure_tests {
     use super::*;
@@ -854,5 +911,61 @@ use std::path::Path;
     #[test]
     fn a_file_reaching_for_nothing_internal_yields_nothing() {
         assert!(crate_uses("use std::path::Path;\nfn main() {}\n").is_empty());
+    }
+
+    /// Written with `\n` escapes rather than as a block, for the reason
+    /// `V1` gives one function over: a declaration at column 0 inside a
+    /// string literal is read as a real one, and this node reads Rust as
+    /// TEXT (§C). Measured -- the block form made `sherd seam` report four
+    /// types for `src/code` that exist only in this fixture.
+    const TYPES: &str = "pub struct Edge {\n    pub dir: String,\n}\
+         \npub enum Verdict { Fits, Over }\
+         \npub trait Transport {}\
+         \npub type Rows = Vec<Edge>;\
+         \nstruct Hidden;\npub(crate) struct Internal;\
+         \npub fn go() {}\npub const N: u8 = 1;\n";
+
+    /// The four declaration words, and only those. A `pub fn` or a `pub
+    /// const` is a different question -- `public_fns` and `signatures`
+    /// already answer it -- and this one is the VOCABULARY a sibling's
+    /// signature spells (`.:R57`).
+    #[test]
+    fn every_public_type_form_is_named_with_the_word_that_declared_it() {
+        let t = public_types(TYPES);
+        let of = |n: &str| t.iter().find(|p| p.name == n).map(|p| &p.kind);
+        assert_eq!(of("Edge"), Some(&"struct".to_string()));
+        assert_eq!(of("Verdict"), Some(&"enum".to_string()));
+        assert_eq!(of("Transport"), Some(&"trait".to_string()));
+        assert_eq!(of("Rows"), Some(&"type".to_string()));
+        assert_eq!(t.len(), 4, "a fn and a const are not types: {t:?}");
+    }
+
+    /// `pub(crate)` is visibility INSIDE the crate, which is what `mod_decls`
+    /// already refuses to read as published: a sibling node cannot name it,
+    /// so it is not vocabulary a parallel build can share.
+    #[test]
+    fn a_private_or_crate_visible_type_is_not_vocabulary() {
+        let named: Vec<String> =
+            public_types(TYPES).into_iter().map(|p| p.name).collect();
+        assert!(!named.contains(&"Hidden".to_string()), "{named:?}");
+        assert!(
+            !named.contains(&"Internal".to_string()),
+            "pub(crate) is not published: {named:?}"
+        );
+    }
+
+    /// A source declaring no type yields NOTHING rather than erroring --
+    /// absence is an answer, not a failure (`.:src/cli:V12`).
+    #[test]
+    fn a_source_with_no_types_yields_an_empty_vocabulary() {
+        assert!(public_types("pub fn a() {}\n").is_empty());
+        assert!(public_types("").is_empty());
+    }
+
+    /// The keyword is matched WITH the space after it, so a name that merely
+    /// begins with one declares nothing.
+    #[test]
+    fn a_word_beginning_with_a_keyword_is_not_a_declaration() {
+        assert!(public_types("pub structure_of(x: u8) {}\n").is_empty());
     }
 }
