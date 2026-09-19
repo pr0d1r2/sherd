@@ -64,3 +64,4 @@ T5|x|`seam` — per node dir, the `pub` types a sibling names; emit the vocabula
 ## §B BUGS
 
 id|date|cause|fix
+B1|2026-09-19|`crate_uses` took the LEADING ident after `use crate::` ∴ a BRACE GROUP begins w/ `{` & yielded NOTHING. MEASURED on this crate: 4 such lines, & `src/cli` names 8 siblings on one of them ∴ read as reaching for ⊥ & lands in the 1st ready set of any graph built from this. unseen ∵ the only consumer was the family COHESION column & no repo dogfooded HAS a family|V4. split the group on `,` & take each part's leading ident. the test carries the `use crate::{fed, spec};` shape verbatim

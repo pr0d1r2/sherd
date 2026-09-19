@@ -26,6 +26,7 @@ sherd -- federated SPEC.md for small-context local models
   sherd validate         DAG + ids + ceilings + slice drift, one verdict
   sherd split [dir]      propose a federation split. writes nothing
   sherd seam [dir]       the public types each node declares. writes nothing
+  sherd wave [dir]       the rounds a parallel build would run. writes nothing
   sherd adopt <dir> [--map FILE] [--check]  migrate a single-file SPEC.md onto a federation
   sherd sync [dir] [--check]  regenerate §N from §F. exit 1 if it wrote
   sherd route <query>    which node owns a question. 0 hit · 2 miss · 3 ambiguous
@@ -120,6 +121,7 @@ pub fn run_args(args: Vec<String>) -> ExitCode {
             )
         }
         Some("seam") => seam_cmd(&root, &arg_dir(&args, &root)),
+        Some("wave") => wave_cmd(&root, &arg_dir(&args, &root)),
         Some("adopt") => match args.get(1).filter(|a| !a.starts_with("--")) {
             Some(_) => adopt_cmd(&root, &args),
             None => usage("adopt needs a dir"),
@@ -421,7 +423,10 @@ fn split_cmd(root: &Path, dir: &Path, apply: bool) -> ExitCode {
         return ExitCode::from(2);
     }
     let (cost, ceiling) = split_budget(root, dir);
-    println!("{}: chain {cost} tok of {ceiling}", node_label(root, dir));
+    println!(
+        "{}: chain {cost} tok of {ceiling}",
+        fed::node_label(root, dir)
+    );
 
     // STRUCTURE FIRST (`.:src/plan:V17`): what the code already separated, then
     // the prose weight of each. A module the spec never mentions is still a
@@ -455,7 +460,7 @@ fn seam_cmd(root: &Path, dir: &Path) -> ExitCode {
         let types = node_types(node, &nodes);
         examined = examined.saturating_add(1);
         declared = declared.saturating_add(types.len());
-        print_seam(&node_label(root, node), &types);
+        print_seam(&fed::node_label(root, node), &types);
     }
     seam_summary(examined, declared);
     // Examining NOTHING is not passing, the same shape `budget` records:
@@ -492,10 +497,98 @@ fn print_seam(label: &str, types: &[code::PubType]) {
     }
 }
 
+/// `sherd wave [dir]` -- the SCHEDULE a parallel build would follow.
+///
+/// The DETERMINISTIC half of `.:V123`, and only that half: the code DAG, the
+/// ready set of each round, and the two numbers that decide whether a
+/// parallel build is worth running -- DEPTH, the rounds it cannot avoid, and
+/// WIDTH, the most workers it can ever keep busy. No worktree is created, no
+/// worker is started, no executor is named and no model is contacted. WHO
+/// writes the code is a swappable adapter whose choice changes nothing here,
+/// and the model half is frozen until rung 0.7 (`.:V117`).
+///
+/// REPORT-ONLY, like `seam` and `split`, so a CYCLE exits 0. A `use crate::`
+/// cycle is legal, ordinary Rust; it bounds how parallel a build can be
+/// rather than breaking a rule, and naming it is the whole finding. `check`
+/// and `validate` are the verbs that hold verdicts, and `.:V4`'s cycle rule
+/// is about the FEDERATION dag -- a different graph over the same
+/// directories (`src/plan:V23`). Exit 2 stays for a dir matching no node:
+/// examining nothing is not passing (`B5`).
+fn wave_cmd(root: &Path, dir: &Path) -> ExitCode {
+    println!("wave -- the schedule a parallel build would follow\n");
+    let s = plan::wave(root, dir);
+    for (i, round) in s.rounds.iter().enumerate() {
+        print_round(i.saturating_add(1), round);
+    }
+    print_blocked(&s.blocked);
+    let examined = s
+        .rounds
+        .iter()
+        .map(Vec::len)
+        .sum::<usize>()
+        .saturating_add(s.blocked.len());
+    wave_summary(&s, examined);
+    if examined == 0 {
+        eprintln!("sherd: {} matched no node", dir.display());
+        return ExitCode::from(2);
+    }
+    ExitCode::SUCCESS
+}
+
+/// One round: how many nodes may be built at once, and which.
+fn print_round(n: usize, nodes: &[String]) {
+    println!("  round {n:<3} {:>2} node(s)", nodes.len());
+    for node in nodes {
+        println!("      {node}");
+    }
+}
+
+/// Nodes no round can reach. A FINDING, not a failure: they import each
+/// other, so they are one unit of work rather than a broken repository.
+fn print_blocked(blocked: &[String]) {
+    if blocked.is_empty() {
+        return;
+    }
+    println!("\n  BLOCKED -- a cycle in the code DAG, so no round reaches:");
+    for node in blocked {
+        println!("      {node}");
+    }
+    println!(
+        "      these import each other, so they are ONE unit of work -- a \
+         wave cannot split them across workers."
+    );
+}
+
+/// The two numbers that make the case, then what this did NOT do (`.:V48`).
+fn wave_summary(s: &plan::Schedule, examined: usize) {
+    println!(
+        "\n  {examined} node(s) examined · depth {} · width {}",
+        s.depth(),
+        s.width()
+    );
+    println!(
+        "  DEPTH is the critical path -- rounds a wave cannot avoid. WIDTH \
+         is the most workers it can ever keep busy at once."
+    );
+    wave_notes();
+}
+
+/// What the edges ARE, and what the verb refused to do.
+fn wave_notes() {
+    println!(
+        "  Edges are `use crate::` imports between sibling nodes: the CODE \
+         dag, NOT the §F federation dag (`src/plan:V23`)."
+    );
+    println!(
+        "  Nothing was written: no worktree, no worker, no executor, no \
+         model. WHO writes the code is named and swappable (`.:V123`)."
+    );
+}
+
 /// The public types one node declares, sorted and deduplicated.
 fn node_types(node: &Path, nodes: &[PathBuf]) -> Vec<code::PubType> {
     let mut out: Vec<code::PubType> = Vec::new();
-    for f in owned_files(node, nodes) {
+    for f in fed::owned_rust_files(node, nodes) {
         let Ok(text) = std::fs::read_to_string(&f) else {
             continue;
         };
@@ -507,26 +600,6 @@ fn node_types(node: &Path, nodes: &[PathBuf]) -> Vec<code::PubType> {
     }
     out.sort_by(|a, b| a.name.cmp(&b.name));
     out
-}
-
-/// The `.rs` files a node OWNS: everything under it that no DEEPER node
-/// claims.
-///
-/// `fed::rust_files` recurses, and the nodes nest -- `src` contains every
-/// other one -- so without this every type would be reported by each of its
-/// ancestors and the root row would be the whole crate. Attributing a file
-/// to the NEAREST node instead reports it exactly once, and a file in an
-/// unfederated subdirectory still reaches the node above it rather than
-/// vanishing (`.:V16`).
-fn owned_files(node: &Path, nodes: &[PathBuf]) -> Vec<PathBuf> {
-    fed::rust_files(node)
-        .into_iter()
-        .filter(|f| {
-            !nodes
-                .iter()
-                .any(|n| n != node && n.starts_with(node) && f.starts_with(n))
-        })
-        .collect()
 }
 
 /// `sherd adopt <dir> [--map FILE] [--check]` -- a foreign single-file
@@ -651,13 +724,6 @@ fn adopt_wrote(r: &crate::adopt::Report) -> ExitCode {
 fn adopt_failed(msg: &str) -> ExitCode {
     eprintln!("{msg}");
     ExitCode::from(1)
-}
-
-/// A node's path relative to root, with the root itself as `.` rather than
-/// the empty string it strips to.
-fn node_label(root: &Path, dir: &Path) -> String {
-    let rel = dir.strip_prefix(root).unwrap_or(dir).display().to_string();
-    if rel.is_empty() { ".".to_string() } else { rel }
 }
 
 /// The proposal: what the code separated, graded, with the prose weight of
@@ -1880,6 +1946,7 @@ mod tests {
             vec!["plan", "--triage"],
             vec!["slice", "--check"],
             vec!["seam"],
+            vec!["wave"],
         ] {
             assert_eq!(
                 run_args(argv(&verb)),
@@ -2986,7 +3053,7 @@ mod tests {
     /// the same thing the gate does and covers the dispatch that reaches
     /// them. `.:V27` -- this repo must be a valid federation -- is exactly
     /// the claim being exercised.
-    const VERBS: [&[&str]; 9] = [
+    const VERBS: [&[&str]; 10] = [
         &["graph"],
         &["graph", "--dot"],
         &["graph", "--table"],
@@ -2996,6 +3063,7 @@ mod tests {
         &["budget"],
         &["slice", "--list"],
         &["seam"],
+        &["wave"],
     ];
 
     #[test]
