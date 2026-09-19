@@ -193,11 +193,14 @@ fn citation_at(line: &str, colon: usize) -> Option<(String, String)> {
 /// Does this spec declare that row id?
 ///
 /// A row opens its line, followed by `|` in a table (`§T`, `§B`) or `:` in a
-/// statement (`§V`, `§R`).
+/// statement (`§V`, `§R`). In a bullet list (`§C`, `§I`) the id opens the
+/// bullet instead, behind `- ` (V8).
 #[must_use]
 pub fn declares(spec: &str, id: &str) -> bool {
     spec.lines().any(|l| {
-        l.strip_prefix(id)
+        l.strip_prefix("- ")
+            .unwrap_or(l)
+            .strip_prefix(id)
             .is_some_and(|r| r.starts_with('|') || r.starts_with(':'))
     })
 }
@@ -295,6 +298,20 @@ mod tests {
         assert!(declares(s, "B7"));
         assert!(!declares(s, "V2"), "V1 must not answer for V2");
         assert!(!declares(s, "V"), "a prefix is not an id");
+    }
+
+    /// V8. `§C` and `§I` are bullet lists in FORMAT.md, so an id there sits
+    /// behind `- `. `citation_at` already accepts `C` and `I`; without this a
+    /// `node:C1` citation could be written and never resolve (`B4`).
+    #[test]
+    fn a_bullet_declares_the_id_it_opens_with() {
+        let s = "## \u{a7}C CONSTRAINTS\n- C1: Rust only\n- plain bullet\n\
+                 ## \u{a7}I INTERFACES\n- I2: `sherd check` exits 1\n";
+        assert!(declares(s, "C1"));
+        assert!(declares(s, "I2"));
+        assert!(!declares(s, "C2"), "C1 must not answer for C2");
+        assert!(!declares("- see C1: for why\n", "C3"), "prose is not a row");
+        assert!(!declares("text - C1: mid-line\n", "C1"), "opens the line");
     }
 
     /// `src/fed:V9`: a `§T` row states REMAINING work. A finished one reads to
