@@ -103,7 +103,7 @@ itok = { version = "0.3", default-features = false, features = ["bpe"] }
 # so the gate's green expired silently whenever the sibling moved, which is B5.
 # A registry version plus the lock checksum is an immutable artifact instead
 # (V101), and the runner in `src/lib.rs` now allows no exceptions at all.
-microlith = "0.6"
+microlith = "0.7.1"
 # ureq 3 with `rustls`, so `SHERD_ENDPOINT` may be an `https://` host. What
 # gets POSTed is the PROMPT -- slices of your spec and your source, because
 # feeding a repository to a model is the whole job -- and `ollama` is a

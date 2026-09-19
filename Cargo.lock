@@ -177,9 +177,9 @@ checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 
 [[package]]
 name = "microlith"
-version = "0.6.1"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f46d7fc3a7505ca134c093959a5f9aebdc29d9a5fe84633699792481fa5b0bb"
+checksum = "6f3528764ca2ec4cf08f6883394da2d801c04df3bbc38105d9fde9552ce4f902"
 
 [[package]]
 name = "once_cell"

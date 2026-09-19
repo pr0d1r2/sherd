@@ -36,6 +36,7 @@ sherd -- federated SPEC.md for small-context local models
   sherd graph [--tree|--table|--dot]  federation DAG, generated from §F
   sherd plan             next 3 steps, with what would invalidate each
   sherd plan --triage    unmanaged rows, with a proposed home for each
+  sherd plan --milestone <M>  next 3 steps among the rows milestone M claims
   sherd apply [--land]   execute step 1 only, commit it to a run branch, stop
   sherd land [--push]    fast-forward main to this run branch, if it earned it
   sherd ask <dir> <q>    ask the endpoint from a node's lens pack
@@ -165,7 +166,20 @@ pub fn run_args(args: Vec<String>) -> ExitCode {
         Some("plan") if args.get(1).map(String::as_str) == Some("--triage") => {
             triage_cmd(&root)
         }
-        Some("plan") => plan_cmd(&root),
+        Some("plan")
+            if args.get(1).map(String::as_str) == Some("--milestone") =>
+        {
+            match args.get(2) {
+                Some(m) if plan::milestone_declared(&root, m) => {
+                    plan_cmd(&root, Some(m))
+                }
+                Some(m) => usage(&format!(
+                    "no node declares milestone `{m}` -- a `| {m} |` row in some node's \u{a7}T"
+                )),
+                None => usage("plan --milestone needs a milestone id, e.g. M1"),
+            }
+        }
+        Some("plan") => plan_cmd(&root, None),
         #[cfg(feature = "ollama")]
         Some("apply") => match plan::apply(&root, 3) {
             Ok(sha) => {
@@ -1694,17 +1708,24 @@ fn tdd_cmd(root: &Path, dir: &Path, invariant: &str, task: &str) -> ExitCode {
     }
 }
 
-fn plan_cmd(root: &Path) -> ExitCode {
-    let p = plan::plan(root);
+fn plan_cmd(root: &Path, milestone: Option<&str>) -> ExitCode {
+    let (p, outside) = plan::plan_in(root, milestone);
     let mut st = state::State::load();
     st.clear_kind("plan"); // a superseded step must not outlive its plan
 
+    let scope = milestone.map_or(String::new(), |m| format!(" in {m}"));
     println!(
-        "HORIZON {} of {} open rows · {} unmanaged\n",
+        "HORIZON {} of {} open rows{scope} · {} unmanaged\n",
         p.steps.len(),
         p.total_open,
         p.unmanaged.len()
     );
+    // V24: rows the filter set aside are named, never silently dropped.
+    if outside > 0 {
+        println!(
+            "  {outside} open rows sit in nodes that declare no milestones -- not in any\n  milestone, so not in this plan.\n"
+        );
+    }
     for (i, t) in p.steps.iter().enumerate() {
         let c = plan::Confidence::of(i);
         let est = lens::pack(root, &root.join(&t.node), lens::Depth::Rule)
@@ -3100,6 +3121,16 @@ mod tests {
     /// `adopt` writes into ANOTHER repository, so the dir is not optional and
     /// defaulting it to the CWD is the shape `B5` records -- a verb answering
     /// confidently about the wrong tree. Here it would answer by writing.
+    /// `src/plan:V24`: a milestone no node declares is a usage error, never an
+    /// empty horizon that reads as "nothing left to do".
+    #[test]
+    fn plan_for_an_undeclared_milestone_is_usage() {
+        let m =
+            |a: &[&str]| run_args(a.iter().map(|s| (*s).to_string()).collect());
+        assert_eq!(m(&["plan", "--milestone", "M999"]), ExitCode::from(2));
+        assert_eq!(m(&["plan", "--milestone"]), ExitCode::from(2));
+    }
+
     #[test]
     fn adopt_without_a_dir_is_usage_rather_than_this_repo() {
         assert_eq!(run_args(vec!["adopt".into()]), ExitCode::from(2));

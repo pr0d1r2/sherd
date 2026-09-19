@@ -30,6 +30,14 @@ pub fn fmt(text: &str) -> Result<String, String> {
     microlith::format_spec(text)
 }
 
+/// Each `| M<n> |` row's id and the `§T` numbers it claims, ranges expanded,
+/// in file order -- microlith's own reading of the milestone grammar, handed
+/// over rather than re-read here (V1; this module is the sole call site, V72).
+#[must_use]
+pub fn milestones(text: &str) -> Vec<(String, Vec<u32>)> {
+    microlith::milestones(text)
+}
+
 /// The RULE sections: what a worker needs to act, without the archive.
 ///
 /// `§G §C §I §V §T` survive; `§R` and `§B` are history and stay out. `§T` is
