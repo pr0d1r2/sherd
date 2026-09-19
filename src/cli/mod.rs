@@ -87,7 +87,8 @@ pub fn run_args(args: Vec<String>) -> ExitCode {
             &crate::land::cargo_bin(),
         ),
         Some("lens") => match (args.get(1), depth_arg(&args)) {
-            // B9: this passed `PathBuf::from(d)` while `budget` and `fed`
+            // `.:B9` (the ROOT's, not this node's): this passed
+            // `PathBuf::from(d)` while `budget` and `fed`
             // went through `arg_dir`, so it never got T10's root resolution
             // and `lens .` reported a different chain than `budget` for the
             // same node. Fixing a shared helper has to be followed by finding
@@ -253,22 +254,57 @@ pub fn run_args(args: Vec<String>) -> ExitCode {
 /// A run with no directory argument at all -- `HEAD` for `review`, `--check`
 /// alone for `sync` -- leaves the CWD walk alone, and an in-repo path
 /// resolves to the same root it always did.
+///
+/// And the directory it names is made ABSOLUTE before the walk. A relative
+/// one was handed over as typed, and `parent()` climbs a relative path to
+/// `""`, which holds no `.git`: the walk ran out of parents and returned its
+/// own START -- the argument -- as the "root", after which `arg_dir` joined
+/// that argument on a second time. `sherd seam code` from `src/` reported
+/// `code/code matched no node`, and the doubling is the proof (`src/cli:B9`,
+/// which is NOT the root's `B9`).
 fn root_for(args: &[String]) -> PathBuf {
-    args.iter()
-        .skip(1)
-        .map(PathBuf::from)
-        .find(|p| p.is_dir())
-        .map_or_else(repo_root, |p| repo_root_from(&p))
+    root_for_from(args, &cwd())
 }
 
+/// As [`root_for`], from an explicit invocation directory (`V6`).
+///
+/// Split for the reason [`repo_root_from`] is: a test can be HANDED the
+/// directory a command was typed in, rather than mutating the process CWD --
+/// which is global, and races every other test in the binary.
+///
+/// The candidate is resolved against `cwd` BEFORE anything reads it, so the
+/// scan and the walk agree about what the path means. `join` is LEXICAL and
+/// total: an absolute argument is left alone, there is no I/O to fail, and
+/// the spelling the caller passed survives. `canonicalize` would also
+/// collapse `..`, but it rewrites symlinks -- macOS hands out
+/// `/var/folders/...` and resolves it to `/private/var/...` -- so the root
+/// would stop comparing equal to the path it was given.
+fn root_for_from(args: &[String], cwd: &Path) -> PathBuf {
+    args.iter()
+        .skip(1)
+        .map(|a| cwd.join(a))
+        .find(|p| p.is_dir())
+        .map_or_else(|| repo_root_from(cwd), |p| repo_root_from(&p))
+}
+
+/// The directory the command was typed in, or `.` when it cannot be read.
+fn cwd() -> PathBuf {
+    std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+}
+
+/// The root from the CWD, for tests that assert about THIS checkout.
+///
+/// Dispatch reaches the walk through [`root_for_from`], which is HANDED its
+/// directory, so this is a test convenience and is compiled as one -- left in
+/// the shipping build it is dead code, which the gate denies.
+#[cfg(test)]
 fn repo_root() -> PathBuf {
-    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-    repo_root_from(&cwd)
+    repo_root_from(&cwd())
 }
 
 /// The walk, given a starting directory (V6).
 ///
-/// Split from [`repo_root`] so a test can be HANDED a tree instead of
+/// Split from `repo_root` so a test can be HANDED a tree instead of
 /// discovering one. `B1` is what the unsplit version cost: the test asserted
 /// that `repo_root()` finds a `.git` and a `SPEC.md`, which it always does
 /// when the runner sits in this checkout and never does anywhere else -- so
@@ -2137,6 +2173,51 @@ mod tests {
         Ok(())
     }
 
+    /// `src/cli:B9` -- NOT the root's `B9`: a RELATIVE `[dir]` never reached
+    /// the walk as a location.
+    ///
+    /// `parent()` climbs a relative path to `""`, which holds no `.git`, so
+    /// the walk ran out of parents and returned its own start -- the argument
+    /// itself -- as the root. `arg_dir` then joined that argument on a second
+    /// time, and `sherd seam code` from `src/` answered `code/code matched no
+    /// node`. The DOUBLING is the proof.
+    ///
+    /// Every spelling of one directory has to resolve to one root: bare,
+    /// `./`-prefixed, from a subdirectory, and absolute. `./x` appeared to
+    /// work from the repo root alone, which is why "use `./`" was never a
+    /// workaround -- it was the one cwd where the two readings agreed.
+    #[test]
+    fn every_spelling_of_a_dir_resolves_to_one_root() -> Result<(), String> {
+        let r = crate::testrepo::TestRepo::new("cli-relative")?;
+        r.write("src/code/SPEC.md", "# SPEC\n\n## \u{a7}G GOAL\n\na node\n")?;
+        r.commit("a node two levels down")?;
+        let root = r.path().to_path_buf();
+        let abs = root.join("src").join("code").display().to_string();
+        for (typed_in, arg) in [
+            (root.clone(), "src/code"),
+            (root.clone(), "./src/code"),
+            (root.join("src"), "code"),
+            (root.join("src"), "./code"),
+            (root.clone(), abs.as_str()),
+        ] {
+            assert_eq!(
+                root_for_from(&argv(&["seam", arg]), &typed_in),
+                root,
+                "`sherd seam {arg}` typed in {}",
+                typed_in.display()
+            );
+        }
+        // The control: resolving against the CWD must not turn a NON-path
+        // into one. A rev is not a dir, so the walk starts where it always
+        // did (`B5`).
+        assert_eq!(
+            root_for_from(&argv(&["review", "HEAD"]), &root),
+            root,
+            "a rev is not a dir"
+        );
+        Ok(())
+    }
+
     /// `B8`: a COLD START is not a breach. With no `.context-limits` at all
     /// the default is a suggestion nobody wrote, and failing a stranger
     /// against it is a claim about a rule that does not exist.
@@ -2882,8 +2963,9 @@ mod tests {
 
     #[test]
     fn arg_dir_resolves_against_root_not_the_cwd() {
-        // B9: a relative argument never compared equal to the absolute paths
-        // `fed::discover` returns, so `budget src/tdd` examined nothing.
+        // `.:B9` (the ROOT's, not this node's): a relative argument never
+        // compared equal to the absolute paths `fed::discover` returns, so
+        // `budget src/tdd` examined nothing.
         let root = Path::new("/tmp/xyz");
         assert_eq!(arg_dir(&argv(&["budget"]), root), root.to_path_buf());
         assert_eq!(
