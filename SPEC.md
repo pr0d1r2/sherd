@@ -59,7 +59,7 @@ self|.|-
 - cmd: `sherd lens <dir> [--facet set|setting|human|all]` → default `set`
 - cmd: `sherd budget [dir]` → node/chain/lens/file token table. exit 1 over
 - cmd: `sherd seam [dir]` → PROPOSE the SEAM a parallel build needs: per node, the public types its siblings ! name before any node is written. report-only, writes ⊥ — WHICH types are shared is a JUDGEMENT (R57)
-- cmd: `sherd wave [dir]` → fan the READY nodes of the code DAG out to N workers, 1 worktree each, merge in topological order. the executor is NAMED, ⊥ assumed (V123) (0.7)
+- cmd: `sherd wave [dir]` → the SCHEDULE a parallel build follows: ready set per round over the CODE dag (`use crate::`, ⊥ `§F`), DEPTH & WIDTH. report-only; a cycle is NAMED, exit 0
 - cmd: `sherd validate` → structural + edges + ceilings + slice drift, & REPORTS what it examined. exit 1 fail
 - cmd: `sherd fed [dir]` → the federation edges a node DECLARES, ⊥ the ones it has
 - cmd: `sherd review [rev]` → mechanical checks on what a commit ADDED (default `HEAD`). ADVISORY: a finding ⊥ fail the cmd, ∵ intent is the reader's call
@@ -304,7 +304,7 @@ T101|.|move the scripted-toolchain fixtures (`scratch`·`scripted_cargo`·`write
 T103|~|LADDER rungs as work: 0.4 = `split`+`sync` DONE · 0.5 = the MECHANICAL surface correct & reusable, measured on a foreign repo · 0.6 = settle · 0.7 = the model half resumes (V117) — & @ 0.7 the 1st question is `src/assay:T6`, whether a FIX SHAPE beats a `§V` ROW: the 4th variable of the `.:R44` gap & the only one untried (V121). 0.1-0.3 reached|V114,V117,V121
 T104|.|lint ratchet ! also count `--no-default-features` — 131 warnings on the SHIPPED binary are uncounted today|V118,B20
 T105|x|BUILD the `V50` check — per-`.rs` code & test ceilings, kind `judgment`. cited 5x as the rule that did the design work & computed nowhere|V119,B23
-T106|.|`wave` — ready set over the code DAG, N workers, 1 worktree each, topological merge; executor named per V123|V123,R57,`src/plan:T15`,`src/ollama:T13`
+T106|.|`wave` EXECUTION @ rung 0.7 — fan the scheduled rounds out to N workers, 1 worktree each, gate & merge in topological order; executor NAMED ⊥ assumed|V123,V117,R57,`src/plan:T15`,`src/ollama:T13`
 
 ## §B BUGS
 
