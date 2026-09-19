@@ -421,7 +421,10 @@ fn split_cmd(root: &Path, dir: &Path, apply: bool) -> ExitCode {
         return ExitCode::from(2);
     }
     let (cost, ceiling) = split_budget(root, dir);
-    println!("{}: chain {cost} tok of {ceiling}", node_label(root, dir));
+    println!(
+        "{}: chain {cost} tok of {ceiling}",
+        fed::node_label(root, dir)
+    );
 
     // STRUCTURE FIRST (`.:src/plan:V17`): what the code already separated, then
     // the prose weight of each. A module the spec never mentions is still a
@@ -455,7 +458,7 @@ fn seam_cmd(root: &Path, dir: &Path) -> ExitCode {
         let types = node_types(node, &nodes);
         examined = examined.saturating_add(1);
         declared = declared.saturating_add(types.len());
-        print_seam(&node_label(root, node), &types);
+        print_seam(&fed::node_label(root, node), &types);
     }
     seam_summary(examined, declared);
     // Examining NOTHING is not passing, the same shape `budget` records:
@@ -495,7 +498,7 @@ fn print_seam(label: &str, types: &[code::PubType]) {
 /// The public types one node declares, sorted and deduplicated.
 fn node_types(node: &Path, nodes: &[PathBuf]) -> Vec<code::PubType> {
     let mut out: Vec<code::PubType> = Vec::new();
-    for f in owned_files(node, nodes) {
+    for f in fed::owned_rust_files(node, nodes) {
         let Ok(text) = std::fs::read_to_string(&f) else {
             continue;
         };
@@ -507,26 +510,6 @@ fn node_types(node: &Path, nodes: &[PathBuf]) -> Vec<code::PubType> {
     }
     out.sort_by(|a, b| a.name.cmp(&b.name));
     out
-}
-
-/// The `.rs` files a node OWNS: everything under it that no DEEPER node
-/// claims.
-///
-/// `fed::rust_files` recurses, and the nodes nest -- `src` contains every
-/// other one -- so without this every type would be reported by each of its
-/// ancestors and the root row would be the whole crate. Attributing a file
-/// to the NEAREST node instead reports it exactly once, and a file in an
-/// unfederated subdirectory still reaches the node above it rather than
-/// vanishing (`.:V16`).
-fn owned_files(node: &Path, nodes: &[PathBuf]) -> Vec<PathBuf> {
-    fed::rust_files(node)
-        .into_iter()
-        .filter(|f| {
-            !nodes
-                .iter()
-                .any(|n| n != node && n.starts_with(node) && f.starts_with(n))
-        })
-        .collect()
 }
 
 /// `sherd adopt <dir> [--map FILE] [--check]` -- a foreign single-file
@@ -651,13 +634,6 @@ fn adopt_wrote(r: &crate::adopt::Report) -> ExitCode {
 fn adopt_failed(msg: &str) -> ExitCode {
     eprintln!("{msg}");
     ExitCode::from(1)
-}
-
-/// A node's path relative to root, with the root itself as `.` rather than
-/// the empty string it strips to.
-fn node_label(root: &Path, dir: &Path) -> String {
-    let rel = dir.strip_prefix(root).unwrap_or(dir).display().to_string();
-    if rel.is_empty() { ".".to_string() } else { rel }
 }
 
 /// The proposal: what the code separated, graded, with the prose weight of

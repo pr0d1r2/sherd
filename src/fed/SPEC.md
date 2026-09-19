@@ -42,6 +42,7 @@ V10: a detector's test ! include a POSITIVE case. asserting only that nothing wa
 V11: sibling `§F` lenses ! EXHAUSTIVE — every child dir on disk appears as a row. a child absent from `§F` is unreachable by descent & invisible to a reader who trusts the table
 V12: sibling `§F` lenses ! DISJOINT — 2 rows ⊥ name the same `dir`. a duplicate makes descent ambiguous & `route` would have to open both
 V14: a finished `§T` row is HISTORY & rule depth LOADS `§T` ∴ every chain pays it every turn — MEASURED 106 done rows tree-wide, 45 @ root, & deleting them dropped root 12,420 → 9,922 & the repo 228,835 → 184,174 tok (19%). V9 said this & nothing read it until `check` counted. what a done row CARRIES moves 1st: a measurement → `§R`, which rule depth does ⊥ load ∴ the finding is kept FREE & only the row is paid (`.:R56` came out of a done root `T96` that way)
+V15: a `.rs` file belongs to the NEAREST node above it & to ⊥ ancestor. nodes NEST ∴ unattributed, `src` owns every sibling's file & the root owns the crate, & a report built on that says the root declares every type & depends on everything. a dir that is ⊥ a node ! still reach the node above it, ⊥ vanish (`.:V16`). `seam` & `wave` both ask ∴ it lives w/ the walk, ⊥ in a caller
 V13: a parser's test ! cover the char it CONSUMES, ⊥ only the sequence it documents. `escaped_pipe_stays_in_the_cell` covers `\|` & nothing covered a LONE `\` ∴ `split_row()` ate backslashes for the project's whole life behind a green suite (B11). B6 is the same shape — a case nothing asserts is a case that passes
 
 ## §T TASKS

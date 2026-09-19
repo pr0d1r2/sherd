@@ -400,6 +400,47 @@ fn collect_rust(dir: &Path, out: &mut Vec<PathBuf>) {
     }
 }
 
+/// A node's NAME: its path relative to the repository root, `.` for the root
+/// itself rather than the empty string it strips to.
+///
+/// The form a citation uses (`src/spec:V7`) and the form every report prints.
+/// Here rather than in a caller because the rule was already written twice --
+/// `disp` above, for the graph renderings, and a copy in `src/cli` for `seam`
+/// and `split` -- and a third consumer would have made it three, which is the
+/// two-readings defect `.:B13` records.
+///
+/// A path from ANOTHER tree is handed back as it is: `strip_prefix` fails,
+/// and relabelling it silently would name a node this repository has not got.
+#[must_use]
+pub fn node_label(root: &Path, dir: &Path) -> String {
+    disp(dir.strip_prefix(root).unwrap_or(dir))
+}
+
+/// The `.rs` files a node OWNS: everything under it that no DEEPER node
+/// claims (V15).
+///
+/// [`rust_files`] recurses and the nodes NEST -- `src` contains every other
+/// node here -- so without this every file is reported by each of its
+/// ancestors and the root owns the whole crate. Attributing a file to the
+/// NEAREST node reports it exactly once, and a file in an unfederated
+/// subdirectory still reaches the node above it rather than vanishing
+/// (`.:V16`).
+///
+/// In this node rather than in the caller that first needed it: which node a
+/// path belongs to is a question about federation STRUCTURE, and `seam` and
+/// `wave` both ask it.
+#[must_use]
+pub fn owned_rust_files(node: &Path, nodes: &[PathBuf]) -> Vec<PathBuf> {
+    rust_files(node)
+        .into_iter()
+        .filter(|f| {
+            !nodes
+                .iter()
+                .any(|n| n != node && n.starts_with(node) && f.starts_with(n))
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -956,6 +997,62 @@ mod nav_tests {
             .collect();
         assert_eq!(found, vec!["src/a.rs", "src/deep/b.rs"], "{found:?}");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Two nodes, one NESTED inside the other, plus a subdirectory that is no
+    /// node at all. Handed to the test rather than discovered (`src/cli:V6`).
+    fn nested_nodes(tag: &str) -> PathBuf {
+        let dir = std::env::temp_dir()
+            .join(format!("sherd-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        for sub in ["src/fed", "src/loose"] {
+            let _ = std::fs::create_dir_all(dir.join(sub));
+        }
+        for f in ["src/lib.rs", "src/fed/mod.rs", "src/loose/x.rs"] {
+            let _ = std::fs::write(dir.join(f), "fn f() {}\n");
+        }
+        dir
+    }
+
+    /// What a node owns, relative to the tree, so the assertion reads the way
+    /// the directories do.
+    fn rel_owned(dir: &Path, node: &Path, nodes: &[PathBuf]) -> Vec<String> {
+        owned_rust_files(node, nodes)
+            .iter()
+            .filter_map(|p| {
+                Some(p.strip_prefix(dir).ok()?.display().to_string())
+            })
+            .collect()
+    }
+
+    /// V15. The nodes NEST, so an unattributed walk hands `src` every
+    /// sibling's file and the root the whole crate -- and a report built on
+    /// that claims the root declares every type and depends on everything.
+    #[test]
+    fn a_file_belongs_to_its_nearest_node_and_to_no_ancestor() {
+        let dir = nested_nodes("owned");
+        let nodes = vec![dir.join("src"), dir.join("src/fed")];
+        assert_eq!(
+            rel_owned(&dir, &dir.join("src"), &nodes),
+            vec!["src/lib.rs", "src/loose/x.rs"],
+            "a deeper node's file is not its parent's, and a subdirectory \
+             that is no node still reaches the node above it"
+        );
+        assert_eq!(
+            rel_owned(&dir, &dir.join("src/fed"), &nodes),
+            vec!["src/fed/mod.rs"]
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The root is `.`, not the empty string it strips to, and a path from
+    /// another tree is left alone rather than silently relabelled.
+    #[test]
+    fn a_node_label_is_relative_and_the_root_is_a_dot() {
+        let root = Path::new("/tmp/sherd-label");
+        assert_eq!(node_label(root, root), ".");
+        assert_eq!(node_label(root, &root.join("src/fed")), "src/fed");
+        assert_eq!(node_label(root, Path::new("/elsewhere")), "/elsewhere");
     }
 }
 
