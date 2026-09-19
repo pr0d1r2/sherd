@@ -362,7 +362,7 @@ fn receive(
     out
 }
 
-/// Append rows to a section, creating the section in FORMAT's position when
+/// Add rows to a section, creating the section in FORMAT's position when
 /// the node has none.
 fn add_rows(text: &str, letter: char, batch: &[String]) -> String {
     let Some(anchor) = anchor_for(text, letter) else {
@@ -371,9 +371,34 @@ fn add_rows(text: &str, letter: char, batch: &[String]) -> String {
     let head = existing_body(text, letter).unwrap_or_else(|| {
         format!("## \u{a7}{}{}", name(letter), header(letter))
     });
-    let body = format!("{head}\n{}", batch.join("\n"));
+    let body = in_id_order(&head, batch);
     let (sec, at) = (letter.to_string(), anchor.to_string());
     spec::upsert_section(text, &sec, body.trim_end(), &at)
+}
+
+/// A section body with each received row placed before the first resident
+/// row numbered higher (V7). Appending instead put a moved `T3` below a
+/// resident `T88`, the order `microlith/V14` rejects -- so V5 refused the
+/// very migration that produced it (`B3`). Lines that are not rows (heading,
+/// table header, prose) keep their place.
+fn in_id_order(head: &str, batch: &[String]) -> String {
+    let mut lines: Vec<String> = head.lines().map(str::to_string).collect();
+    for row in batch {
+        let n = id_number(row).unwrap_or(u64::MAX);
+        let at = lines
+            .iter()
+            .position(|l| id_number(l).is_some_and(|m| m > n))
+            .unwrap_or(lines.len());
+        lines.insert(at, row.clone());
+    }
+    lines.join("\n")
+}
+
+/// The number of the id a row line opens with -- `T88` → 88 -- or `None`
+/// for any line that is not a row.
+fn id_number(line: &str) -> Option<u64> {
+    let row = spec::rows(line).into_iter().next()?;
+    row.id.get(1..)?.parse().ok()
 }
 
 /// The section as it stands, heading included, or `None` when absent.
@@ -688,6 +713,32 @@ render|rendering, output, colour|parsing, input|-\n";
             let found = spec::check(&read(r.path(), rel)?);
             assert!(found.is_empty(), "{rel}: {found:?}");
         }
+        Ok(())
+    }
+
+    /// V7. A node that already holds rows RECEIVES in id order. Appending put
+    /// a moved `T3` below a resident `T88`, and V5's own check then refused
+    /// the whole migration over an order the verb itself had produced (`B3`).
+    #[test]
+    fn received_rows_land_in_id_order_among_resident_rows() -> Result<(), String>
+    {
+        let r = tree("adopt-order")?;
+        r.write(
+            "src/parse/SPEC.md",
+            "# SPEC\n\n## \u{a7}G GOAL\n\nparsing\n\n\
+## \u{a7}V INVARIANTS\n\nV5: a rule this node already had\n\n\
+## \u{a7}T TASKS\n\nid|status|task|cites\nT9|.|a task this node already had|-\n",
+        )?;
+        apply(r.path(), &read_map("V1 src/parse\nT1 src/parse")?)?;
+        let parse = read(r.path(), "src/parse/SPEC.md")?;
+        let at = |needle: &str| {
+            parse
+                .find(needle)
+                .ok_or(format!("{needle} missing:\n{parse}"))
+        };
+        assert!(at("V1: the parser")? < at("V5: a rule")?, "{parse}");
+        assert!(at("T1|.|nested")? < at("T9|.|a task")?, "{parse}");
+        assert!(spec::check(&parse).is_empty(), "{parse}");
         Ok(())
     }
 
