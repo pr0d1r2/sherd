@@ -903,9 +903,28 @@ fn siblings(parent: &Path, root: &Path, name: &str) -> Vec<Nav> {
 pub fn nav_section(rows: &[Nav]) -> String {
     let mut s = String::from("## \u{a7}N NAV\n\nrel|path|lens\n");
     for r in rows {
-        s.push_str(&format!("{}|{}|{}\n", r.rel, r.path, r.lens));
+        s.push_str(&format!("{}|{}|{}\n", r.rel, r.path, escape_cell(&r.lens)));
     }
     s
+}
+
+/// A cell as `split_row` needs to read it back (V16): `|` becomes `\|`, and a
+/// `\` becomes `\\` exactly where V4 would otherwise read it as an escape --
+/// before `\`, before `|`, or ending the cell. Anywhere else a backslash is
+/// literal and stays single, so `C:\path` is written as it reads (`B11`).
+fn escape_cell(cell: &str) -> String {
+    let mut out = String::with_capacity(cell.len());
+    let mut chars = cell.chars().peekable();
+    while let Some(c) = chars.next() {
+        match c {
+            '|' => out.push_str("\\|"),
+            '\\' if matches!(chars.peek(), None | Some('\\' | '|')) => {
+                out.push_str("\\\\");
+            }
+            c => out.push(c),
+        }
+    }
+    out
 }
 
 #[cfg(test)]
@@ -954,6 +973,27 @@ mod nav_tests {
                 .any(|s| s.path == "src/lens" && !s.lens.is_empty()),
             "a sibling carries its parent's lens: {sibs:?}"
         );
+    }
+
+    /// V16. A lens is a `§F` CELL, so it is written back as one: a `|` the
+    /// parser unescaped is re-escaped, or the `§N` row gains a column (`B13`).
+    /// Round-trips through `split_row`, the parser every reader uses.
+    #[test]
+    fn a_lens_holding_a_pipe_stays_one_cell() {
+        for lens in ["depth `rule`|`why`", r"C:\path", r"tail\", r"a\|b"] {
+            let rows = vec![Nav {
+                rel: "sib".into(),
+                path: "src/lens".into(),
+                lens: lens.into(),
+            }];
+            let section = nav_section(&rows);
+            let row = section.lines().last().unwrap_or_default();
+            assert_eq!(
+                split_row(row),
+                vec!["sib".to_string(), "src/lens".into(), lens.into()],
+                "{row}"
+            );
+        }
     }
 
     #[test]
