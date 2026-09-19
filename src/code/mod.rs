@@ -790,18 +790,44 @@ pub fn crate_uses(src: &str) -> Vec<String> {
     let mut out: Vec<String> = src
         .lines()
         .map(str::trim)
-        .filter_map(|l| {
-            let rest = l.strip_prefix("use crate::")?;
-            let name: String = rest
-                .chars()
-                .take_while(|c| c.is_alphanumeric() || *c == '_')
-                .collect();
-            (!name.is_empty()).then_some(name)
-        })
+        .filter_map(|l| l.strip_prefix("use crate::"))
+        .flat_map(use_names)
         .collect();
     out.sort();
     out.dedup();
     out
+}
+
+/// The module names ONE `use crate::` line reaches for.
+///
+/// A BRACE GROUP names several at once -- `use crate::{fed, spec};` -- and
+/// reading only the leading identifier returned NOTHING for it, because the
+/// first character is `{`. MEASURED on this crate: four such lines, and
+/// `src/cli`, which names eight siblings on one of them, read as reaching for
+/// none (`B1`).
+///
+/// A nested group (`use crate::{a::{b, c}, d}`) is split on the commas like
+/// any other, so an inner item can be named as if it were a module. Line
+/// oriented, like everything here, and §C states that trade for the node.
+fn use_names(rest: &str) -> Vec<String> {
+    let Some(group) = rest.strip_prefix('{') else {
+        return leading_ident(rest).into_iter().collect();
+    };
+    group
+        .split_once('}')
+        .map_or(group, |(inner, _)| inner)
+        .split(',')
+        .filter_map(|part| leading_ident(part.trim()))
+        .collect()
+}
+
+/// The identifier a path segment begins with, or nothing.
+fn leading_ident(s: &str) -> Option<String> {
+    let name: String = s
+        .chars()
+        .take_while(|c| c.is_alphanumeric() || *c == '_')
+        .collect();
+    (!name.is_empty()).then_some(name)
 }
 
 /// One public TYPE, and the word that declared it.
@@ -911,6 +937,31 @@ use std::path::Path;
     #[test]
     fn a_file_reaching_for_nothing_internal_yields_nothing() {
         assert!(crate_uses("use std::path::Path;\nfn main() {}\n").is_empty());
+    }
+
+    /// `B1`: a brace GROUP names several modules on one line, and taking only
+    /// the leading identifier saw NONE of them -- the first character is `{`.
+    /// `src/cli` names eight siblings that way and read as reaching for
+    /// nothing, which puts it in the first ready set of any graph built from
+    /// this.
+    ///
+    /// Written with `\n` escapes, and naming modules this crate does not
+    /// have, for the reason the `TYPES` const below gives: this file is read
+    /// as Rust TEXT like any other, so a fixture spelling `use crate::{fed,
+    /// spec};` at the start of a line would put edges into the repository's
+    /// own code DAG (`.:src/plan:V23`).
+    #[test]
+    fn a_brace_group_names_every_module_in_it() {
+        let src = "use crate::{render, units};\nuse crate::bpe;\n\
+                   use std::path::Path;\n";
+        assert_eq!(crate_uses(src), vec!["bpe", "render", "units"]);
+    }
+
+    /// A group with one member, and a trailing comma, are the same group.
+    #[test]
+    fn a_single_member_group_is_still_a_group() {
+        assert_eq!(crate_uses("use crate::{bpe};\n"), vec!["bpe"]);
+        assert_eq!(crate_uses("use crate::{bpe, };\n"), vec!["bpe"]);
     }
 
     /// Written with `\n` escapes rather than as a block, for the reason
