@@ -404,6 +404,7 @@ line fails the gate (`src/cli:V7`, after `src/cli:B2`).
 | `sherd graph [--tree\|--table\|--dot]` | federation DAG, generated from §F |
 | `sherd plan` | next 3 steps, with what would invalidate each |
 | `sherd plan --triage` | unmanaged rows, with a proposed home for each |
+| `sherd plan --milestone <M>` | next 3 steps among the rows milestone M claims |
 | `sherd apply [--land]` | execute step 1 only, commit it to a run branch, stop |
 | `sherd land [--push]` | fast-forward main to this run branch, if it earned it |
 | `sherd ask <dir> <q>` | ask the endpoint from a node's lens pack |
