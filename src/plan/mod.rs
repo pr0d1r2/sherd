@@ -280,10 +280,87 @@ pub struct Plan {
     pub total_open: usize,
 }
 
+/// Keep only the rows `milestone` claims in their OWN node's `§T` (V24).
+///
+/// Ids are node-scoped, so a milestone table speaks only for its own node:
+/// each node is read through microlith's partition (`spec::milestones`), never
+/// a second reading of the grammar. A suffixed id rides its base, as
+/// `microlith/V14` orders it, so `T7a` is in whatever milestone claims 7.
+///
+/// Returns the kept rows and how many open rows sat in nodes that declare NO
+/// milestones -- counted so the caller can say so, because a filter that
+/// silently drops unscheduled work reads as "nothing left" (V3).
+#[must_use]
+pub fn in_milestone(
+    root: &Path,
+    rows: Vec<Task>,
+    milestone: &str,
+) -> (Vec<Task>, usize) {
+    let mut parts: std::collections::BTreeMap<
+        PathBuf,
+        Vec<(String, Vec<u32>)>,
+    > = std::collections::BTreeMap::new();
+    let mut kept = Vec::new();
+    let mut undeclared = 0usize;
+    for t in rows {
+        let node = parts.entry(t.node.clone()).or_insert_with(|| {
+            std::fs::read_to_string(root.join(&t.node).join("SPEC.md"))
+                .map(|s| crate::spec::milestones(&s))
+                .unwrap_or_default()
+        });
+        if node.is_empty() {
+            undeclared = undeclared.saturating_add(1);
+            continue;
+        }
+        let claimed = task_number(&t.id).is_some_and(|n| {
+            node.iter()
+                .any(|(m, tasks)| m == milestone && tasks.contains(&n))
+        });
+        if claimed {
+            kept.push(t);
+        }
+    }
+    (kept, undeclared)
+}
+
+/// `T7` and `T7a` -> 7. A suffixed row rides its base (`microlith/V14`).
+fn task_number(id: &str) -> Option<u32> {
+    let digits: String = id
+        .strip_prefix('T')?
+        .chars()
+        .take_while(char::is_ascii_digit)
+        .collect();
+    digits.parse().ok()
+}
+
+/// Does any node declare this milestone? A name nobody declares is a typo,
+/// and planning it would print an empty horizon that reads as "all done".
+#[must_use]
+pub fn milestone_declared(root: &Path, milestone: &str) -> bool {
+    fed::discover(root).iter().any(|n| {
+        std::fs::read_to_string(n.join("SPEC.md")).is_ok_and(|s| {
+            crate::spec::milestones(&s)
+                .iter()
+                .any(|(m, _)| m == milestone)
+        })
+    })
+}
+
 /// Take the next [`HORIZON`] actionable rows and everything it cannot manage.
 #[must_use]
 pub fn plan(root: &Path) -> Plan {
-    let all = open_tasks(root);
+    plan_in(root, None).0
+}
+
+/// [`plan`], optionally narrowed to one milestone (V24). The second value is
+/// how many open rows the filter set aside because their node declares no
+/// milestones -- 0 without a milestone.
+#[must_use]
+pub fn plan_in(root: &Path, milestone: Option<&str>) -> (Plan, usize) {
+    let (all, outside) = match milestone {
+        Some(m) => in_milestone(root, open_tasks(root), m),
+        None => (open_tasks(root), 0),
+    };
     let total_open = all.len();
     let mut steps = Vec::new();
     let mut unmanaged = Vec::new();
@@ -323,11 +400,14 @@ pub fn plan(root: &Path) -> Plan {
             .then_with(|| a.id.cmp(&b.id))
     });
     steps.extend(candidates.into_iter().take(HORIZON));
-    Plan {
-        steps,
-        unmanaged,
-        total_open,
-    }
+    (
+        Plan {
+            steps,
+            unmanaged,
+            total_open,
+        },
+        outside,
+    )
 }
 
 /// The first `§V` a row cites, as `(where it is declared, id)`.
@@ -1084,6 +1164,51 @@ mod git_tests {
     /// A real node, so `classify` gets past its `mod.rs` guard.
     fn node() -> std::path::PathBuf {
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/fed")
+    }
+
+    const MS_ROOT: &str = "# SPEC\n\n## \u{a7}G GOAL\n\ntoy\n\n\
+## \u{a7}F FEDERATION\n\ndir|owns|\u{22a5}owns|tokens\na|alpha|beta|-\nb|beta|alpha|-\n";
+
+    /// `a` declares milestones, `b` declares none; `T2` is done and `T2a`
+    /// rides it, so M1 claims `T2a` through `T1-T2`.
+    const MS_A: &str = "# SPEC\n\n## \u{a7}G GOAL\n\nalpha\n\n## \u{a7}T TASKS\n\n\
+| id | scope | tasks | done-when |\n|----|-------|-------|-----------|\n\
+| M1 | first | T1-T2 | shipped |\n| M2 | later | T3 | shipped |\n\n\
+id|status|task|cites\nT1|.|one|-\nT2|x|two|-\nT2a|.|two more|-\nT3|.|three|-\n";
+
+    const MS_B: &str = "# SPEC\n\n## \u{a7}G GOAL\n\nbeta\n\n## \u{a7}T TASKS\n\n\
+id|status|task|cites\nT1|.|unscheduled|-\n";
+
+    /// V24. A milestone keeps exactly the rows its OWN node's table claims,
+    /// and the open rows of a node with no milestones are COUNTED, not
+    /// silently dropped -- an empty horizon must never read as "all done".
+    #[test]
+    fn a_milestone_keeps_its_own_rows_and_counts_the_unscheduled()
+    -> Result<(), String> {
+        let r = TestRepo::new("plan-milestone")?;
+        r.write("SPEC.md", MS_ROOT)?;
+        r.write("a/SPEC.md", MS_A)?;
+        r.write("b/SPEC.md", MS_B)?;
+        let (kept, outside) =
+            in_milestone(r.path(), open_tasks(r.path()), "M1");
+        let ids: Vec<String> = kept
+            .iter()
+            .map(|t| format!("{}:{}", t.node.display(), t.id))
+            .collect();
+        assert_eq!(ids, vec!["a:T1", "a:T2a"]);
+        assert_eq!(outside, 1, "b:T1 is counted, not dropped");
+        assert!(milestone_declared(r.path(), "M2"));
+        assert!(!milestone_declared(r.path(), "M9"), "a typo is not a plan");
+        Ok(())
+    }
+
+    /// A suffixed id rides its base, as `microlith/V14` orders it.
+    #[test]
+    fn a_task_number_ignores_its_suffix() {
+        assert_eq!(task_number("T7"), Some(7));
+        assert_eq!(task_number("T7a"), Some(7));
+        assert_eq!(task_number("V7"), None);
+        assert_eq!(task_number("T"), None);
     }
 
     #[test]
