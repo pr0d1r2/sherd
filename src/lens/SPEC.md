@@ -9,7 +9,7 @@ Lens pack — what one node costs to work at.
 rel|path|lens
 up|.|-
 up|src|code nodes — tokens, spec, fed, lens facades & logic
-self|src/lens|pack assembly, depth `rule`|`why`, budget verdict
+self|src/lens|pack assembly, depth `rule`\|`why`, budget verdict
 sib|src/tokens|`itok` facade, counts w/ method label, entry cost, working budget
 sib|src/spec|`microlith` facade, §-section split, structural check, fmt
 sib|src/fed|`§F` parse, edges, chain root→node, `SPEC.md` discovery
