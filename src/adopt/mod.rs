@@ -55,6 +55,20 @@ fn read_source(root: &Path) -> Result<String, String> {
         .map_err(|e| format!("adopt: {}: {e}", path.display()))
 }
 
+/// Rows the source carries in a form this reader does not accept (V8).
+///
+/// Separate from [`propose`] and consulted BEFORE it, because the answer
+/// changes what every other count means: `0 rows read` over a file full of
+/// bracketed rows is not "nothing to move", it is "I could not read this"
+/// (`B4`). One reading for every adopt invocation, propose and `--map`
+/// alike, so no path can skip it.
+///
+/// # Errors
+/// When the root carries no readable `SPEC.md` -- there is nothing to adopt.
+pub fn unreadable(root: &Path) -> Result<Vec<spec::Unreadable>, String> {
+    Ok(spec::unreadable_rows(&read_source(root)?))
+}
+
 /// PROPOSE a row-to-node map. Writes nothing, ever.
 ///
 /// # Errors

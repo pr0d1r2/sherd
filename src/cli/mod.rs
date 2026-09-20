@@ -686,10 +686,47 @@ fn node_types(node: &Path, nodes: &[PathBuf]) -> Vec<code::PubType> {
 /// to move and exits 0 (`src/adopt:V6`).
 fn adopt_cmd(root: &Path, args: &[String]) -> ExitCode {
     let dry = args.iter().any(|a| a == "--check");
+    // BEFORE any count is printed (`src/adopt:V8`). A source this reader
+    // cannot parse produces `0 rows read`, which in adopt's exit scheme means
+    // "nothing to move" -- the opposite answer, in the same words, at the
+    // same exit code (`src/adopt:B4`).
+    match crate::adopt::unreadable(root) {
+        Ok(found) if !found.is_empty() => {
+            return adopt_unreadable(root, &found);
+        }
+        Ok(_) => {}
+        Err(e) => return adopt_failed(&e),
+    }
     match flag_value(args, "--map") {
         None => adopt_propose(root),
         Some(file) => adopt_with_map(root, file, dry),
     }
+}
+
+/// Rows this reader could not parse, named with the line each sits on, and
+/// exit 2 -- the USAGE code, because the file is in a form the verb does not
+/// accept. Exit 0 keeps meaning "I read this and there is nothing to move".
+fn adopt_unreadable(
+    root: &Path,
+    found: &[crate::spec::Unreadable],
+) -> ExitCode {
+    let path = root.join("SPEC.md");
+    eprintln!(
+        "adopt: {}: {} id-shaped row(s) in a form this does not read",
+        path.display(),
+        found.len()
+    );
+    for u in found.iter().take(3) {
+        eprintln!("  line {}: {}", u.line, u.text.trim());
+    }
+    if found.len() > 3 {
+        eprintln!("  ... and {} more", found.len().saturating_sub(3));
+    }
+    eprintln!(
+        "  a row opens its line with the id: `T1|status|task|cites`, \
+         pipe-delimited (FORMAT.md). convert the table and run this again."
+    );
+    ExitCode::from(2)
 }
 
 /// The argument after a flag, e.g. the `FILE` of `--map FILE`.
@@ -3269,6 +3306,35 @@ mod tests {
         with.extend(["--map".to_string(), map.display().to_string()]);
         assert_eq!(run_args(with), ExitCode::from(1), "it wrote");
         assert_eq!(run_args(args), ExitCode::SUCCESS, "nothing left to move");
+        Ok(())
+    }
+
+    /// `src/adopt:B4`. Exit 0 from `adopt` means "I read this and there is
+    /// nothing to move", and a source written in the bracketed table dialect
+    /// produced exactly that while carrying rows. The two answers now differ,
+    /// and the difference is in the exit code as well as the words -- a
+    /// wrapper reads the code.
+    #[test]
+    fn a_source_this_reader_cannot_parse_is_usage_not_nothing_to_move()
+    -> Result<(), String> {
+        let r = adopt_fixture()?;
+        r.write(
+            "SPEC.md",
+            "# SPEC\n\n## \u{a7}G GOAL\n\nx\n\n## \u{a7}F FEDERATION\n\n\
+             dir|owns|\u{22a5}owns|tokens\nsrc|parser input|the goal|-\n\n\
+             ## \u{a7}T TASKS\n\n| id | status | task | cites |\n\
+             | --- | --- | --- | --- |\n| T1 | . | first task | - |\n",
+        )?;
+        let args = vec!["adopt".to_string(), r.path().display().to_string()];
+        assert_eq!(run_args(args.clone()), ExitCode::from(2));
+
+        // The same refusal on the `--map` path: a map cannot be applied to a
+        // file this reader did not read, and that path had its own exit code.
+        let map = r.path().join("map");
+        std::fs::write(&map, "T1 src\n").map_err(|e| e.to_string())?;
+        let mut with = args;
+        with.extend(["--map".to_string(), map.display().to_string()]);
+        assert_eq!(run_args(with), ExitCode::from(2));
         Ok(())
     }
 }
