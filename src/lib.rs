@@ -31,6 +31,7 @@ pub mod state;
 #[cfg(test)]
 pub mod testrepo;
 pub mod tokens;
+pub mod wave;
 
 #[cfg(feature = "ollama")]
 pub mod ollama;
