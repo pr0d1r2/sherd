@@ -52,44 +52,37 @@ pub fn edges(text: &str) -> Vec<Edge> {
     out
 }
 
-/// Split a `§F` row on unescaped pipes.
+/// Split a `§F` row on unescaped pipes (V4).
 ///
-/// `\` escapes the next character only when that character is `\` or `|`;
-/// before anything else it is literal and kept (V4). Two defects shaped this
-/// and both are in `§B`:
+/// The grammar is UPSTREAM's, and so is the code that reads it:
+/// `microlith::cells` decides which pipes are structural and
+/// `microlith::unescape` decodes what is left. `src/spec:V1` -- what
+/// microlith owns is adapted, not reimplemented -- and `src/spec:V5` -- what
+/// the root re-exports is contract -- both point here, and microlith exports
+/// this codec as a set precisely because a pipe row is the one construct a
+/// consumer cannot avoid re-reading (its `B36`).
 ///
-/// B11 -- the first version consumed `\` before ANY character, so the
-/// backslash vanished out of `C:\path`, and a cell ending in `\\` produced
-/// five cells for a four-column row, which `edges()` then dropped silently.
+/// This node had its own reading for the project's life, and three defects
+/// came out of it -- all in `§B`, all kept as the record of why:
+///
+/// B11 -- it consumed `\` before ANY character, so the backslash vanished out
+/// of `C:\path`, and a cell ending in `\\` produced five cells for a
+/// four-column row, which `edges()` then dropped silently.
 ///
 /// B12 -- the first fix escaped only before `|`, which left a cell ENDING in
-/// a backslash unrepresentable: `tail\\|` swallowed the column break. An
-/// escape scheme has to be able to express its own escape character.
+/// a backslash unrepresentable. An escape scheme has to be able to express
+/// its own escape character.
+///
+/// B13 -- the reader and the writer drifted apart, because they were two
+/// readings rather than one codec used in both directions.
+///
+/// What stays local is `fed`'s own shape, not the grammar: the trim, and the
+/// owned `String` per cell that `edges()` and `nav()` hold onto.
 fn split_row(line: &str) -> Vec<String> {
-    let mut cells = vec![String::new()];
-    let mut chars = line.trim().chars().peekable();
-    while let Some(ch) = chars.next() {
-        match ch {
-            '\\' if matches!(chars.peek(), Some('\\' | '|')) => {
-                if let Some(c) = chars.next() {
-                    push(&mut cells, c);
-                }
-            }
-            '|' => cells.push(String::new()),
-            c => push(&mut cells, c),
-        }
-    }
-    cells.iter().map(|c| c.trim().to_string()).collect()
-}
-
-/// Append to the cell being built. The slice is seeded with one `String` and
-/// never shrinks, so the `None` arm is unreachable -- but `indexing_slicing`
-/// is denied and an `expect` here would be a panic in a tool that runs
-/// unattended.
-fn push(cells: &mut [String], c: char) {
-    if let Some(last) = cells.last_mut() {
-        last.push(c);
-    }
+    microlith::cells(line.trim())
+        .into_iter()
+        .map(|c| microlith::unescape(c.trim()))
+        .collect()
 }
 
 /// The chain of `SPEC.md` files from repo root down to `dir`, inclusive.
@@ -908,23 +901,18 @@ pub fn nav_section(rows: &[Nav]) -> String {
     s
 }
 
-/// A cell as `split_row` needs to read it back (V16): `|` becomes `\|`, and a
-/// `\` becomes `\\` exactly where V4 would otherwise read it as an escape --
-/// before `\`, before `|`, or ending the cell. Anywhere else a backslash is
-/// literal and stays single, so `C:\path` is written as it reads (`B11`).
+/// A cell as `split_row` reads it back (V16): `microlith::escape`, the
+/// inverse of the decode above and the same one microlith's own writers use.
+///
+/// The local version doubled a backslash only where V4 would otherwise read
+/// it as an escape -- before `\`, before `|`, or ending the cell -- and left
+/// `C:\path` single. Upstream doubles every backslash, so the ENCODED form of
+/// such a cell changes; the DECODED form does not, which is the only thing a
+/// reader sees and the only thing V16 asserts. One codec used in both
+/// directions is what `B13` asks for: a reader and a writer that are two
+/// readings of one sentence will drift again.
 fn escape_cell(cell: &str) -> String {
-    let mut out = String::with_capacity(cell.len());
-    let mut chars = cell.chars().peekable();
-    while let Some(c) = chars.next() {
-        match c {
-            '|' => out.push_str("\\|"),
-            '\\' if matches!(chars.peek(), None | Some('\\' | '|')) => {
-                out.push_str("\\\\");
-            }
-            c => out.push(c),
-        }
-    }
-    out
+    microlith::escape(cell)
 }
 
 #[cfg(test)]
@@ -994,6 +982,21 @@ mod nav_tests {
                 "{row}"
             );
         }
+    }
+
+    /// The one thing the switch to `microlith::escape` CHANGES, pinned so it
+    /// is a decision rather than a surprise: upstream doubles every
+    /// backslash, the local version doubled only the ones V4 would have read
+    /// as an escape. Both decode to the same cell, and the decode is what a
+    /// reader sees -- but a `§N` row holding a Windows path is written
+    /// differently than it was, and `sync` rewrites it once.
+    #[test]
+    fn upstream_doubles_every_backslash_and_the_decode_is_unchanged() {
+        assert_eq!(escape_cell(r"C:\path"), r"C:\\path");
+        assert_eq!(
+            split_row(&escape_cell(r"C:\path")),
+            vec![r"C:\path".to_string()]
+        );
     }
 
     #[test]

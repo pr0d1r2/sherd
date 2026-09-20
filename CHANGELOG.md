@@ -51,6 +51,22 @@ publish run surfaced two warnings that eleven gate steps had read past
 
 ## [Unreleased]
 
+### Changed
+
+- **`src/fed` reads pipe rows with microlith's exported codec** rather than
+  its own (`src/fed:V4`, `V17`). `split_row` is `microlith::cells` +
+  `unescape`, `escape_cell` is `microlith::escape`; only the trim and the
+  owned cell stay local, because those are `fed`'s shape and not the grammar.
+  Three defects came out of the local reading -- `B11`, `B12` and `B13` -- and
+  the last of them was the reader and the writer drifting apart, which one
+  codec used in both directions cannot do.
+
+  One encoded form changes: upstream doubles every backslash, where the local
+  writer doubled only the ones the splitter would have re-read. Both decode
+  to the same cell, which is what `V16` asserts and all a reader sees; a `§N`
+  row holding a Windows path is rewritten once by `sync`. No such row exists
+  in this repository -- `sherd sync --check` reports 20 nodes, 0 stale.
+
 ### Added
 
 - **`sherd --version` and `sherd -V` print `sherd <semver>` on stdout and exit

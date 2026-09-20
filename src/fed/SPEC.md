@@ -32,7 +32,7 @@ sib|src/git|one git invocation shape — the repo a command acts on, & the env i
 V1: `§F` row = `dir|owns|⊥owns|tokens`. 4 cells or ⊥ a row
 V2: edge depth = parent + 1 exactly. ⊥ skip levels
 V3: `⊥owns` ! present — positive lens decides DESCEND, negative one decides STOP. the negative is the byte that prevents loading
-V4: `\` escapes the NEXT char only when that char is `\` or `\|` — before anything else it is LITERAL & kept ∴ `C:\path` survives `edges()` & a cell may END in a backslash. a splitter consuming `\` before ANY char eats data silently, & leaves a cell ending in one unrepresentable, which V1 then drops as a non-row (B11, B12)
+V4: the row codec is `microlith::cells`+`unescape`+`escape` — the grammar is UPSTREAM's ∴ so is the code (`src/spec:V1`, `src/spec:V5`; `microlith/V38`). what stays here is `fed`'s SHAPE, ⊥ the grammar: the trim & the owned cell. this node's own reading cost B11·B12·B13, & the rule it was reading (`\` escapes the next char only when that char is `\` | `|`, literal elsewhere ∴ `C:\path` survives & a cell may END in a backslash) is now cited, ⊥ restated
 V5: `tokens` = `-` means UNRECORDED, ⊥ zero
 V6: header row (`dir|owns|…`) ⊥ an edge
 V7: `§F` parse stops @ next `## §` header
@@ -44,7 +44,8 @@ V12: sibling `§F` lenses ! DISJOINT — 2 rows ⊥ name the same `dir`. a dupli
 V14: a finished `§T` row is HISTORY & rule depth LOADS `§T` ∴ every chain pays it every turn — MEASURED 106 done rows tree-wide, 45 @ root, & deleting them dropped root 12,420 → 9,922 & the repo 228,835 → 184,174 tok (19%). V9 said this & nothing read it until `check` counted. what a done row CARRIES moves 1st: a measurement → `§R`, which rule depth does ⊥ load ∴ the finding is kept FREE & only the row is paid (`.:R56` came out of a done root `T96` that way)
 V15: a `.rs` file belongs to the NEAREST node above it & to ⊥ ancestor. nodes NEST ∴ unattributed, `src` owns every sibling's file & the root owns the crate, & a report built on that says the root declares every type & depends on everything. a dir that is ⊥ a node ! still reach the node above it, ⊥ vanish (`.:V16`). `seam` & `wave` both ask ∴ it lives w/ the walk, ⊥ in a caller
 V13: a parser's test ! cover the char it CONSUMES, ⊥ only the sequence it documents. `escaped_pipe_stays_in_the_cell` covers `\|` & nothing covered a LONE `\` ∴ `split_row()` ate backslashes for the project's whole life behind a green suite (B11). B6 is the same shape — a case nothing asserts is a case that passes
-V16: a `§N` lens is a `§F` CELL & is WRITTEN BACK as one — `escape_cell()` is V4 in reverse: `|` → `\|`, `\` → `\\` exactly where V4 would read it as an escape (before `\`, before `|`, or ending the cell), literal elsewhere ∴ `split_row(nav_section(x))` returns `x` (B13)
+V16: a `§N` lens is a `§F` CELL & is WRITTEN BACK as one — `escape_cell()` is V4's codec in reverse, i.e. `microlith::escape` ∴ `split_row(nav_section(x))` returns `x` (B13). the ROUND TRIP is the assertion, ⊥ the encoded bytes: upstream doubles EVERY `\` where the local writer doubled only the ones V4 would re-read, & both decode to the same cell
+V17: ONE codec, used in BOTH directions. a reader & a writer that are 2 readings of 1 sentence drift, & B13 is this node's recording of it — `nav_section()` wrote raw while `split_row()` unescaped, & 17 files carried the extra column. importing a codec the upstream EXPORTS as a set (its `B36`: a pipe row is the 1 construct a consumer cannot avoid re-reading) is how that stops being possible, ⊥ a rule to remember
 
 ## §T TASKS
 
