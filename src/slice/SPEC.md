@@ -18,6 +18,7 @@ sib|src/lens|pack assembly, depth `rule`\|`why`, budget verdict
 sib|src/ollama|local endpoint client, `num_ctx`, fence extraction
 sib|src/tdd|red→judge→green→gate→repair loop, source region edits
 sib|src/plan|open `§T` rows, horizon, confidence, `apply` one step
+sib|src/wave|the SCHEDULE a parallel build follows — code DAG, ready set per round, depth & width
 sib|src/review|mechanical checks on what `apply` committed
 sib|src/state|one idempotent cached store — pace, telemetry, applied rows
 sib|src/land|run branch → `main` when believability earns it

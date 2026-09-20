@@ -19,6 +19,7 @@ sib|src/adopt|foreign single-file spec → federation: row placement, citation r
 sib|src/lens|pack assembly, depth `rule`\|`why`, budget verdict
 sib|src/ollama|local endpoint client, `num_ctx`, fence extraction
 sib|src/plan|open `§T` rows, horizon, confidence, `apply` one step
+sib|src/wave|the SCHEDULE a parallel build follows — code DAG, ready set per round, depth & width
 sib|src/review|mechanical checks on what `apply` committed
 sib|src/state|one idempotent cached store — pace, telemetry, applied rows
 sib|src/slice|distil a document to the part needed to ACT, generated

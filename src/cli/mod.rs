@@ -4,7 +4,7 @@
 //! contracts and every §T row about them was unreachable while this file had
 //! no `SPEC.md` to hold them.
 
-use crate::{code, fed, lens, plan, slice, spec, state, tokens};
+use crate::{code, fed, lens, plan, slice, spec, state, tokens, wave};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
@@ -582,11 +582,11 @@ fn print_seam(label: &str, types: &[code::PubType]) {
 /// rather than breaking a rule, and naming it is the whole finding. `check`
 /// and `validate` are the verbs that hold verdicts, and `.:V4`'s cycle rule
 /// is about the FEDERATION dag -- a different graph over the same
-/// directories (`src/plan:V23`). Exit 2 stays for a dir matching no node:
+/// directories (`src/wave:V1`). Exit 2 stays for a dir matching no node:
 /// examining nothing is not passing (`B5`).
 fn wave_cmd(root: &Path, dir: &Path) -> ExitCode {
     println!("wave -- the schedule a parallel build would follow\n");
-    let s = plan::wave(root, dir);
+    let s = wave::wave(root, dir);
     for (i, round) in s.rounds.iter().enumerate() {
         print_round(i.saturating_add(1), round);
     }
@@ -630,7 +630,7 @@ fn print_blocked(blocked: &[String]) {
 }
 
 /// The two numbers that make the case, then what this did NOT do (`.:V48`).
-fn wave_summary(s: &plan::Schedule, examined: usize) {
+fn wave_summary(s: &wave::Schedule, examined: usize) {
     println!(
         "\n  {examined} node(s) examined · depth {} · width {}",
         s.depth(),
@@ -647,7 +647,7 @@ fn wave_summary(s: &plan::Schedule, examined: usize) {
 fn wave_notes() {
     println!(
         "  Edges are `use crate::` imports between sibling nodes: the CODE \
-         dag, NOT the §F federation dag (`src/plan:V23`)."
+         dag, NOT the §F federation dag (`src/wave:V1`)."
     );
     println!(
         "  Nothing was written: no worktree, no worker, no executor, no \
@@ -1699,7 +1699,7 @@ fn check(root: &Path) -> ExitCode {
         };
         bad = bad.saturating_add(check_node(root, node, &path, &text));
     }
-    // `.:V50` at last (`.:T105`). Reported once for the whole tree rather
+    // `.:V50`, built at last. Reported once for the whole tree rather
     // than per node: the ceiling is per FILE (`.:V119`), and a file belongs
     // to exactly one node, so walking nodes would visit each twice.
     let over = file_ceilings(root);

@@ -125,6 +125,7 @@ src/spec       13200
 src/state      12500
 src/tdd        15100
 src/tokens     12800
+src/wave       14200
 #
 # `src/debt` added 2026-08-24 at 13,700, ~22% over its measured 11,262 --
 # the same slack every other row carries. It inherited `src` by longest
@@ -142,3 +143,22 @@ src/tokens     12800
 # prefix, which IS checked (V104), and that left it 3%, which reads as
 # deliberate and was not: the node is new and its §V section is the whole
 # design, so the next legitimate row would have been a raise.
+
+# NEW NODE 2026-09-20: `src/wave` 14200, its first entry rather than a raise
+# of anything. `wave` split out of `src/plan` (`src/plan:T14`, issue #21):
+# that node's subject is what to attempt NEXT, and scheduling a parallel
+# build over the code DAG is a different question with its own graph and its
+# own rule. Measured at the split with `sherd budget`: `src/wave` chain
+# 12,277 -- root 11,537 plus `src` plus its own spec -- so 14200 is the
+# 15-30% slack this file's header asks for. Unlisted it would have inherited
+# 12,300 and sat at 99.8% of it on the day it was created, which is the
+# "ceiling a hair above current" this file warns against.
+#
+# `src/plan` keeps 15200 and is NOT lowered here. Its chain moved 14,239 ->
+# 14,254: the rows that left were two (`V23` moved with its code, `T15` with
+# it), and the 337 lines of scheduler that left were CODE, which this file
+# does not measure. What the split bought shows up in `V50` instead, and not
+# where it was expected: `src/plan/mod.rs` measures code 4,468 tok BEFORE and
+# AFTER, while its tests fall 20,093 -> 16,879. The scheduler sat after that
+# file's first test module, and V50 splits code from tests POSITIONALLY, so
+# 337 lines of production code were being counted as tests all along (`.:B29`).

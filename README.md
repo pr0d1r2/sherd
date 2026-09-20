@@ -11,7 +11,7 @@
 [![gate steps 34](https://img.shields.io/badge/gate_steps-34-6E4AFF)](hk.pkl)
 [![coverage floor 92.3%](https://img.shields.io/badge/coverage_floor-%E2%89%A592.3%25-brightgreen)](.coverage)
 [![lint debt 14.7/KLoC](https://img.shields.io/badge/lint_debt-%E2%89%A414.7%2FKLoC-orange)](.lint-debt)
-[![federated nodes 20](https://img.shields.io/badge/federated_nodes-20-6E4AFF)](SPEC.md)
+[![federated nodes 21](https://img.shields.io/badge/federated_nodes-21-6E4AFF)](SPEC.md)
 
 [![nix flake](https://img.shields.io/badge/nix-flake-5277C3?logo=nixos&logoColor=white)](flake.nix)
 [![nixpkgs 26.05 (2026-09-17 - ecc58f3)](https://img.shields.io/badge/nixpkgs-26.05_(2026--09--17_--_ecc58f3)-5277C3?logo=nixos&logoColor=white)](flake.lock)
@@ -80,6 +80,7 @@ nodes it was missing while this sentence claimed otherwise.
 |   |-- ollama
 |   |-- tdd
 |   |-- plan
+|   |-- wave
 |   |-- review
 |   |-- state
 |   |-- slice
@@ -109,6 +110,7 @@ graph TD
     src_ollama[ollama]
     src_tdd[tdd]
     src_plan[plan]
+    src_wave[wave]
     src_review[review]
     src_state[state]
     src_slice[slice]
@@ -128,6 +130,7 @@ graph TD
     src --> src_ollama
     src --> src_tdd
     src --> src_plan
+    src --> src_wave
     src --> src_review
     src --> src_state
     src --> src_slice
@@ -156,6 +159,7 @@ knows when to stop looking. Also generated, by `sherd graph --table`:
 | `src/ollama` | local endpoint client, `num_ctx`, fence extraction | prompt construction, loop control |
 | `src/tdd` | red→judge→green→gate→repair loop, source region edits | HTTP, token counting |
 | `src/plan` | open `§T` rows, horizon, confidence, `apply` one step | writing code, judging it |
+| `src/wave` | the SCHEDULE a parallel build follows — code DAG, ready set per round, depth & width | planning steps, writing code, running the build |
 | `src/review` | mechanical checks on what `apply` committed | reading the diff, judging intent |
 | `src/state` | one idempotent cached store — pace, telemetry, applied rows | everything else |
 | `src/slice` | distil a document to the part needed to ACT, generated | judging what the slice says |

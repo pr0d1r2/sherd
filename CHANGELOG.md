@@ -70,6 +70,26 @@ publish run surfaced two warnings that eleven gate steps had read past
 
 ### Changed
 
+- **`wave` is its own node, `src/wave`** (`src/plan:T14`). The scheduler --
+  the code DAG, the ready set per round, depth and width -- moved out of
+  `src/plan`, whose subject is what to attempt *next* and why it might not
+  survive contact. It takes its rule with it: the code DAG is not the
+  federation DAG is now `src/wave:V1`, and the three citations of it were
+  repointed. `src/wave` is also where the executor half, frozen until rung
+  `0.7`, will live, which is somewhere that is not the planner.
+
+  The public API moves with it: `plan::wave`, `plan::schedule`,
+  `plan::code_deps`, `plan::Schedule` and `plan::CodeDep` are now
+  `wave::*`. No behaviour changed -- the same 341 tests pass, and `sherd
+  wave` prints what it printed.
+
+  One thing the split MEASURED rather than assumed: `src/plan/mod.rs`
+  reports the same code weight before and after (4,468 tok), while its tests
+  fall 20,093 → 16,879. `V50` splits a file at the *first* `#[cfg(test)]`,
+  so the 337 lines of scheduler below `plan`'s first test module had been
+  counted as tests all along. Recorded as `.:B29` with `T107` for the fix,
+  which re-measures every `.rs` file in the tree and is its own change.
+
 - **`src/fed` reads pipe rows with microlith's exported codec** rather than
   its own (`src/fed:V4`, `V17`). `split_row` is `microlith::cells` +
   `unescape`, `escape_cell` is `microlith::escape`; only the trim and the

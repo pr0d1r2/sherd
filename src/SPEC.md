@@ -15,6 +15,7 @@ lens|pack assembly, depth `rule`\|`why`, budget verdict|parsing, counting intern
 ollama|local endpoint client, `num_ctx`, fence extraction|prompt construction, loop control|-
 tdd|red→judge→green→gate→repair loop, source region edits|HTTP, token counting|-
 plan|open `§T` rows, horizon, confidence, `apply` one step|writing code, judging it|-
+wave|the SCHEDULE a parallel build follows — code DAG, ready set per round, depth & width|planning steps, writing code, running the build|-
 review|mechanical checks on what `apply` committed|reading the diff, judging intent|-
 state|one idempotent cached store — pace, telemetry, applied rows|everything else|-
 slice|distil a document to the part needed to ACT, generated|judging what the slice says|-

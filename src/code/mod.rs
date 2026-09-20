@@ -949,7 +949,7 @@ use std::path::Path;
     /// have, for the reason the `TYPES` const below gives: this file is read
     /// as Rust TEXT like any other, so a fixture spelling `use crate::{fed,
     /// spec};` at the start of a line would put edges into the repository's
-    /// own code DAG (`.:src/plan:V23`).
+    /// own code DAG (`src/wave:V1`).
     #[test]
     fn a_brace_group_names_every_module_in_it() {
         let src = "use crate::{render, units};\nuse crate::bpe;\n\
