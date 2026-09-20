@@ -46,6 +46,7 @@ V14: the binary is a SHIM — `main` holds nothing & dispatch carries no logic; 
 V13: a GENERATOR is tested by running it TWICE. once proves it writes; the 2nd run is what proves it wrote the SAME thing, & `sync`·`slice`·`sherd-dev readme` are all gates whose `--check` half is meaningless if the fix half is ⊥ a fixed point (B4)
 V15: a path from ARGV is ⊥ a location til resolved ABSOLUTE against the CWD, ONCE, before any walk | join reads it. `parent()` climbs a relative path to `""` ∴ an upward walk from one runs out of parents & returns its own START — the ARGUMENT — as the answer, & the caller then joins that argument on a 2nd time (`code/code`, B9). V5 says WHERE the root is; this says what the INPUT ! be. B5·B7·B9 are 1 family & each fix named a different half of the input — WHICH repo · WHICH position · WHICH FORM
 V16: `--version`/`-V` answer on STDOUT w/ exit 0 & name the version `Cargo.toml` declares, ⊥ a 2nd spelling of it. a binary that cannot say what it is forces its wrapper to parse the usage banner (B10)
+V17: a MISS ! teach the spelling that WORKS. `[dir]` is ROOT-relative (V15) ∴ `seam code` typed in `src/` looks for `<root>/code` & misses w/ `src/code` right there — honest, & a dead end (B9's RESIDUE). the fix is the MESSAGE, ⊥ the resolution: trying the CWD next makes what an argument MEANS depend on where the caller stands, which is B5·B7's ambiguity re-admitted. a name NO node carries gets ⊥ invented suggestion (V2); a name SEVERAL carry is LISTED, ⊥ guessed (`.:V20`)
 
 ## §T TASKS
 

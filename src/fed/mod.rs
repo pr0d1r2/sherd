@@ -409,6 +409,37 @@ pub fn node_label(root: &Path, dir: &Path) -> String {
     disp(dir.strip_prefix(root).unwrap_or(dir))
 }
 
+/// Nodes whose path ENDS with the spelling `rel` -- what a reader typed,
+/// read as a name rather than as a location (V18).
+///
+/// `[dir]` resolves against the repo ROOT by design (`src/cli:V15`,
+/// `src/cli:B9`), so `seam code` typed in `src/` looks for `<root>/code` and
+/// misses. The node meant is `src/code`, and it is recoverable from the
+/// spelling ALONE: no CWD is consulted, so what an argument means does not
+/// depend on where the caller stands -- the ambiguity `src/cli:B5` and `B7`
+/// were about. This answers a MISS; it never chooses a node.
+///
+/// A match of the whole relative path is excluded: that spelling is the one
+/// that was just tried, and offering it back is not a suggestion.
+#[must_use]
+pub fn spelled(root: &Path, rel: &Path) -> Vec<PathBuf> {
+    let want: Vec<_> = rel.components().collect();
+    if want.is_empty() {
+        return Vec::new();
+    }
+    discover(root)
+        .into_iter()
+        .filter(|node| {
+            let have: Vec<_> = node
+                .strip_prefix(root)
+                .unwrap_or(node)
+                .components()
+                .collect();
+            have.len() > want.len() && have.ends_with(&want)
+        })
+        .collect()
+}
+
 /// The `.rs` files a node OWNS: everything under it that no DEEPER node
 /// claims (V15).
 ///
@@ -437,8 +468,42 @@ pub fn owned_rust_files(node: &Path, nodes: &[PathBuf]) -> Vec<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::testrepo::TestRepo;
 
     const F: &str = "## \u{a7}F FEDERATION\ndir|owns|\u{22a5}owns|tokens\nsrc|code nodes|scripts, docs|1200\nscripts|inference harness|rust code|-\n\n## \u{a7}V INVARIANTS\nV1: x\n";
+
+    /// V18. Three properties, one fixture, because they are three answers to
+    /// the same question and a tree per answer would say less: a name resolves
+    /// to the node carrying it, the spelling just TRIED is never offered back,
+    /// and a name two nodes carry stays ambiguous rather than being guessed.
+    #[test]
+    fn a_node_is_findable_by_the_name_a_reader_typed() {
+        let r = TestRepo::new("fed-spelled").expect("fixture repo");
+        for n in ["src", "src/code", "dev/tools/code"] {
+            r.write(&format!("{n}/SPEC.md"), "# SPEC\n").expect("write");
+        }
+        let root = r.path();
+
+        // `seam code` from `src/`: the miss `src/cli:B9` left honest and
+        // unhelpful. Two nodes end in `code`, so there is no single answer.
+        let both = spelled(root, Path::new("code"));
+        let names: Vec<String> =
+            both.iter().map(|n| node_label(root, n)).collect();
+        assert_eq!(names, vec!["dev/tools/code", "src/code"], "{both:?}");
+
+        // One more component and it is unambiguous.
+        let one = spelled(root, Path::new("tools/code"));
+        assert_eq!(
+            one.iter().map(|n| node_label(root, n)).collect::<Vec<_>>(),
+            vec!["dev/tools/code"]
+        );
+
+        // The whole relative path names a node exactly -- which is the
+        // spelling that WORKS, so it is never reached as a miss, and handing
+        // it back as a suggestion would be advice to retype what was typed.
+        assert!(spelled(root, Path::new("src/code")).is_empty());
+        assert!(spelled(root, Path::new("")).is_empty());
+    }
 
     #[test]
     fn parses_rows_and_stops_at_next_section() {

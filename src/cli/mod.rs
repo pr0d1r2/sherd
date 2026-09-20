@@ -386,6 +386,48 @@ fn arg_dir(args: &[String], root: &Path) -> PathBuf {
         .map_or_else(|| root.to_path_buf(), |d| root.join(d))
 }
 
+/// A `[dir]` that matched no node, said in full (V2, V18).
+///
+/// The path is named absolute, because that is what was looked for. What the
+/// old message left out is WHY it was looked for there: `arg_dir` resolves
+/// `[dir]` against the repo root, so `seam code` typed in `src/` is a miss
+/// even though `src/code` is right there. The contract stays -- an argument
+/// that means a different node depending on where the caller stands is the
+/// ambiguity `B5` and `B7` were about -- and the miss now teaches the
+/// spelling that works instead of ending the conversation.
+fn no_node(root: &Path, dir: &Path) -> String {
+    let mut msg = format!("sherd: {} matched no node", dir.display());
+    let rel = dir.strip_prefix(root).unwrap_or(dir);
+    let near = fed::spelled(root, rel);
+    let Some((first, rest)) = near.split_first() else {
+        return msg;
+    };
+    msg.push_str(
+        "\n  [dir] is resolved against the repo ROOT, not the directory you \
+         are standing in (V15).",
+    );
+    if rest.is_empty() {
+        msg.push_str(&format!(
+            "\n  did you mean `{}`?",
+            fed::node_label(root, first)
+        ));
+        return msg;
+    }
+    // Several nodes end in that name, so there is no single answer and
+    // guessing one would be `route`'s ambiguous case answered as a hit
+    // (`.:V20`). All of them are named, and the reader picks.
+    let all: Vec<String> =
+        near.iter().map(|n| fed::node_label(root, n)).collect();
+    msg.push_str(&format!(
+        "\n  nodes with that name: {}",
+        all.iter()
+            .map(|n| format!("`{n}`"))
+            .collect::<Vec<_>>()
+            .join(", ")
+    ));
+    msg
+}
+
 /// `sherd init [dir] [--stdout]` -- scaffold a `SPEC.md` for a directory.
 ///
 /// REFUSES an existing file, exit 1, and there is no `--force`. Clobbering a
@@ -494,7 +536,7 @@ fn seam_cmd(root: &Path, dir: &Path) -> ExitCode {
     // Examining NOTHING is not passing, the same shape `budget` records:
     // an empty table and a repo with no types read identically (`B5`).
     if examined == 0 {
-        eprintln!("sherd: {} matched no node", dir.display());
+        eprintln!("{}", no_node(root, dir));
         return ExitCode::from(2);
     }
     ExitCode::SUCCESS
@@ -557,7 +599,7 @@ fn wave_cmd(root: &Path, dir: &Path) -> ExitCode {
         .saturating_add(s.blocked.len());
     wave_summary(&s, examined);
     if examined == 0 {
-        eprintln!("sherd: {} matched no node", dir.display());
+        eprintln!("{}", no_node(root, dir));
         return ExitCode::from(2);
     }
     ExitCode::SUCCESS
@@ -1230,7 +1272,7 @@ fn budget(root: &Path, dir: PathBuf) -> ExitCode {
     // empty table and exited 0, which is indistinguishable from a clean
     // repo -- the same vacuous-pass shape as `src/tdd:V26`.
     if examined == 0 {
-        eprintln!("sherd: {} matched no node", dir.display());
+        eprintln!("{}", no_node(root, &dir));
         return ExitCode::from(2);
     }
     // A COLD START is not a breach. With no `.context-limits` at all the
@@ -3079,6 +3121,28 @@ mod tests {
             arg_dir(&argv(&["budget", "/elsewhere"]), root),
             PathBuf::from("/elsewhere")
         );
+    }
+
+    /// V18, and the residue `B9` left: the contract above is right and the
+    /// miss it produces was a dead end. `seam code` typed in `src/` looks for
+    /// `<root>/code` -- honestly named and still no help to a reader with
+    /// `src/code` in front of them.
+    #[test]
+    fn a_miss_names_the_spelling_that_would_have_worked() {
+        let r = crate::testrepo::TestRepo::new("cli-miss").expect("fixture");
+        r.write("src/code/SPEC.md", "# SPEC\n").expect("write");
+        let root = r.path();
+
+        let msg = no_node(root, &root.join("code"));
+        assert!(msg.contains("matched no node"), "{msg}");
+        assert!(msg.contains("resolved against the repo ROOT"), "{msg}");
+        assert!(msg.contains("did you mean `src/code`?"), "{msg}");
+
+        // A name no node carries gets no invented suggestion: the honest
+        // answer is the miss alone (`V2`).
+        let none = no_node(root, &root.join("nowhere"));
+        assert!(none.contains("matched no node"), "{none}");
+        assert_eq!(none.lines().count(), 1, "{none}");
     }
 
     /// The read-only verbs, run against THIS repo.
