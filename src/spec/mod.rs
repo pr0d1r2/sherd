@@ -38,6 +38,30 @@ pub fn milestones(text: &str) -> Vec<(String, Vec<u32>)> {
     microlith::milestones(text)
 }
 
+/// Each `| M<n> |` row's id and its task cell AS WRITTEN -- `T1-T3` stays a
+/// range here, where [`milestones`] would have expanded it (V10).
+///
+/// The pair is the point. What a row CLAIMS is microlith's answer and is
+/// never re-derived; what it SAYS is what a message has to quote and what a
+/// rewrite has to survive, and the two differ exactly when a range is in
+/// play. `src/adopt:B5` is what that difference cost while nothing could see
+/// it.
+#[must_use]
+pub fn milestone_cells(text: &str) -> Vec<(String, String)> {
+    text.lines()
+        // microlith's own predicate for a milestone row, deliberately the
+        // same one: a line this recognised and `milestones` did not would
+        // pair an id with a cell from another row.
+        .filter(|l| l.starts_with("| M"))
+        .map(|l| {
+            let cells = microlith::cells(l);
+            let at =
+                |n: usize| cells.get(n).map(|c| microlith::unescape(c.trim()));
+            (at(1).unwrap_or_default(), at(3).unwrap_or_default())
+        })
+        .collect()
+}
+
 /// The RULE sections: what a worker needs to act, without the archive.
 ///
 /// `§G §C §I §V §T` survive; `§R` and `§B` are history and stay out. `§T` is
@@ -874,6 +898,36 @@ mod row_tests {
         {
             assert!(rows(line).is_empty(), "not a row: {line}");
         }
+    }
+
+    /// V10. The pair only earns its place where the two readings DIFFER, so
+    /// that is what this asserts: same ids, and a cell that still says
+    /// `T1-T3` where `milestones` has already expanded it to three numbers.
+    #[test]
+    fn a_milestone_cell_is_carried_as_written_while_its_claim_is_expanded() {
+        let doc = "## \u{a7}T TASKS\n\n\
+                   | id | scope | tasks | done-when |\n\
+                   |----|-------|-------|-----------|\n\
+                   | M1 | first | T1-T3 | all three |\n\
+                   | M2 | second | T7, T9 | both |\n";
+        let cells = milestone_cells(doc);
+        assert_eq!(
+            cells,
+            vec![
+                ("M1".to_string(), "T1-T3".to_string()),
+                ("M2".to_string(), "T7, T9".to_string()),
+            ]
+        );
+
+        let claimed = milestones(doc);
+        let ids: Vec<&String> = claimed.iter().map(|(m, _)| m).collect();
+        assert_eq!(ids, vec!["M1", "M2"], "the two readings pair up");
+        assert_eq!(
+            claimed.first().map(|(_, t)| t.clone()),
+            Some(vec![1, 2, 3]),
+            "expanded there, and not here"
+        );
+        assert!(milestone_cells("V1: not a milestone row").is_empty());
     }
 
     /// V9. A DETECTOR needs a positive case or a function that finds nothing

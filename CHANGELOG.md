@@ -53,6 +53,23 @@ publish run surfaced two warnings that eleven gate steps had read past
 
 ### Fixed
 
+- **`sherd adopt` names a milestone RANGE it cannot split, instead of failing
+  three steps downstream** (`src/adopt:B5`, `V9`, `src/spec:V10`). A monolith
+  whose milestone row lists `T1-T3` -- the form `microlith/V15` documents as
+  the cheap way to maintain that column, and so the form a brownfield spec
+  most often carries -- was refused with `microlith/V15: T3 is in no
+  milestone`, a symptom naming a row that never moved. The citation rewrite
+  walks token by token, so the range became `` `child:T1` ``-`T3`, which
+  expands to no tasks at all.
+
+  The range is now detected before anything is written and quoted as the
+  reader wrote it: *``M1`` lists its tasks as a RANGE (`T1-T3`) and this map
+  moves T1, T2 -- a range cannot survive a split. Expand it into ids before
+  adopting.* It is not expanded automatically, because the ids of one
+  milestone may land in two nodes and which of them keeps the row is a
+  judgement. A range no row of the map touches is left alone, so a rerun over
+  an already-migrated tree still exits clean (`V6`).
+
 - **`sherd adopt` refuses a source it cannot read instead of reporting it
   empty** (`src/adopt:B4`, `V8`, `src/spec:V9`). A `SPEC.md` whose `§T` is
   written as a bracketed markdown table -- `| T1 | . | first task | - |` --
