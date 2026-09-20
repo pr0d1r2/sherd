@@ -36,12 +36,22 @@ sib|src/git|one git invocation shape — the repo a command acts on, & the env i
 
 ## §I INTERFACES
 
-- lib: `split_module(&str) -> (&str, &str)` — impl half, test half
+- lib: `split_module(&str) -> (&str, &str)` — the CUT: where the 1st test region begins. a POSITION, for `tdd`'s region write & `review`'s per-side read
+- lib: `split_regions(&str) -> (String, String)` — the MEASURE: EVERY non-test region, every test region (V6, `.:B29`)
 - lib: `public_fns(&str) -> Vec<String>` — declared `pub fn` names
+- lib: `fn_names(&str) -> Vec<String>` — every `fn`, ⊥ only the public ones
+- lib: `fn_body(&str, name) -> Option<&str>` — one fn's body, braces matched
 - lib: `is_called(&str, name) -> bool` — called outside its own declaration
 - lib: `expected_calls(test, existing) -> Vec<String>` — calls a test makes that ⊥ exist yet
 - lib: `signatures(&str) -> String` — public surface, docs kept, bodies dropped
+- lib: `test_decls(&str) -> String` — the test names a region declares
+- lib: `literal_indexes(&str) -> Vec<(String, usize)>` — literal index expressions & where
+- lib: `markers(&str) -> Vec<String>` — the stub words a body admits to
+- lib: `mod_decls(&str) -> Vec<ModDecl>` — `mod x;` declarations & their visibility
+- lib: `crate_uses(&str) -> Vec<String>` — WHICH sibling a file reaches for (V5)
+- lib: `crate_imports(&str) -> Vec<Import>` — WHAT it names there: module + last segment (V5)
 - lib: `public_types(&str) -> Vec<PubType>` — `pub` struct|enum|trait|type, the names a sibling can spell
+- lib: `types_in(&[String]) -> Vec<PubType>` — the vocabulary of a NODE: pooled, deduped, sorted
 
 ## §R RESEARCH
 
@@ -55,6 +65,7 @@ V2: `is_called` searches the WHOLE crate, ⊥ the declaring module. a `pub fn` c
 V3: a GENERIC declaration `fn f<'a>(` ⊥ contain `f(` ∴ ⊥ count occurrences & assume "declaration + 1" (`.:src/review:B2`)
 V4: a heuristic here ! carry the case that broke it as a TEST. the fn is 10 lines; the reason it is 10 & ⊥ 3 is the §B row it answers
 V5: `crate_uses()` answers WHICH sibling a file reaches for; `crate_imports()` answers WHAT it names there — module + the LAST segment of each branch. a caller asking whether an import is a TYPE reference needs the 2nd (`src/wave:V4`), & a path this line-oriented reader cannot resolve is dropped ∴ the edge counts as BLOCKING, the safe direction
+V6: a CUT is ⊥ a MEASURE. `split_module()` answers WHERE the 1st test region starts — a POSITION, & `tdd`/`review` EDIT against it; `split_regions()` answers HOW MUCH of a file is code — a TOTAL over every region. 1 fn serving both reads production code below a test module as test weight (`.:B29`), & the halves are ⊥ contiguous ∴ the measure ! own its strings. a region opens on `#[cfg(test)]` @ col 0 (V1) & closes @ the next `}` @ col 0 — the ITEM, `mod` | `fn` alike
 
 ## §T TASKS
 
