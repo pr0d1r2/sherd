@@ -51,6 +51,16 @@ publish run surfaced two warnings that eleven gate steps had read past
 
 ## [Unreleased]
 
+### Added
+
+- **`sherd --version` and `sherd -V` print `sherd <semver>` on stdout and exit
+  0** (`src/cli:B10`). Both spellings previously fell through to the unknown
+  command arm, so the binary answered the question with its usage banner on
+  stderr and exit 2 -- the code reserved for a malformed invocation. A CI gate
+  that records the version of every tool it ran could record every sibling in
+  the toolchain and not this one. The number comes from `CARGO_PKG_VERSION`,
+  so it cannot drift from the manifest.
+
 ## [0.5.0] - 2026-08-31
 
 The `0.5` rung as a release. Identical in surface to `0.5.0-rc.1` -- the
