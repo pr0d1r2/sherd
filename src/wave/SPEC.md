@@ -38,6 +38,7 @@ sib|src/git|one git invocation shape — the repo a command acts on, & the env i
 
 - lib: `code_deps(&Path) -> Vec<CodeDep>` — per node, the SIBLING nodes its `use crate::` lines name
 - lib: `schedule(&[CodeDep]) -> Schedule` — ready set per round, pure
+- lib: `CodeDep.needs` (BLOCKING) · `CodeDep.seam` (type-only) · `Schedule.edges`/`.blocking` — both numbers, ⊥ one (V4)
 - lib: `wave(&Path, &Path) -> Schedule` — the schedule a wave over one dir would follow
 - lib: `Schedule::depth()` · `Schedule::width()` — rounds, & the most workers ever busy at once
 
@@ -46,6 +47,7 @@ sib|src/git|one git invocation shape — the repo a command acts on, & the env i
 V1: the CODE dag is ⊥ the FEDERATION dag. code edge = `use crate::` between SIBLING nodes; federation edge = a `§F` row, parent→child ∴ 2 graphs over 1 tree & conflating them ships a schedule nobody can run — `§F` makes co-children read INDEPENDENT when the code makes one wait for the other, & declares parent→child edges the code ⊥ have. a CYCLE in the code dag is legal Rust ∴ NAMED & exit 0, where `.:V4`'s federation cycle is exit 1: 1 word, 2 graphs, 2 verdicts. MOVED here w/ the code it governs, from the rule the planner carried while the scheduler lived there
 V2: a dependency LEAVING the scope is DROPPED, ⊥ left unsatisfiable. keeping it reports every scoped node blocked — a cycle report for a tree w/ no cycle
 V3: a schedule is STABLE between runs ∴ labels sort. a report whose rounds reorder cannot be diffed, & the 2 numbers are what a reader compares
+V4: a TYPE-ONLY import is an EDGE & ⊥ a WAIT. `use crate::lint::Level` names a type a SEAM commit already declared ∴ the importer waits for ⊥ lint's LOGIC, & counting it as blocking UNDERSTATES width exactly when the seam has done its job (B1). an import of the MODULE (`use crate::lint;`) names no item ∴ never type-only, & 1 behavioural reach makes the whole edge blocking — a sibling you ! wait for is ⊥ made safe by also naming its type. BOTH numbers are reported (edges · blocking): 1 of them decided the rounds & a reader cannot see which from `depth` alone
 
 ## §T TASKS
 
@@ -56,3 +58,4 @@ T2|.|`wave --json` — the rounds as data, for a runner that is ⊥ a human|`.:V
 ## §B BUGS
 
 id|date|cause|fix
+B1|2026-09-20|`wave` counted EVERY `use crate::` edge as blocking ∴ it reported the PESSIMISTIC shape precisely when a seam commit had made the edges non-blocking — `seam` proposes the vocabulary that frees them & `wave` measured the same rounds anyway, so the 2 verbs told a reader contradicting stories. MEASURED on a consumer repo of 10 nodes (`.:R57`): `wave` reported depth 5 · width 6, rounds `[charset, scan, cli, tokens] → lint → rules → fix → render`, & the repo was in fact built by 7 workers in 1 ROUND w/ 1 integration break. the 5 rounds never happened. the build was preceded by a seam commit declaring every node's public TYPES & nothing else ∴ `use crate::lint::Level` in `rules` is a compile-time reference to a type that ALREADY EXISTS|V4 & `src/code:V5`: `crate_imports()` reads the ITEM half of a `use` line, & an edge whose every item is a public type of the target is counted & ⊥ waited for. both numbers ship in the report. GENERALLY: a scheduler that cannot tell a TYPE reference from a CALL is measuring the language's compile graph, ⊥ the work graph, & the 2 diverge the moment anyone declares an interface first
