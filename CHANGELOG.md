@@ -67,6 +67,24 @@ publish run surfaced two warnings that eleven gate steps had read past
   row holding a Windows path is rewritten once by `sync`. No such row exists
   in this repository -- `sherd sync --check` reports 20 nodes, 0 stale.
 
+- **A `[dir]` that matches no node now names the spelling that would have
+  worked** (`src/cli:V17`, `src/fed:V18`). `[dir]` is resolved against the
+  repository root, so `sherd seam code` typed in `src/` looks for
+  `<root>/code` and misses while `src/code` sits right there. The contract
+  stays -- an argument whose meaning depends on where the caller stands is
+  the ambiguity `src/cli:B5` and `B7` were about -- and the miss teaches
+  instead of ending the conversation:
+
+  ```
+  sherd: /repo/code matched no node
+    [dir] is resolved against the repo ROOT, not the directory you are standing in (V15).
+    did you mean `src/code`?
+  ```
+
+  The suggestion is read from the spelling alone and never from the working
+  directory. A name no node carries gets no invented suggestion, and a name
+  several nodes carry is listed rather than guessed.
+
 ### Added
 
 - **`sherd --version` and `sherd -V` print `sherd <semver>` on stdout and exit

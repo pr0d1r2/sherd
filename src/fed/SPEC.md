@@ -46,6 +46,7 @@ V15: a `.rs` file belongs to the NEAREST node above it & to ⊥ ancestor. nodes 
 V13: a parser's test ! cover the char it CONSUMES, ⊥ only the sequence it documents. `escaped_pipe_stays_in_the_cell` covers `\|` & nothing covered a LONE `\` ∴ `split_row()` ate backslashes for the project's whole life behind a green suite (B11). B6 is the same shape — a case nothing asserts is a case that passes
 V16: a `§N` lens is a `§F` CELL & is WRITTEN BACK as one — `escape_cell()` is V4's codec in reverse, i.e. `microlith::escape` ∴ `split_row(nav_section(x))` returns `x` (B13). the ROUND TRIP is the assertion, ⊥ the encoded bytes: upstream doubles EVERY `\` where the local writer doubled only the ones V4 would re-read, & both decode to the same cell
 V17: ONE codec, used in BOTH directions. a reader & a writer that are 2 readings of 1 sentence drift, & B13 is this node's recording of it — `nav_section()` wrote raw while `split_row()` unescaped, & 17 files carried the extra column. importing a codec the upstream EXPORTS as a set (its `B36`: a pipe row is the 1 construct a consumer cannot avoid re-reading) is how that stops being possible, ⊥ a rule to remember
+V18: a node is findable by the NAME a reader typed — `spelled()` matches a trailing run of components over `discover()`, & reads ⊥ the CWD ∴ the answer is the same wherever it was typed. it answers a MISS & never CHOOSES: the exact spelling is excluded (it is the one that worked), & 2 nodes ending in 1 name are both returned (`src/cli:V17`)
 
 ## §T TASKS
 
