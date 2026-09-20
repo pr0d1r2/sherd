@@ -211,9 +211,68 @@ pub fn refusals(root: &Path, map: &BTreeMap<String, String>) -> Vec<String> {
     let declared: BTreeSet<String> =
         fed::declared(root).into_iter().map(|h| h.node).collect();
     let source = read_source(root).unwrap_or_default();
-    map.iter()
+    let mut out: Vec<String> = map
+        .iter()
         .filter_map(|(id, node)| refusal(root, &declared, &source, (id, node)))
+        .collect();
+    out.extend(ranges_that_would_break(&source, map));
+    out
+}
+
+/// Milestone rows that list a RANGE the migration would split apart (V9).
+///
+/// A range is the format's own affordance and the cheap way to maintain the
+/// column (`microlith/V15`), so it is the shape a brownfield spec most often
+/// carries -- and the rewrite that namespaces moved ids works token by token,
+/// which turns `T1-T3` into `` `child:T1` ``-`T3`. What `check` then reported
+/// was `T3 is in no milestone`: a SYMPTOM, three steps from the cause, on a
+/// migration that wrote nothing (`B5`).
+///
+/// Refused up front and named, rather than expanded here. Expanding is a
+/// judgement about the column's future: the ids of one milestone may end up
+/// in two nodes, and which of them keeps the milestone row -- or whether the
+/// table moves out of `SPEC.md` entirely, as this repository's own reporter
+/// did -- is the reader's call, not a rewrite's.
+///
+/// A range NOBODY moves is left alone. `V6` says a second run over a migrated
+/// tree finds nothing to move and says so, and a refusal that fired on a
+/// range no row of the map touches would make every rerun fail.
+fn ranges_that_would_break(
+    source: &str,
+    map: &BTreeMap<String, String>,
+) -> Vec<String> {
+    spec::milestone_cells(source)
+        .into_iter()
+        .filter_map(|(id, cell)| {
+            let claimed = claims_of(source, &id)?;
+            // A RANGE is the difference between what the row claims and what
+            // it spells out -- measured, not re-parsed. `T1-T3` claims three
+            // and writes two, and that gap is the whole detection.
+            let spelled = cell.split(',').count();
+            if claimed.len() <= spelled {
+                return None;
+            }
+            let moving: Vec<String> = claimed
+                .iter()
+                .map(|n| format!("T{n}"))
+                .filter(|t| map.contains_key(t))
+                .collect();
+            (!moving.is_empty()).then(|| {
+                format!(
+                    "adopt: `{id}` lists its tasks as a RANGE (`{cell}`) and this map moves {} -- a range cannot survive a split. Expand it into ids before adopting.",
+                    moving.join(", ")
+                )
+            })
+        })
         .collect()
+}
+
+/// What one milestone row claims, ranges expanded -- microlith's reading.
+fn claims_of(source: &str, id: &str) -> Option<Vec<u32>> {
+    spec::milestones(source)
+        .into_iter()
+        .find(|(m, _)| m == id)
+        .map(|(_, claimed)| claimed)
 }
 
 /// Why one mapping is refused, if it is.
@@ -710,6 +769,51 @@ render|rendering, output, colour|parsing, input|-\n";
         let out = apply(r.path(), &read_map("T2 src/render")?)?;
         assert_eq!(out.moved, 1, "the move still happens");
         assert!(!out.carried.is_empty(), "and the tree's own is reported");
+        Ok(())
+    }
+
+    /// A monolith whose milestone row lists its tasks as a RANGE -- the form
+    /// `microlith/V15` documents as the cheap way to maintain the column, and
+    /// so the form a brownfield spec is most likely to carry.
+    fn tree_with_milestone(tag: &str, cell: &str) -> Result<TestRepo, String> {
+        let r = tree(tag)?;
+        let source = read(r.path(), "SPEC.md")?.replace(
+            "## \u{a7}T TASKS\n\nid",
+            &format!(
+                "## \u{a7}T TASKS\n\n| id | scope | tasks | done-when |\n\
+                 |----|-------|-------|-----------|\n\
+                 | M1 | first milestone | {cell} | both are done |\n\nid"
+            ),
+        );
+        r.write("SPEC.md", &source)?;
+        Ok(r)
+    }
+
+    /// V9 (`B5`). Three readings of one tree, because the rule is a
+    /// DIFFERENCE and asserting only the refusal would be satisfied by a
+    /// check that refuses everything.
+    #[test]
+    fn a_milestone_range_is_refused_only_when_the_map_splits_it()
+    -> Result<(), String> {
+        let r = tree_with_milestone("adopt-range", "T1-T2")?;
+        let refused = refusals(r.path(), &read_map("T1 src/parse")?);
+        assert_eq!(refused.len(), 1, "{refused:?}");
+        let first = refused.first().map_or("", String::as_str);
+        assert!(first.contains("`M1`"), "{first}");
+        assert!(first.contains("RANGE (`T1-T2`)"), "the cell AS WRITTEN");
+        assert!(first.contains("moves T1"), "{first}");
+
+        // A range NOTHING moves is left alone, or `V6`'s rerun over a
+        // migrated tree would fail forever.
+        let untouched = refusals(r.path(), &read_map("B1 src/parse")?);
+        assert!(untouched.is_empty(), "{untouched:?}");
+
+        // And the spelled-out form migrates, which is the whole point of
+        // naming the range rather than refusing every milestone table.
+        let ids = tree_with_milestone("adopt-ids", "T1, T2")?;
+        let ok = refusals(ids.path(), &read_map("T1 src/parse")?);
+        assert!(ok.is_empty(), "{ok:?}");
+        assert_eq!(apply(ids.path(), &read_map("T1 src/parse")?)?.moved, 1);
         Ok(())
     }
 
