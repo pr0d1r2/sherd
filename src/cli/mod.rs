@@ -44,8 +44,15 @@ sherd -- federated SPEC.md for small-context local models
   sherd oneshot <dir> <Vn> <task>   the monolith arm: one call, whole repo
 
   -v, --verbose        dump every prompt and stream every reply
+  -V, --version        print `sherd <semver>` and exit 0
 
 exit: 0 clean · 1 violation · 2 usage";
+
+/// The answer to `--version`: the crate version this binary was built from.
+///
+/// `env!`, so it cannot drift from `Cargo.toml` -- a second spelling of a
+/// version number is the founding defect §C names, one field over.
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Parse argv and dispatch. The binary itself holds nothing (`src/cli:V14`).
 #[must_use]
@@ -237,6 +244,13 @@ pub fn run_args(args: Vec<String>) -> ExitCode {
         },
         Some("-h" | "--help" | "help") => {
             println!("{USAGE}");
+            ExitCode::SUCCESS
+        }
+        // STDOUT and exit 0, like every sibling in the toolchain. A version
+        // on stderr behind exit 2 is one a CI gate has to parse out of a
+        // usage banner, which is what `B10` records.
+        Some("-V" | "--version") => {
+            println!("sherd {VERSION}");
             ExitCode::SUCCESS
         }
         Some(other) => usage(&format!("unknown command '{other}'")),
@@ -3108,6 +3122,29 @@ mod tests {
             run_args(argv(&["budget", "no-such-dir"])),
             ExitCode::from(2)
         );
+    }
+
+    /// V16. Both spellings answer, and they answer with the version this
+    /// binary was BUILT from -- `B10` is the state where neither did, and a
+    /// CI gate recording tool versions had to parse the usage banner.
+    #[test]
+    fn both_version_spellings_exit_clean_and_name_the_crate_version() {
+        assert_eq!(run_args(argv(&["--version"])), ExitCode::SUCCESS);
+        assert_eq!(run_args(argv(&["-V"])), ExitCode::SUCCESS);
+
+        // Read from the manifest rather than restated here: a literal in
+        // this assertion is the second spelling `VERSION` exists to avoid,
+        // and it would need editing at every release.
+        let manifest =
+            include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml"));
+        let declared = manifest
+            .lines()
+            .find_map(|l| l.strip_prefix("version = \""))
+            .and_then(|v| v.split_once('"').map(|(v, _)| v));
+        assert_eq!(declared, Some(VERSION), "{VERSION}");
+
+        let parts: Vec<&str> = VERSION.split('.').collect();
+        assert_eq!(parts.len(), 3, "semver, three components: {VERSION}");
     }
 
     #[test]

@@ -72,16 +72,27 @@ pub fn dispatched(source: &str) -> Vec<String> {
     out
 }
 
-/// Verbs that dispatch and appear in no usage line (`src/cli:V7`).
+/// A dispatch arm that is a FLAG about the binary, not a verb acting on a
+/// repository.
 ///
-/// `help` and its flag spellings are excluded: they are how usage is REACHED,
-/// so a usage text listing itself would be noise rather than a contract.
+/// `help` and its spellings are how usage is REACHED, so a usage text listing
+/// itself would be noise rather than a contract. `--version` is the same
+/// thing one field over: it answers what this binary IS. Both are excluded
+/// from the two contracts below -- `usage_lines` and `specced` read VERB
+/// lines, and neither the README's Commands table nor `§I` is a place a flag
+/// belongs. `-v`/`--verbose` is absent from both for the same reason and
+/// never reached here, because it is removed from argv before dispatch.
+fn is_flag_not_verb(v: &str) -> bool {
+    matches!(v, "help" | "--help" | "-h" | "--version" | "-V")
+}
+
+/// Verbs that dispatch and appear in no usage line (`src/cli:V7`).
 pub fn undocumented(usage: &str, source: &str) -> Vec<String> {
     let named: Vec<String> =
         usage_lines(usage).into_iter().map(|(v, _)| v).collect();
     dispatched(source)
         .into_iter()
-        .filter(|v| !matches!(v.as_str(), "help" | "--help" | "-h"))
+        .filter(|v| !is_flag_not_verb(v))
         .filter(|v| !named.contains(v))
         .collect()
 }
@@ -177,6 +188,33 @@ exit: 0 clean · 1 violation · 2 usage";
         assert!(undocumented(USAGE, dispatch).is_empty());
     }
 
+    /// `src/cli:B10`'s residue: the fix for it adds a dispatch arm, and both
+    /// contracts over dispatch would otherwise demand a `--version` row in a
+    /// table of VERBS -- the README's Commands section and `§I`.
+    ///
+    /// The fixture carries the `match args.first()` header `dispatched`
+    /// scopes to, and the assertion below proves the arm was SEEN. Without
+    /// it both checks pass over an empty verb list, which is the vacuous
+    /// green this repo keeps finding (`.:B17`).
+    #[test]
+    fn version_is_a_flag_in_neither_the_commands_table_nor_the_interface() {
+        let dispatch = "\
+    match args.first().map(String::as_str) {
+        Some(\"budget\") => budget(),
+        Some(\"-V\" | \"--version\") => version(),
+    }
+";
+        assert_eq!(dispatched(dispatch), vec!["budget", "-V"]);
+        assert!(undocumented(USAGE, dispatch).is_empty());
+        assert!(
+            interface_drift(
+                "## §I INTERFACES\n\n- cmd: `sherd budget [dir]` → a table\n",
+                dispatch
+            )
+            .is_empty()
+        );
+    }
+
     #[test]
     fn every_documented_verb_reaches_the_table() {
         let table = render(USAGE);
@@ -230,7 +268,7 @@ pub fn interface_drift(spec: &str, source: &str) -> Vec<String> {
         .collect();
     let mut out: Vec<String> = dispatched(source)
         .into_iter()
-        .filter(|v| !matches!(v.as_str(), "help" | "--help" | "-h"))
+        .filter(|v| !is_flag_not_verb(v))
         .filter(|v| !named.contains(&v))
         .map(|v| format!("`{v}` dispatches and §I does not name it"))
         .collect();
