@@ -1613,19 +1613,25 @@ fn dangling_citations(root: &Path, text: &str) -> Vec<String> {
 /// size. Re-derive that number before this refuses a commit.
 ///
 /// Counted SEPARATELY per `§V50`, never as one ceiling over both.
+///
+/// Over every REGION, not from the first `#[cfg(test)]` onward: production
+/// code written below a test module is code, and measuring it as test weight
+/// is what `.:B29` records. `code::split_regions` owns that reading -- the
+/// cut point `src/tdd` and `src/review` edit against is a different question
+/// and keeps its own function.
 fn file_ceilings(root: &Path) -> Vec<String> {
     let mut out = Vec::new();
     for f in fed::rust_files(root) {
         let Ok(src) = std::fs::read_to_string(&f) else {
             continue;
         };
-        let (impl_r, tests_r) = crate::code::split_module(&src);
+        let (impl_r, tests_r) = crate::code::split_regions(&src);
         let rel = f.strip_prefix(root).unwrap_or(&f).display().to_string();
         for (half, text, ceiling) in [
             ("code", impl_r, crate::debt::CEILING_FILE),
             ("tests", tests_r, crate::debt::CEILING_TEST),
         ] {
-            let n = tokens::count(text).tokens;
+            let n = tokens::count(&text).tokens;
             if n > ceiling {
                 out.push(format!(
                     "{rel}: sherd/V50: {half} {n} tok over {ceiling} -- \

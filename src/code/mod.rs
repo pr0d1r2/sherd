@@ -14,10 +14,17 @@
 //! Everything here is a pure function over `&str`. No IO, no model, no
 //! subprocess -- which is what makes it testable without either.
 
-/// Split a Rust source file at the `#[cfg(test)]` boundary.
+/// The CUT POINT: where the first `#[cfg(test)]` region begins.
 ///
-/// ONE definition. The code ceiling (`.:V50`) needs exactly this split, and
-/// two readings of one rule is the defect this project exists to end.
+/// One definition of the cut, and two callers depend on it being a cut rather
+/// than a measure: `src/tdd` writes a generated test region back over the
+/// tail, and `src/review` reads what a commit added on each side of it. Both
+/// need one position in the file, not a total.
+///
+/// What it is NOT is a measurement of how much of a file is code. Everything
+/// after the first marker is the second half, production code included, and
+/// [`split_regions`] is the function that answers that question instead
+/// (`.:B29`).
 ///
 /// Matches at column 0 only, so the marker inside a string literal -- a test
 /// fixture carrying `"#[cfg(test)]\nmod t {"` -- does not split the file.
@@ -27,6 +34,44 @@ pub fn split_module(src: &str) -> (&str, &str) {
         Some(i) => (&src[..i + 1], &src[i + 1..]),
         None => (src, ""),
     }
+}
+
+/// The MEASURE: every non-test region of a file, and every test region.
+///
+/// A file may hold production code BELOW a test module, and the cut above
+/// reads all of it as tests. `.:B29` is what that cost -- 337 lines of
+/// scheduler sat below `src/plan`'s first test module and were weighed
+/// against the TEST ceiling for as long as they existed, so the code number
+/// `.:V50` reports did not move when they left the file.
+///
+/// A region opens on `#[cfg(test)]` at column 0 and closes on the next `}` at
+/// column 0: the item the attribute applies to, whether that is a `mod` or a
+/// single `fn` (`src/cli` has one of each). Column 0 for the same reason
+/// `split_module` uses it, V1 -- a marker indented or inside a string is
+/// content, not structure.
+///
+/// Returns owned strings because the regions are not contiguous. That is the
+/// whole difference from the cut, and it is why the two cannot be one
+/// function.
+#[must_use]
+pub fn split_regions(src: &str) -> (String, String) {
+    let mut code = String::new();
+    let mut tests = String::new();
+    let mut in_tests = false;
+    for line in src.lines() {
+        if !in_tests && line.starts_with("#[cfg(test)]") {
+            in_tests = true;
+        }
+        let half = if in_tests { &mut tests } else { &mut code };
+        half.push_str(line);
+        half.push('\n');
+        // The close of the attributed item. Anything nested is indented, so
+        // this is the end of the region rather than of a block inside it.
+        if in_tests && line == "}" {
+            in_tests = false;
+        }
+    }
+    (code, tests)
 }
 
 /// The `pub fn` names a source declares.
@@ -659,6 +704,68 @@ mod tests {
         let (i, t) = split_module(src);
         assert_eq!(t, "", "a marker inside a literal is not a boundary");
         assert!(i.contains("pub fn a"));
+    }
+
+    /// `.:B29`, planted. 337 lines of scheduler sat below `src/plan`'s first
+    /// test module and were weighed against the TEST ceiling for as long as
+    /// they existed -- so when they moved to another node, the code number
+    /// `.:V50` reports did not change. The CUT still cuts at the first
+    /// marker, which is what `src/tdd` and `src/review` edit against; the
+    /// MEASURE sums every region, and this asserts both readings side by
+    /// side, since agreeing was the bug.
+    #[test]
+    fn code_below_a_test_module_is_code_to_the_measure_and_not_to_the_cut() {
+        let src = "pub fn above() {}\n\
+                   #[cfg(test)]\n\
+                   mod t {\n    #[test]\n    fn x() {}\n}\n\
+                   pub fn below() {}\n";
+
+        let (code, tests) = split_regions(src);
+        assert!(code.contains("pub fn above"), "{code}");
+        assert!(code.contains("pub fn below"), "the whole finding: {code}");
+        assert!(!code.contains("#[cfg(test)]"), "{code}");
+        assert!(tests.contains("fn x"), "{tests}");
+        assert!(!tests.contains("pub fn below"), "{tests}");
+
+        // The cut is UNCHANGED, and that is deliberate: it answers where the
+        // test region starts, not how much of the file is code.
+        let (_, tail) = split_module(src);
+        assert!(tail.contains("pub fn below"), "the cut still cuts: {tail}");
+    }
+
+    /// The attribute applies to an ITEM, and the item is not always a module:
+    /// `src/cli` carries a `#[cfg(test)] fn repo_root()`. The old cut read
+    /// every line after it as tests; the measure closes the region at the
+    /// item's own `}` and keeps reading code afterwards.
+    #[test]
+    fn a_cfg_test_function_closes_its_own_region() {
+        let src = "pub fn a() {}\n\
+                   #[cfg(test)]\n\
+                   fn helper() -> u8 {\n    1\n}\n\
+                   pub fn b() {}\n";
+        let (code, tests) = split_regions(src);
+        assert!(
+            code.contains("pub fn a") && code.contains("pub fn b"),
+            "{code}"
+        );
+        assert!(tests.contains("fn helper"), "{tests}");
+        assert!(!tests.contains("pub fn b"), "{tests}");
+    }
+
+    /// V1 holds for the measure as it does for the cut: a marker indented or
+    /// inside a string literal is content. `src/tdd`'s corpora carry one.
+    #[test]
+    fn the_measure_matches_at_column_zero_only() {
+        let src =
+            "pub const F: &str = \"#[cfg(test)]\\nmod t {}\";\npub fn a() {}\n";
+        let (code, tests) = split_regions(src);
+        assert_eq!(tests, "", "a marker inside a literal opens no region");
+        assert!(code.contains("pub fn a"));
+
+        // And a file with no tests at all is all code, both readings.
+        let (code, tests) = split_regions("pub fn a() {}\n");
+        assert_eq!(tests, "");
+        assert_eq!(code, "pub fn a() {}\n");
     }
 
     #[test]
