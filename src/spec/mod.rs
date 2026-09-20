@@ -685,6 +685,64 @@ pub struct Row {
     pub line: usize,
 }
 
+/// A line that LOOKS like a row and is not one this grammar reads.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Unreadable {
+    /// 1-indexed line in the source document.
+    pub line: usize,
+    /// The line, byte for byte.
+    pub text: String,
+}
+
+/// Lines carrying an id in a form [`rows`] does not accept (V9).
+///
+/// The bracketed markdown table -- `| T1 | . | first task | - |` -- is the
+/// one a stranger writes, and to [`rows`] it is prose: the id does not open
+/// the line, so the file reads as having no rows at all. "I read this and
+/// there is nothing" and "I could not read this" then produce the same
+/// output and the same exit code, and on a repository being weighed for
+/// adoption the first is the opposite of the truth (`src/adopt:B4`).
+///
+/// The id shape is decided by the same private parser `rows` uses and not by
+/// a second reading of it:
+/// the first cell is handed to the same parser with the terminator it would
+/// have had. So `M1` in a bracketed milestone table is NOT reported -- this
+/// grammar does not own `M`, `microlith::milestones` reads that table, and
+/// flagging it would refuse every spec that keeps one.
+#[must_use]
+pub fn unreadable_rows(spec: &str) -> Vec<Unreadable> {
+    spec.lines()
+        .enumerate()
+        .filter(|(_, line)| row_id(line).is_none())
+        .filter(|(_, line)| bracketed_id(line))
+        .map(|(n, line)| Unreadable {
+            line: n.saturating_add(1),
+            text: line.to_string(),
+        })
+        .collect()
+}
+
+/// `| T1 | ... |` -- an id in the first cell of a leading-pipe table row.
+///
+/// Three cells at least, so a two-column table of prose whose first cell
+/// happens to read `T1` is not mistaken for a row, and the separator line
+/// (`| --- | --- |`) fails the id test anyway.
+fn bracketed_id(line: &str) -> bool {
+    let trimmed = line.trim();
+    let Some(body) = trimmed.strip_prefix('|') else {
+        return false;
+    };
+    // The CLOSING pipe is punctuation of this dialect, not a column: left on,
+    // it yields an empty trailing cell and a two-column table of prose counts
+    // as three.
+    let body = body.strip_suffix('|').unwrap_or(body);
+    let cells: Vec<&str> = microlith::cells(body);
+    let Some(first) = cells.first().map(|c| c.trim()) else {
+        return false;
+    };
+    cells.len() >= 3 && row_id(&format!("{first}|")).is_some()
+}
+
 /// Every addressable row of a spec, in document order.
 ///
 /// One parser (V1): `declares` already fixed what a row LOOKS like -- an id
@@ -815,6 +873,43 @@ mod row_tests {
         for line in ["id|status|task|cites", "V without a number: x", "Vx|.|y"]
         {
             assert!(rows(line).is_empty(), "not a row: {line}");
+        }
+    }
+
+    /// V9. A DETECTOR needs a positive case or a function that finds nothing
+    /// passes it (`src/fed:V10`), and it needs the negatives too, because
+    /// every false positive here REFUSES a migration.
+    #[test]
+    fn a_bracketed_table_row_is_seen_as_unreadable_and_a_real_one_is_not() {
+        let doc = "# SPEC\n\n\
+                   ## \u{a7}T TASKS\n\n\
+                   | id | status | task | cites |\n\
+                   | --- | --- | --- | --- |\n\
+                   | T1 | . | first task | - |\n\
+                   | T2 | x | second | - |\n";
+        let found = unreadable_rows(doc);
+        assert_eq!(found.len(), 2, "{found:?}");
+        let [first, _] = found.as_slice() else {
+            unreachable!("two, and the pattern says so")
+        };
+        assert_eq!(first.line, 7);
+        assert_eq!(first.text, "| T1 | . | first task | - |");
+
+        // Rows this grammar DOES read, and lines that only look like rows.
+        assert!(unreadable_rows(DOC).is_empty(), "the readable dialect");
+        for line in [
+            // `M` belongs to `microlith::milestones`, which reads exactly
+            // this table. Reporting it would refuse every spec that keeps a
+            // milestone table -- the form the format documents.
+            "| M1 | first milestone | T1-T3 | all three are done |",
+            "| id | status | task | cites |",
+            "| --- | --- | --- | --- |",
+            // Two cells is a table of prose, not a row shape.
+            "| T1 | a note |",
+            // Not a leading-pipe table at all.
+            "see T1 | elsewhere | in prose",
+        ] {
+            assert!(unreadable_rows(line).is_empty(), "not a row: {line}");
         }
     }
 

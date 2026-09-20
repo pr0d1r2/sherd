@@ -51,6 +51,23 @@ publish run surfaced two warnings that eleven gate steps had read past
 
 ## [Unreleased]
 
+### Fixed
+
+- **`sherd adopt` refuses a source it cannot read instead of reporting it
+  empty** (`src/adopt:B4`, `V8`, `src/spec:V9`). A `SPEC.md` whose `§T` is
+  written as a bracketed markdown table -- `| T1 | . | first task | - |` --
+  parsed as having no rows at all, so `adopt --check` printed
+  `0 rows read · 0 placed · 0 unplaced` and exited 0. In this verb's exit
+  scheme that means *nothing to move*, which on a repository being weighed
+  for adoption reads as *already federated* -- the opposite of the truth, in
+  the same words and at the same exit code as the honest answer.
+
+  Rows carrying an id in a form the reader declines are now detected before
+  any count is printed, named with the line each sits on, and the command
+  exits 2. Exit 0 keeps meaning "I read this and there is nothing to move".
+  Milestone tables are untouched: `microlith::milestones` reads that dialect,
+  and `M` is not an id this grammar owns.
+
 ### Changed
 
 - **`src/fed` reads pipe rows with microlith's exported codec** rather than
