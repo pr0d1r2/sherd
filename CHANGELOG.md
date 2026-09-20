@@ -53,6 +53,24 @@ publish run surfaced two warnings that eleven gate steps had read past
 
 ### Fixed
 
+- **`wave` no longer counts a type-only import as a wait** (`src/wave:B1`,
+  `V4`, `src/code:V5`). Every `use crate::` edge was blocking, so `wave`
+  reported the pessimistic shape precisely when a seam commit had made the
+  edges non-blocking: `sherd seam` proposes the vocabulary that frees them
+  and `wave` measured the same rounds anyway, so the two verbs told a reader
+  contradicting stories. `.:R57` has the measurement — a ten-node repository
+  `wave` called five rounds deep, which seven workers in fact built in one.
+
+  An edge is type-only when every item the line names is a public type the
+  sibling declares: `use crate::lint::Level` is a reference to a type a seam
+  commit has already created, not a wait for `lint`'s logic. An import of the
+  module itself names no item and is never type-only, and one behavioural
+  reach makes the whole edge blocking.
+
+  The report now carries **both** numbers — `N sibling edge(s) · M blocking ·
+  K type-only` — because only one of them decided the rounds, and a reader
+  cannot see which from `depth` alone.
+
 - **`sherd adopt` names a milestone RANGE it cannot split, instead of failing
   three steps downstream** (`src/adopt:B5`, `V9`, `src/spec:V10`). A monolith
   whose milestone row lists `T1-T3` -- the form `microlith/V15` documents as

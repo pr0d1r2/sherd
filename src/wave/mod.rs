@@ -20,8 +20,12 @@ use std::path::{Path, PathBuf};
 pub struct CodeDep {
     /// The node's path relative to the repository root -- `src/fed`, or `.`.
     pub node: String,
-    /// The sibling nodes it imports, as the same labels.
+    /// The siblings it must WAIT for: it reaches into their behaviour.
     pub needs: Vec<String>,
+    /// The siblings it names only by TYPE, which a seam commit can satisfy
+    /// before either node is written (V4). These are edges, and they are not
+    /// blocking -- `schedule` never waits for one.
+    pub seam: Vec<String>,
 }
 
 /// The rounds a wave would run, and what no round can reach.
@@ -33,6 +37,13 @@ pub struct Schedule {
     /// Nodes no round can reach: a CYCLE in the code DAG. Named rather than
     /// looped over, and not a defect (`V1`).
     pub blocked: Vec<String>,
+    /// Every sibling edge the DAG carries -- blocking and type-only both.
+    pub edges: usize,
+    /// The edges that decided these rounds. The gap between this and
+    /// `edges` is what a seam commit buys, and reporting only one of the two
+    /// is what made `depth` read as a fact rather than an upper bound (V4,
+    /// B1).
+    pub blocking: usize,
 }
 
 impl Schedule {
@@ -49,20 +60,25 @@ impl Schedule {
     }
 }
 
-/// The CODE dag of a repository: per node, the sibling nodes it imports.
+/// The CODE dag of a repository: per node, the siblings it waits for, and
+/// the siblings it names only by type (V4).
 #[must_use]
 pub fn code_deps(root: &Path) -> Vec<CodeDep> {
     let nodes = fed::discover(root);
     nodes
         .iter()
-        .map(|n| CodeDep {
-            node: fed::node_label(root, n),
-            needs: needs_of(root, n, &nodes),
+        .map(|n| {
+            let (needs, seam) = edges_of(root, n, &nodes);
+            CodeDep {
+                node: fed::node_label(root, n),
+                needs,
+                seam,
+            }
         })
         .collect()
 }
 
-/// The sibling nodes one node's `use crate::` lines name.
+/// One node's sibling edges, split into BLOCKING and type-only (V4).
 ///
 /// Resolved against SIBLINGS: a crate module path is one segment, and the
 /// nodes that can carry that segment are the co-children of the same parent
@@ -70,16 +86,58 @@ pub fn code_deps(root: &Path) -> Vec<CodeDep> {
 /// sibling resolves to nothing and is dropped, which is what happens to
 /// `std`, to a module that is not a node, and to a declaration inside a
 /// string literal (`src/code:§C` states that trade).
-fn needs_of(root: &Path, node: &Path, nodes: &[PathBuf]) -> Vec<String> {
+///
+/// An edge is type-only when EVERY item the line names is a public type the
+/// sibling declares. One behavioural reach makes the whole edge blocking, and
+/// a node reached both ways appears only in `needs`: a sibling you must wait
+/// for is not made safe by also naming one of its types.
+fn edges_of(
+    root: &Path,
+    node: &Path,
+    nodes: &[PathBuf],
+) -> (Vec<String>, Vec<String>) {
     let sibs = siblings_of(root, node, nodes);
-    let mut out: Vec<String> = owned_sources(node, nodes)
-        .iter()
-        .flat_map(|t| code::crate_uses(t))
-        .filter_map(|u| sibling_label(&sibs, &u))
-        .collect();
-    out.sort();
-    out.dedup();
-    out
+    let mut needs: Vec<String> = Vec::new();
+    let mut seam: Vec<String> = Vec::new();
+    for src in owned_sources(node, nodes) {
+        for import in code::crate_imports(&src) {
+            let Some(label) = sibling_label(&sibs, &import.module) else {
+                continue;
+            };
+            let target = node_path(root, &label);
+            if type_only(&import, &declared_types(&target, nodes)) {
+                seam.push(label);
+            } else {
+                needs.push(label);
+            }
+        }
+    }
+    dedup(&mut needs);
+    dedup(&mut seam);
+    seam.retain(|l| !needs.contains(l));
+    (needs, seam)
+}
+
+/// Does this import name ONLY types the target declares?
+///
+/// An import of the module itself (`use crate::lint;`) names no item and is
+/// never type-only: what the importer does with it is a call, and the line
+/// does not say which.
+fn type_only(import: &code::Import, types: &[String]) -> bool {
+    !import.items.is_empty() && import.items.iter().all(|i| types.contains(i))
+}
+
+/// The names of the public types a node declares.
+fn declared_types(node: &Path, nodes: &[PathBuf]) -> Vec<String> {
+    code::types_in(&owned_sources(node, nodes))
+        .into_iter()
+        .map(|t| t.name)
+        .collect()
+}
+
+fn dedup(v: &mut Vec<String>) {
+    v.sort();
+    v.dedup();
 }
 
 /// The label of the sibling a crate module name resolves to, if any.
@@ -127,7 +185,14 @@ fn owned_sources(node: &Path, nodes: &[PathBuf]) -> Vec<String> {
 /// rule (`V1`).
 #[must_use]
 pub fn schedule(deps: &[CodeDep]) -> Schedule {
-    let mut out = Schedule::default();
+    let mut out = Schedule {
+        blocking: deps.iter().map(|d| d.needs.len()).sum(),
+        edges: deps
+            .iter()
+            .map(|d| d.needs.len().saturating_add(d.seam.len()))
+            .sum(),
+        ..Schedule::default()
+    };
     let mut built: Vec<String> = Vec::new();
     let mut rest: Vec<&CodeDep> = deps.iter().collect();
     while !rest.is_empty() {
@@ -190,17 +255,22 @@ fn node_path(root: &Path, label: &str) -> PathBuf {
 /// it is not part of this wave, so it is not something this wave waits for.
 /// Keeping it would report every scoped node blocked -- a cycle report for a
 /// tree that has no cycle.
+/// The labels of a list that are inside the scope.
+fn within(labels: &[String], keep: &[String]) -> Vec<String> {
+    labels
+        .iter()
+        .filter(|l| keep.contains(l))
+        .cloned()
+        .collect()
+}
+
 fn scoped(deps: &[CodeDep], keep: &[String]) -> Vec<CodeDep> {
     deps.iter()
         .filter(|d| keep.contains(&d.node))
         .map(|d| CodeDep {
             node: d.node.clone(),
-            needs: d
-                .needs
-                .iter()
-                .filter(|n| keep.contains(n))
-                .cloned()
-                .collect(),
+            needs: within(&d.needs, keep),
+            seam: within(&d.seam, keep),
         })
         .collect()
 }
@@ -210,9 +280,19 @@ mod wave_tests {
     use super::*;
 
     fn dep(node: &str, needs: &[&str]) -> CodeDep {
+        seamed(node, needs, &[])
+    }
+
+    /// A node with BLOCKING deps and type-only ones. `schedule` counts the
+    /// second kind and never waits for it (V4).
+    fn seamed(node: &str, needs: &[&str], seam: &[&str]) -> CodeDep {
+        let own = |xs: &[&str]| -> Vec<String> {
+            xs.iter().map(|n| (*n).to_string()).collect()
+        };
         CodeDep {
             node: node.to_string(),
-            needs: needs.iter().map(|n| (*n).to_string()).collect(),
+            needs: own(needs),
+            seam: own(seam),
         }
     }
 
@@ -309,6 +389,55 @@ mod wave_tests {
         assert_eq!(s.rounds.get(1), Some(&vec!["src/b".to_string()]));
         assert!(s.blocked.is_empty());
         Ok(())
+    }
+
+    /// V4 (`B1`). `.:R57` recorded a ten-node repository that `wave` called
+    /// five rounds deep and that seven workers in fact built in ONE, because
+    /// a seam commit had declared every node's public types first. This is
+    /// that tree in miniature: `b` names a TYPE of `a` and nothing else, so
+    /// it does not wait for `a`'s logic -- and the edge is still reported,
+    /// because it is still an edge.
+    #[test]
+    fn an_import_naming_only_a_type_is_an_edge_and_not_a_wait()
+    -> Result<(), String> {
+        let r = code_dag_fixture()?;
+        r.write("src/a/mod.rs", "pub struct Level;\npub fn a() {}\n")?;
+        r.write("src/b/mod.rs", "use crate::a::Level;\npub fn b() {}\n")?;
+
+        let s = wave(r.path(), r.path());
+        assert_eq!(s.depth(), 1, "one round, behind a seam: {s:?}");
+        assert_eq!(s.width(), 4, "every node of the fixture at once: {s:?}");
+        assert_eq!((s.edges, s.blocking), (1, 0), "an edge, and not a wait");
+
+        // The SAME tree, reaching for behaviour instead: back to two rounds.
+        r.write("src/b/mod.rs", "use crate::a::a;\npub fn b() {}\n")?;
+        let s = wave(r.path(), r.path());
+        assert_eq!(s.depth(), 2, "a function is a wait: {s:?}");
+        assert_eq!((s.edges, s.blocking), (1, 1));
+
+        // And one behavioural reach among type reaches keeps the wait: a
+        // sibling you must wait for is not made safe by also naming a type.
+        r.write(
+            "src/b/mod.rs",
+            "use crate::a::Level;\nuse crate::a::a;\npub fn b() {}\n",
+        )?;
+        let s = wave(r.path(), r.path());
+        assert_eq!(s.depth(), 2, "{s:?}");
+        assert_eq!((s.edges, s.blocking), (1, 1), "counted ONCE, blocking");
+        Ok(())
+    }
+
+    /// `schedule` never waits for a type-only edge, and still counts it. The
+    /// two numbers are what `B1` was missing: reporting only the total made
+    /// `depth` read as a fact rather than an upper bound.
+    #[test]
+    fn a_type_only_edge_is_counted_and_never_scheduled_against() {
+        let s = schedule(&[
+            seamed("src/rules", &[], &["src/lint"]),
+            dep("src/lint", &[]),
+        ]);
+        assert_eq!(s.depth(), 1, "{s:?}");
+        assert_eq!((s.edges, s.blocking), (1, 0));
     }
 
     /// `V1`, from the other side: `§F` makes `a` and `b` CO-CHILDREN with no

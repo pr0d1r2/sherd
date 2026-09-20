@@ -821,6 +821,105 @@ fn use_names(rest: &str) -> Vec<String> {
         .collect()
 }
 
+/// One `use crate::` reach, with the ITEMS it names rather than only the
+/// module it enters.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Import {
+    /// The first segment after `crate::` -- `lint` in `use crate::lint::Level`.
+    pub module: String,
+    /// The last segment of each path under that module, or EMPTY when the
+    /// line imports the module itself (`use crate::lint;`). Empty is not
+    /// "nothing named": it is the whole module, which is the strongest reach
+    /// a line can make.
+    pub items: Vec<String>,
+}
+
+/// Every `use crate::` line, read one level deeper than [`crate_uses`].
+///
+/// `crate_uses` answers WHICH sibling a file reaches for, which is all
+/// cohesion evidence needs. Telling a TYPE reference apart from a call needs
+/// the item as well: `use crate::lint::Level` names a type, and once a seam
+/// commit has declared it, the importing node does not wait for `lint`'s
+/// logic (`src/wave:V4`, `src/wave:B1`).
+///
+/// Line oriented, like everything here: a path is read as `module` plus the
+/// LAST segment of each branch, so `crate::a::b::Item` is `a` naming `Item`.
+/// §C states that trade for the node.
+#[must_use]
+pub fn crate_imports(src: &str) -> Vec<Import> {
+    src.lines()
+        .map(str::trim)
+        .filter_map(|l| l.strip_prefix("use crate::"))
+        .flat_map(|rest| imports_of(rest.trim_end_matches(';').trim()))
+        .collect()
+}
+
+/// One `use crate::` body as imports. A brace group at the TOP level names
+/// several modules at once and each is its own reach.
+fn imports_of(rest: &str) -> Vec<Import> {
+    let Some(group) = rest.strip_prefix('{') else {
+        return one_import(rest).into_iter().collect();
+    };
+    split_top(group.strip_suffix('}').unwrap_or(group))
+        .iter()
+        .filter_map(|part| one_import(part.trim()))
+        .collect()
+}
+
+/// `lint::Level` -> module `lint` naming `Level`; `lint::{A, B}` -> both.
+fn one_import(path: &str) -> Option<Import> {
+    let module = leading_ident(path)?;
+    let rest = path.get(module.len()..).unwrap_or("");
+    let Some(tail) = rest.strip_prefix("::") else {
+        // `use crate::lint;` -- the module itself, items deliberately empty.
+        return Some(Import {
+            module,
+            items: vec![],
+        });
+    };
+    let items = match tail.strip_prefix('{') {
+        Some(g) => split_top(g.strip_suffix('}').unwrap_or(g))
+            .iter()
+            .filter_map(|p| last_segment(p.trim()))
+            .collect(),
+        None => last_segment(tail).into_iter().collect(),
+    };
+    Some(Import { module, items })
+}
+
+/// The final identifier of a path: `a::b::Item` is `Item`.
+fn last_segment(path: &str) -> Option<String> {
+    let last = path.rsplit("::").next().unwrap_or(path).trim();
+    // A nested group under a deeper segment (`a::{b, c}`) has no single last
+    // identifier, and reading `{b` as one would invent an item named `b` with
+    // a brace on it. Those are rare enough to drop, and dropping them counts
+    // the edge as BLOCKING, which is the safe direction (`src/wave:V4`).
+    (!last.starts_with('{'))
+        .then(|| leading_ident(last))
+        .flatten()
+}
+
+/// Split on commas that are NOT inside a nested brace group.
+fn split_top(group: &str) -> Vec<String> {
+    let mut out = vec![String::new()];
+    let mut depth = 0usize;
+    for c in group.chars() {
+        match c {
+            '{' => depth = depth.saturating_add(1),
+            '}' => depth = depth.saturating_sub(1),
+            ',' if depth == 0 => {
+                out.push(String::new());
+                continue;
+            }
+            _ => {}
+        }
+        if let Some(last) = out.last_mut() {
+            last.push(c);
+        }
+    }
+    out
+}
+
 /// The identifier a path segment begins with, or nothing.
 fn leading_ident(s: &str) -> Option<String> {
     let name: String = s
@@ -865,6 +964,26 @@ const TYPE_KINDS: [&str; 4] = ["struct", "enum", "trait", "type"];
 #[must_use]
 pub fn public_types(src: &str) -> Vec<PubType> {
     src.lines().filter_map(|l| one_type(l.trim())).collect()
+}
+
+/// The public types a SET of sources declares: deduplicated, sorted by name.
+///
+/// The vocabulary of a whole node rather than of one file. Both callers that
+/// ask -- `seam`, which reports it, and `wave`, which asks whether an import
+/// names one -- would otherwise write this fold themselves, and two readings
+/// of one question is the defect this node exists to prevent (`V1`).
+#[must_use]
+pub fn types_in(sources: &[String]) -> Vec<PubType> {
+    let mut out: Vec<PubType> = Vec::new();
+    for src in sources {
+        for t in public_types(src) {
+            if !out.contains(&t) {
+                out.push(t);
+            }
+        }
+    }
+    out.sort_by(|a, b| a.name.cmp(&b.name));
+    out
 }
 
 /// One `pub struct Foo`, or nothing.
@@ -962,6 +1081,65 @@ use std::path::Path;
     fn a_single_member_group_is_still_a_group() {
         assert_eq!(crate_uses("use crate::{bpe};\n"), vec!["bpe"]);
         assert_eq!(crate_uses("use crate::{bpe, };\n"), vec!["bpe"]);
+    }
+
+    /// The item half, which `crate_uses` throws away and `src/wave:V4`
+    /// needs: WHICH names a line reaches for, not only which module.
+    ///
+    /// Written with `\n` escapes and naming modules this crate has not got,
+    /// for the reason the test above gives.
+    #[test]
+    fn an_import_carries_the_items_it_names() {
+        let one = |src: &str| -> (String, Vec<String>) {
+            let i = crate_imports(src).first().cloned().unwrap_or(Import {
+                module: String::new(),
+                items: vec![],
+            });
+            (i.module, i.items)
+        };
+        assert_eq!(
+            one("use crate::lint::Level;\n"),
+            ("lint".to_string(), vec!["Level".to_string()])
+        );
+        assert_eq!(
+            one("use crate::lint::{Level, Rule};\n"),
+            ("lint".into(), vec!["Level".into(), "Rule".into()])
+        );
+        // A deeper path is the module plus the LAST segment.
+        assert_eq!(
+            one("use crate::lint::rules::Rule;\n"),
+            ("lint".into(), vec!["Rule".into()])
+        );
+        // The module ITSELF: no item named, which is the strongest reach a
+        // line can make and never type-only (`src/wave:V4`).
+        assert_eq!(one("use crate::lint;\n"), ("lint".into(), vec![]));
+
+        // A top-level group is several reaches; a NESTED one stays with its
+        // own module rather than leaking into the outer list.
+        let many = crate_imports("use crate::{lint::Level, render};\n");
+        assert_eq!(many.len(), 2, "{many:?}");
+        assert_eq!(
+            many.iter().map(|i| i.module.clone()).collect::<Vec<_>>(),
+            vec!["lint", "render"]
+        );
+        assert_eq!(
+            many.first().map(|i| i.items.clone()),
+            Some(vec!["Level".into()])
+        );
+        assert_eq!(many.get(1).map(|i| i.items.clone()), Some(vec![]));
+    }
+
+    /// The vocabulary of a NODE rather than of one file: deduplicated across
+    /// sources and sorted, so `seam` and `wave` read one answer.
+    #[test]
+    fn types_across_sources_are_pooled_and_deduplicated() {
+        let sources = vec![
+            "pub struct Edge;\npub enum Kind { A }\n".to_string(),
+            "pub struct Edge;\npub trait Reader {}\n".to_string(),
+        ];
+        let names: Vec<String> =
+            types_in(&sources).into_iter().map(|t| t.name).collect();
+        assert_eq!(names, vec!["Edge", "Kind", "Reader"]);
     }
 
     /// Written with `\n` escapes rather than as a block, for the reason

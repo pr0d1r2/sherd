@@ -54,6 +54,7 @@ V1: `split_module` matches @ COLUMN 0 only. a fixture string carrying `"#[cfg(te
 V2: `is_called` searches the WHOLE crate, ⊥ the declaring module. a `pub fn` called from a sibling node is WIRED (`.:src/review:B1`)
 V3: a GENERIC declaration `fn f<'a>(` ⊥ contain `f(` ∴ ⊥ count occurrences & assume "declaration + 1" (`.:src/review:B2`)
 V4: a heuristic here ! carry the case that broke it as a TEST. the fn is 10 lines; the reason it is 10 & ⊥ 3 is the §B row it answers
+V5: `crate_uses()` answers WHICH sibling a file reaches for; `crate_imports()` answers WHAT it names there — module + the LAST segment of each branch. a caller asking whether an import is a TYPE reference needs the 2nd (`src/wave:V4`), & a path this line-oriented reader cannot resolve is dropped ∴ the edge counts as BLOCKING, the safe direction
 
 ## §T TASKS
 

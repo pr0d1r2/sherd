@@ -640,7 +640,31 @@ fn wave_summary(s: &wave::Schedule, examined: usize) {
         "  DEPTH is the critical path -- rounds a wave cannot avoid. WIDTH \
          is the most workers it can ever keep busy at once."
     );
+    wave_edges(s);
     wave_notes();
+}
+
+/// Both edge counts, because only one of them decided the rounds
+/// (`src/wave:V4`, `src/wave:B1`).
+///
+/// A type-only import is an edge and is not a wait: once a seam commit has
+/// declared the vocabulary, `use crate::lint::Level` is a reference to a type
+/// that already exists. Reporting the total alone made `depth` read as a
+/// fact, when on a repository built behind a seam it was an upper bound
+/// nobody could see past.
+fn wave_edges(s: &wave::Schedule) {
+    let seam = s.edges.saturating_sub(s.blocking);
+    println!(
+        "  {} sibling edge(s) · {} blocking · {seam} type-only",
+        s.edges, s.blocking
+    );
+    if seam > 0 {
+        println!(
+            "      the type-only ones name a sibling's public TYPES and \
+             nothing else, so a `sherd seam` commit satisfies them before \
+             any node is written -- they are not waits."
+        );
+    }
 }
 
 /// What the edges ARE, and what the verb refused to do.
@@ -657,19 +681,11 @@ fn wave_notes() {
 
 /// The public types one node declares, sorted and deduplicated.
 fn node_types(node: &Path, nodes: &[PathBuf]) -> Vec<code::PubType> {
-    let mut out: Vec<code::PubType> = Vec::new();
-    for f in fed::owned_rust_files(node, nodes) {
-        let Ok(text) = std::fs::read_to_string(&f) else {
-            continue;
-        };
-        for t in code::public_types(&text) {
-            if !out.contains(&t) {
-                out.push(t);
-            }
-        }
-    }
-    out.sort_by(|a, b| a.name.cmp(&b.name));
-    out
+    let sources: Vec<String> = fed::owned_rust_files(node, nodes)
+        .iter()
+        .filter_map(|f| std::fs::read_to_string(f).ok())
+        .collect();
+    code::types_in(&sources)
 }
 
 /// `sherd adopt <dir> [--map FILE] [--check]` -- a foreign single-file
