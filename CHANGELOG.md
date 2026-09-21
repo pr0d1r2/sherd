@@ -51,6 +51,20 @@ publish run surfaced two warnings that eleven gate steps had read past
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-09-21
+
+Still the `0.5` rung: what it promises -- every verb that never calls a model,
+correct and reusable as a library -- is unchanged, and so is the parity. What
+changed is how much of that promise holds. Most of this release is defects
+found by running the deterministic verbs on repositories that are neither
+`itok` nor this one, which is the rung's own test, plus two report-only verbs
+(`seam`, `wave`) that write nothing and call no model.
+
+`cargo semver-checks check-release --baseline-rev v0.5.0` requires no semver
+update: every public item `0.5.0` shipped is still there with the signature
+it shipped with. `plan()` and `Plan` in particular keep their shape; the
+milestone filter arrives beside them rather than inside them.
+
 ### Fixed
 
 - **`wave` no longer counts a type-only import as a wait** (`src/wave:B1`,
@@ -103,7 +117,62 @@ publish run surfaced two warnings that eleven gate steps had read past
   Milestone tables are untouched: `microlith::milestones` reads that dialect,
   and `M` is not an id this grammar owns.
 
+- **`V50` weighs every region of a `.rs` file, not everything above the
+  first test module** (`.:B29`, `T107`). A file was cut into code and tests
+  at the FIRST `#[cfg(test)]`, so production code written below a test
+  module was weighed against the test ceiling and never counted as code at
+  all. `code::split_regions` now sums every non-test region and every test
+  region; `split_module` keeps its single cut for the callers that need one
+  position in the file (`src/tdd`, `src/review`).
+
+- **`sync` writes a `§N` lens back as the escaped cell it read**
+  (`src/fed:B13`, `V16`). `split_row` unescaped `\|` when reading a `§F`
+  row, but `§N` was written raw, so any `owns` cell holding a pipe came back
+  with an extra column in every `§N` naming that node -- 17 files in this
+  repository alone.
+
+- **A `§C`/`§I` id written as a bullet can be cited** (`src/spec:B4`, `V8`).
+  `FORMAT.md` writes those sections as `- C1: …` bullets, but `declares()`
+  matched only a line opening with the id, so `` `node:C1` `` pointing at a
+  real bullet reported `resolves to no row` -- constraints became uncitable
+  the moment a monolith's `§C` was split across nodes.
+
+- **`adopt` inserts received rows in id order** (`src/adopt:B3`, `V7`). Rows
+  moved into a node that already held rows were appended after them, so a
+  second adoption moving `T3` beside a resident `T88` wrote an order
+  `microlith/V14` rejects, and the delta check refused the whole migration
+  -- an order the verb had written itself.
+
+- **The code DAG reads `use crate::{a, b}` groups** (`src/code`). A brace
+  group collected an empty module name and the line was dropped, so
+  `src/cli`, which names eight siblings on one such line, read as depending
+  on nothing and landed in the first ready set.
+
+- **A relative `[dir]` is resolved before the root walk** (`src/cli`). The
+  argument itself was taken for the repository root and then joined onto
+  itself, so `sherd seam code` from `src/` answered `code/code matched no
+  node`. Every `[dir]` verb was affected -- `budget`, `seam`, `lens`,
+  `check`, `fed`.
+
+- **Pushing a release tag no longer crashes the pre-push hook.** git hands
+  `pre-push` the annotated tag object, which hk fed to a merge-base without
+  peeling, so `cargo release push` failed at its last step on both `0.5.0`
+  releases. The hook now skips only when every pushed ref is a tag whose
+  commit `origin/main` already contains; a branch, or a tag on an unmerged
+  commit, still pays the gate.
+
 ### Changed
+
+- **`microlith` 0.6 -> 0.7.1.** 0.7.1 exports the milestone partition that
+  `plan --milestone` reads, rather than sherd re-parsing the grammar, and
+  0.7.0 brought `microlith/V42`: a row whose literal `|` is unescaped splits
+  into more fields than its table declares. `sherd check` now reports that,
+  so a spec that passed under `0.5.0` may not -- eight such rows in this
+  repository were escaped before the bump.
+
+- **The gate audits the CI workflow with `zizmor` at `pedantic`** alongside
+  `actionlint` (`.:V122`, `B28`). Contributor-facing only; the crate's
+  behaviour is unchanged.
 
 - **`wave` is its own node, `src/wave`** (`src/plan:T14`). The scheduler --
   the code DAG, the ready set per round, depth and width -- moved out of
@@ -113,17 +182,16 @@ publish run surfaced two warnings that eleven gate steps had read past
   repointed. `src/wave` is also where the executor half, frozen until rung
   `0.7`, will live, which is somewhere that is not the planner.
 
-  The public API moves with it: `plan::wave`, `plan::schedule`,
-  `plan::code_deps`, `plan::Schedule` and `plan::CodeDep` are now
-  `wave::*`. No behaviour changed -- the same 341 tests pass, and `sherd
-  wave` prints what it printed.
+  Its public API is `wave::wave`, `wave::schedule`, `wave::code_deps`,
+  `wave::Schedule` and `wave::CodeDep`. They briefly lived under `plan::` on
+  `main`, but no release carried them there, so nothing a `0.5.0` consumer
+  could have imported moved.
 
   One thing the split MEASURED rather than assumed: `src/plan/mod.rs`
   reports the same code weight before and after (4,468 tok), while its tests
   fall 20,093 → 16,879. `V50` splits a file at the *first* `#[cfg(test)]`,
   so the 337 lines of scheduler below `plan`'s first test module had been
-  counted as tests all along. Recorded as `.:B29` with `T107` for the fix,
-  which re-measures every `.rs` file in the tree and is its own change.
+  counted as tests all along. Recorded as `.:B29`; fixed above.
 
 - **`src/fed` reads pipe rows with microlith's exported codec** rather than
   its own (`src/fed:V4`, `V17`). `split_row` is `microlith::cells` +
@@ -158,6 +226,26 @@ publish run surfaced two warnings that eleven gate steps had read past
   several nodes carry is listed rather than guessed.
 
 ### Added
+
+- **`sherd seam [dir]`** prints, per node, the public types it declares --
+  the vocabulary a sibling can spell before either node is written, which is
+  what lets nodes be built in parallel (`.:R57`). Report-only: which of those
+  names are shared is a judgement, so there is no `--apply`. Library:
+  `code::public_types`.
+
+- **`sherd wave [dir]`** prints the rounds a parallel build would run -- the
+  ready set per round, with depth and width -- from the CODE DAG (`use
+  crate::` between sibling nodes), which is not the federation DAG
+  (`src/wave:V1`). It creates no worktree and calls no model; the executor
+  half stays frozen until rung `0.7`. A cycle is named, and the verb still
+  exits 0.
+
+- **`sherd plan --milestone <M>`** narrows the horizon to the rows milestone
+  `M` claims, read from each node's own `§T` milestone table through
+  `microlith::milestones`. Open rows in nodes that declare no milestones are
+  counted and printed rather than dropped, and a milestone no node declares
+  exits 2 -- a typo must not look like a finished milestone. Library:
+  `plan::plan_in`, `in_milestone`, `milestone_declared`.
 
 - **`sherd --version` and `sherd -V` print `sherd <semver>` on stdout and exit
   0** (`src/cli:B10`). Both spellings previously fell through to the unknown
