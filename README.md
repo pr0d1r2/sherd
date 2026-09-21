@@ -311,16 +311,16 @@ violation would disappear.
 
 ## Status
 
-**Rung `0.3` of the [version ladder](CHANGELOG.md#version-ladder), reached
-and not published.** An even minor is stable, an odd minor is functional but
-not for production, and the first published artifact will be `0.5.0-rc.1` —
-so there is nothing on crates.io yet, on purpose.
+**Rung `0.5` of the [version ladder](CHANGELOG.md#version-ladder), published
+to crates.io.** An even minor is stable, an odd minor is functional but not
+for production — so `0.5` is the first public artifact, not a promise that
+the surface has settled. That is rung `0.6`.
 
-What runs today: `init`, `budget`, `lens`, `fed`, `graph`, `check`,
-`validate`, `route`, `slice`, `review`, `plan`, `apply`, `land`, plus the
-model-facing `ask`, `tdd` and `oneshot`. `split`, `sync` and `SPEC.why.md`
-are specced and unbuilt, and each carries the rung it is promised for.
-`§F`/`§N` are extensions
+What runs today is every verb in the [commands table](#commands) below: the
+deterministic half — `init`, `budget`, `lens`, `fed`, `check`, `validate`,
+`split`, `seam`, `wave`, `adopt`, `sync`, `route`, `review`, `slice`,
+`graph`, `plan` — plus `apply`, `land` and the model-facing `ask`, `tdd` and
+`oneshot`. `§F`/`§N` are extensions
 [microlith](https://github.com/pr0d1r2/microlith) cannot yet parse — they
 need to go upstream rather than fork the format.
 
