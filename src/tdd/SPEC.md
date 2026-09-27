@@ -32,7 +32,7 @@ sib|src/git|one git invocation shape — the repo a command acts on, & the env i
 
 ## §C CONSTRAINTS
 
-- ∀ step declares its profile. ⊥ one call sees spec + tests + impl together (`.:V87`).
+- ∀ step declares its profile. ⊥ one call sees spec + tests + impl together (`src/lens:V14`).
 - step 3 = LOCAL, deterministic, ZERO tokens (`.:V18`).
 
 ## §V INVARIANTS
