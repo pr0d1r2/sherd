@@ -255,6 +255,7 @@ V122: a workflow ! be AUDITED, ⊥ merely PARSED — & the audit runs at the STR
 
 V73: dir promotion has 2 triggers — (a) V50 code ceiling, (b) module owns SPEC worth its own node even under ceiling. vendor facades are (b): few hundred lines carrying V17/V24/V25. ⊥ promote every `.rs` — 30 files → 60 is ceremony
 V123: the EXECUTOR is an ADAPTER & sherd owns everything AROUND it: the code DAG, ready set, worktrees, ceilings, gate & merge order stay DETERMINISTIC & offline (V18). WHO writes the code is NAMED — local model | external command — & swapping it changes ⊥ about scheduling. hardcoding the writer ships 2 decisions as 1 ∴ neither measures alone.
+V124: TESTS live in a `tests/` tree beside the code they test, ⊥ inline `mod tests { }`. a FACET is a property of the FILE (`src/lens:V8`) ∴ a file mixing code & tests has none & V50 must GUESS the cut (B29). include as `#[cfg(test)] #[path = "tests/x.rs"] mod tests;` — a CHILD module ∴ private fns stay reachable; the crate `tests/` dir sees `pub` only & widening a published API to test it is the wrong trade. V50 measures a file under a `tests` path component as tests in FULL
 
 ## §T TASKS
 
@@ -290,6 +291,7 @@ T103|~|LADDER rungs as work: 0.4 = `split`+`sync` DONE · 0.5 = the MECHANICAL s
 T104|.|lint ratchet ! also count `--no-default-features` — 131 warnings on the SHIPPED binary are uncounted today|V118,B20
 T106|.|`wave` EXECUTION @ rung 0.7 — fan the scheduled rounds out to N workers, 1 worktree each, gate & merge in topological order; executor NAMED ⊥ assumed|V123,V117,R57,`src/wave:T1`,`src/ollama:T13`
 T107|x|V50 splits a file @ the 1st `#[cfg(test)]` ∴ code BELOW a test module counts as tests (B29). sum every non-test region, re-measure|V50
+T108|.|move ∀ node's inline `mod tests { }` into its `tests/` tree per V124, 1 PR per node; `src/cli` already follows it (`src/cli:V18`)|V124,V50
 
 ## §B BUGS
 
