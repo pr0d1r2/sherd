@@ -254,9 +254,6 @@ pub(super) fn triage_cmd(root: &Path) -> ExitCode {
 mod tests {
     use super::*;
 
-    /// `adopt` writes into ANOTHER repository, so the dir is not optional and
-    /// defaulting it to the CWD is the shape `B5` records -- a verb answering
-    /// confidently about the wrong tree. Here it would answer by writing.
     /// `src/plan:V24`: a milestone no node declares is a usage error, never an
     /// empty horizon that reads as "nothing left to do".
     #[test]

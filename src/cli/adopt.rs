@@ -170,6 +170,9 @@ pub(super) fn adopt_failed(msg: &str) -> ExitCode {
 mod tests {
     use super::*;
 
+    /// `adopt` writes into ANOTHER repository, so the dir is not optional and
+    /// defaulting it to the CWD is the shape `B5` records -- a verb answering
+    /// confidently about the wrong tree. Here it would answer by writing.
     #[test]
     fn adopt_without_a_dir_is_usage_rather_than_this_repo() {
         assert_eq!(run_args(vec!["adopt".into()]), ExitCode::from(2));
