@@ -93,6 +93,29 @@ fn the_code_and_test_halves_have_their_own_ceilings() -> Result<(), String> {
     Ok(())
 }
 
+/// A file in a `tests/` tree is test code in FULL, though it carries no
+/// `#[cfg(test)]` -- it is compiled only under one, from the `mod tests;`
+/// that points at it. Read by region it would be all CODE, measured against
+/// the code ceiling, twice the test one: moving a suite into its own file
+/// would then make a test-ceiling breach vanish without a token shrinking.
+#[test]
+fn a_file_in_a_tests_tree_is_measured_as_tests() -> Result<(), String> {
+    let r = crate::testrepo::TestRepo::new("cli-v50-tree")?;
+    r.write("SPEC.md", "# SPEC\n\n## \u{a7}G GOAL\n\ntree\n")?;
+    let big = "    assert_eq!(f(), 2, \"a wordy message\");\n".repeat(400);
+    let suite = format!("#[test]\nfn a() {{\n{big}}}\n");
+    r.write("src/small/tests/small.rs", &suite)?;
+    r.commit("a suite in its own file")?;
+    let found = file_ceilings(r.path());
+    let as_tests = found.iter().filter(|f| f.contains(": tests ")).count();
+    assert_eq!(
+        (found.len(), as_tests),
+        (1, 1),
+        "ONE finding, as TESTS: {found:?}"
+    );
+    Ok(())
+}
+
 /// A file inside both ceilings reports nothing at all -- the check must
 /// not fire on every file merely for existing.
 #[test]

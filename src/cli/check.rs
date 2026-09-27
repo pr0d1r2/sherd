@@ -171,8 +171,9 @@ pub(super) fn file_ceilings(root: &Path) -> Vec<String> {
         let Ok(src) = std::fs::read_to_string(&f) else {
             continue;
         };
-        let (impl_r, tests_r) = crate::code::split_regions(&src);
-        let rel = f.strip_prefix(root).unwrap_or(&f).display().to_string();
+        let rel_path = f.strip_prefix(root).unwrap_or(&f);
+        let (impl_r, tests_r) = halves(rel_path, src);
+        let rel = rel_path.display().to_string();
         for (half, text, ceiling) in [
             ("code", impl_r, crate::debt::CEILING_FILE),
             ("tests", tests_r, crate::debt::CEILING_TEST),
@@ -187,6 +188,18 @@ pub(super) fn file_ceilings(root: &Path) -> Vec<String> {
         }
     }
     out
+}
+
+/// A file's `(code, tests)` halves for V50. A file under a `tests/` tree is
+/// test code in FULL: it carries no `#[cfg(test)]` to find, because the
+/// `mod tests;` that includes it does (`src/cli:V18`). Read by region it
+/// would be all code, against a ceiling twice the test one.
+fn halves(rel: &Path, src: String) -> (String, String) {
+    if rel.components().any(|c| c.as_os_str() == "tests") {
+        (String::new(), src)
+    } else {
+        crate::code::split_regions(&src)
+    }
 }
 
 /// Structural checks over ONE node's spec. Returns how many were FATAL.
