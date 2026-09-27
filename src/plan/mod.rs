@@ -10,7 +10,14 @@
 //! confidence and what would invalidate it. Beyond that is fiction.
 
 use crate::fed;
-use crate::split::{Proposal, propose};
+/// Moved to [`crate::split`] (`src/plan:T14`) and re-exported here, because
+/// every one of them was public at `0.5.1` and crates.io is immutable: a
+/// caller of `sherd::plan::structure` must still compile. New code should
+/// name `sherd::split`.
+pub use crate::split::{
+    Evidence, Proposal, Proposed, Ranked, propose, rank, row_weight, structure,
+    uniform_evidence,
+};
 use std::path::{Path, PathBuf};
 
 /// How far ahead a plan is worth stating.
