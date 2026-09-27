@@ -235,6 +235,9 @@ impl Confidence {
     }
     /// What would make this step wrong. Stated per step, because a plan that
     /// does not say how it fails is a promise rather than a plan.
+    ///
+    /// The text form: [`Confidence::invalidators`] joined by ` · `. Kept as a
+    /// `&str` because it is published API; a test pins the two together.
     #[must_use]
     pub fn invalidated_by(self) -> &'static str {
         match self {
@@ -247,6 +250,25 @@ impl Confidence {
             Confidence::Tentative => {
                 "any §T row added by steps above it; ordering has no declared `needs`"
             }
+        }
+    }
+
+    /// [`Confidence::invalidated_by`], one entry per condition, so the JSON
+    /// form carries a list rather than a string a caller must split on the
+    /// text form's separator (V25).
+    #[must_use]
+    pub fn invalidators(self) -> &'static [&'static str] {
+        match self {
+            Confidence::Next => &[
+                "judge rejects the test 3x",
+                "gate still red after 3 repairs",
+            ],
+            Confidence::Likely => &[
+                "step 1 adds a §B row to this node, changing its authoring prompt (tdd B9)",
+            ],
+            Confidence::Tentative => &[
+                "any §T row added by steps above it; ordering has no declared `needs`",
+            ],
         }
     }
 }
@@ -410,6 +432,102 @@ pub fn plan_in(root: &Path, milestone: Option<&str>) -> (Plan, usize) {
     )
 }
 
+/// `plan --format json`: the plumbing form of a [`plan_in`] result (V25).
+///
+/// `context_tokens[i]` is step `i`'s lens pack cost, measured by the caller
+/// because the pack is `src/lens`'s. A missing entry reads as 0, as the text
+/// form prints a pack that failed to build. Believability and the kept/tried
+/// record come from `st`, the store the caller already holds. Keys are fixed
+/// and ordered; the text layout may change, this may only grow.
+#[must_use]
+pub fn to_json(
+    st: &crate::state::State,
+    p: &Plan,
+    (milestone, outside): (Option<&str>, usize),
+    context_tokens: &[u64],
+) -> String {
+    let steps: Vec<String> = (1usize..)
+        .zip(&p.steps)
+        .map(|(rank, t)| {
+            let c = Confidence::of(rank.saturating_sub(1));
+            let (tried, kept) = record_in(st, &t.node);
+            let why: Vec<String> =
+                c.invalidators().iter().map(|w| json_str(w)).collect();
+            format!(
+                "{{\"rank\":{rank},\"kind\":{},\"node\":{},\"id\":{},\"text\":{},\
+                 \"believability\":{},\"tried\":{tried},\"kept\":{kept},\
+                 \"context_tokens\":{},\"invalidated_by\":[{}]}}",
+                json_str(c.label().trim()),
+                json_node(&t.node),
+                json_str(&t.id),
+                json_str(&t.text),
+                believability_in(st, &t.node),
+                context_tokens
+                    .get(rank.saturating_sub(1))
+                    .copied()
+                    .unwrap_or(0),
+                why.join(",")
+            )
+        })
+        .collect();
+    let unmanaged: Vec<String> = p
+        .unmanaged
+        .iter()
+        .map(|(t, k)| {
+            format!(
+                "{{\"node\":{},\"id\":{},\"text\":{},\"reason\":{}}}",
+                json_node(&t.node),
+                json_str(&t.id),
+                json_str(&t.text),
+                json_str(k.why())
+            )
+        })
+        .collect();
+    format!(
+        "{{\"horizon\":{},\"open\":{},\"unmanaged\":{},\"milestone\":{},\
+         \"outside_milestones\":{outside},\"steps\":[{}],\"unmanaged_rows\":[{}]}}",
+        p.steps.len(),
+        p.total_open,
+        p.unmanaged.len(),
+        milestone.map_or_else(|| "null".to_string(), json_str),
+        steps.join(","),
+        unmanaged.join(",")
+    )
+}
+
+/// A node as a caller names it. The root is `""` in memory and `.` in every
+/// namespaced cite (`` `.:V83` ``), so the plumbing spells it `.` -- an empty
+/// string is the one path a consumer cannot join or cite.
+fn json_node(node: &Path) -> String {
+    if node.as_os_str().is_empty() {
+        json_str(".")
+    } else {
+        json_str(&node.to_string_lossy())
+    }
+}
+
+/// A JSON string literal. `"`, `\` and every control char are escaped, which
+/// is all RFC 8259 requires; everything else passes through as UTF-8.
+fn json_str(s: &str) -> String {
+    let mut out = String::with_capacity(s.len().saturating_add(2));
+    out.push('"');
+    for c in s.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if c.is_control() && u32::from(c) < 0x20 => {
+                out.push_str(&format!("\\u{:04x}", u32::from(c)));
+            }
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+    out
+}
+
 /// The first `§V` a row cites, as `(where it is declared, id)`.
 ///
 /// A cite may be bare (`V3`, this node) or namespaced (`` `.:V73` ``, root;
@@ -503,7 +621,72 @@ mod tests {
                 !c.invalidated_by().is_empty(),
                 "a plan that cannot say how it fails is a promise"
             );
+            // 2 spellings of 1 list: the text form ! stay the list, joined.
+            assert_eq!(c.invalidated_by(), c.invalidators().join(" · "));
         }
+    }
+
+    fn row(node: &str, id: &str, text: &str) -> Task {
+        Task {
+            node: PathBuf::from(node),
+            id: id.into(),
+            status: '.',
+            text: text.into(),
+            cites: String::new(),
+        }
+    }
+
+    /// V25: the JSON form is a CONTRACT a caller parses. Pinned whole, so a
+    /// renamed key, a reordered field or a dropped row fails here rather than
+    /// in the hallucinogen loop that reads it (issue #36).
+    #[test]
+    fn json_form_is_pinned() {
+        let mut st = crate::state::State::default();
+        record_outcome_in(&mut st, Path::new("src/b"), true);
+        let p = Plan {
+            steps: vec![row("src/a", "T1", "add `x`"), row("src/b", "T2", "y")],
+            unmanaged: vec![(row("", "T9", "root"), Kind::NoModule)],
+            total_open: 4,
+        };
+        assert_eq!(
+            to_json(&st, &p, (Some("M1"), 1), &[120]),
+            concat!(
+                r#"{"horizon":2,"open":4,"unmanaged":1,"milestone":"M1","outside_milestones":1,"#,
+                r#""steps":[{"rank":1,"kind":"NEXT","node":"src/a","id":"T1","text":"add `x`","#,
+                r#""believability":0.5,"tried":0,"kept":0,"context_tokens":120,"#,
+                r#""invalidated_by":["judge rejects the test 3x","gate still red after 3 repairs"]},"#,
+                r#"{"rank":2,"kind":"LIKELY","node":"src/b","id":"T2","text":"y","#,
+                r#""believability":0.6666666666666666,"tried":1,"kept":1,"context_tokens":0,"#,
+                r#""invalidated_by":["step 1 adds a §B row to this node, changing its authoring prompt (tdd B9)"]}],"#,
+                r#""unmanaged_rows":[{"node":".","id":"T9","text":"root","reason":"root row -- no mod.rs to add to"}]}"#,
+            )
+        );
+    }
+
+    /// An empty plan is still one object with every key: `null` milestone,
+    /// empty lists. A caller reading `steps` ⊥ special-cases "nothing to do".
+    #[test]
+    fn json_of_an_empty_plan_keeps_every_key() {
+        let p = Plan {
+            steps: vec![],
+            unmanaged: vec![],
+            total_open: 0,
+        };
+        assert_eq!(
+            to_json(&crate::state::State::default(), &p, (None, 0), &[]),
+            r#"{"horizon":0,"open":0,"unmanaged":0,"milestone":null,"outside_milestones":0,"steps":[],"unmanaged_rows":[]}"#
+        );
+    }
+
+    /// Row text is caveman prose from a `§T` cell: backslashes survive
+    /// microlith's unescape (`src/fed:V4`), quotes are common, and a control
+    /// char must ⊥ reach the output raw.
+    #[test]
+    fn json_str_escapes_what_rfc_8259_requires() {
+        assert_eq!(
+            json_str("a \"q\" C:\\p\n\t\u{1}|∴"),
+            r#""a \"q\" C:\\p\n\t\u0001|∴""#
+        );
     }
 
     #[test]

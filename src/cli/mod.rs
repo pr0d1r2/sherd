@@ -34,9 +34,9 @@ sherd -- federated SPEC.md for small-context local models
   sherd slice [--check|--list]  regenerate distilled slices from their sources
   sherd outcome <node> <kept|reverted>  record whether a node's work survived review
   sherd graph [--tree|--table|--dot]  federation DAG, generated from §F
-  sherd plan             next 3 steps, with what would invalidate each
+  sherd plan [--format text|json]  next 3 steps, with what would invalidate each
   sherd plan --triage    unmanaged rows, with a proposed home for each
-  sherd plan --milestone <M>  next 3 steps among the rows milestone M claims
+  sherd plan --milestone <M> [--format text|json]  next 3 steps among the rows milestone M claims
   sherd apply [--land]   execute step 1 only, commit it to a run branch, stop
   sherd land [--push]    fast-forward main to this run branch, if it earned it
   sherd ask <dir> <q>    ask the endpoint from a node's lens pack
@@ -170,23 +170,27 @@ pub fn run_args(args: Vec<String>) -> ExitCode {
         Some("review") => {
             review_cmd(&root, args.get(1).map_or("HEAD", String::as_str))
         }
-        Some("plan") if args.get(1).map(String::as_str) == Some("--triage") => {
-            triage_cmd(&root)
-        }
-        Some("plan")
-            if args.get(1).map(String::as_str) == Some("--milestone") =>
-        {
-            match args.get(2) {
-                Some(m) if plan::milestone_declared(&root, m) => {
-                    plan_cmd(&root, Some(m))
+        Some("plan") => match take_format(args.get(1..).unwrap_or_default()) {
+            Err(e) => usage(&e),
+            Ok((json, rest)) => match rest.first().map(String::as_str) {
+                Some("--triage") if json => {
+                    usage("plan --triage has no --format json yet")
                 }
-                Some(m) => usage(&format!(
-                    "no node declares milestone `{m}` -- a `| {m} |` row in some node's \u{a7}T"
-                )),
-                None => usage("plan --milestone needs a milestone id, e.g. M1"),
-            }
-        }
-        Some("plan") => plan_cmd(&root, None),
+                Some("--triage") => triage_cmd(&root),
+                Some("--milestone") => match rest.get(1) {
+                    Some(m) if plan::milestone_declared(&root, m) => {
+                        plan_cmd(&root, Some(m), json)
+                    }
+                    Some(m) => usage(&format!(
+                        "no node declares milestone `{m}` -- a `| {m} |` row in some node's \u{a7}T"
+                    )),
+                    None => {
+                        usage("plan --milestone needs a milestone id, e.g. M1")
+                    }
+                },
+                _ => plan_cmd(&root, None, json),
+            },
+        },
         #[cfg(feature = "ollama")]
         Some("apply") => match plan::apply(&root, 3) {
             Ok(sha) => {
@@ -1823,10 +1827,53 @@ fn tdd_cmd(root: &Path, dir: &Path, invariant: &str, task: &str) -> ExitCode {
     }
 }
 
-fn plan_cmd(root: &Path, milestone: Option<&str>) -> ExitCode {
+/// Split `--format <text|json>` out of a verb's arguments, wherever it sits
+/// (V4's rule for a mode). `Ok((true, rest))` for json; a missing or unknown
+/// value is usage, ⊥ a silent fall back to text a parser then chokes on.
+fn take_format(args: &[String]) -> Result<(bool, Vec<String>), String> {
+    let Some(at) = args.iter().position(|a| a == "--format") else {
+        return Ok((false, args.to_vec()));
+    };
+    let json = match args.get(at.saturating_add(1)).map(String::as_str) {
+        Some("json") => true,
+        Some("text") => false,
+        Some(v) => return Err(format!("unknown --format `{v}` -- text|json")),
+        None => return Err("--format needs a value -- text|json".into()),
+    };
+    let rest = (0usize..)
+        .zip(args)
+        .filter(|(i, _)| *i != at && *i != at.saturating_add(1))
+        .map(|(_, a)| a.clone())
+        .collect();
+    Ok((json, rest))
+}
+
+fn plan_cmd(root: &Path, milestone: Option<&str>, json: bool) -> ExitCode {
     let (p, outside) = plan::plan_in(root, milestone);
     let mut st = state::State::load();
     st.clear_kind("plan"); // a superseded step must not outlive its plan
+    let est: Vec<u64> = p
+        .steps
+        .iter()
+        .map(|t| {
+            lens::pack(root, &root.join(&t.node), lens::Depth::Rule)
+                .map_or(0, |k| k.cost.tokens)
+        })
+        .collect();
+    // `apply` reads these keys, so both forms record the same plan.
+    for (rank, t) in (1usize..).zip(&p.steps) {
+        let c = plan::Confidence::of(rank.saturating_sub(1));
+        st.set(
+            "plan",
+            &rank.to_string(),
+            format!("{} {} {}", t.node.display(), t.id, c.label().trim()),
+        );
+    }
+    if json {
+        println!("{}", plan::to_json(&st, &p, (milestone, outside), &est));
+        st.save();
+        return ExitCode::SUCCESS;
+    }
 
     let scope = milestone.map_or(String::new(), |m| format!(" in {m}"));
     println!(
@@ -1841,10 +1888,8 @@ fn plan_cmd(root: &Path, milestone: Option<&str>) -> ExitCode {
             "  {outside} open rows sit in nodes that declare no milestones -- not in any\n  milestone, so not in this plan.\n"
         );
     }
-    for (i, t) in p.steps.iter().enumerate() {
+    for ((i, t), est) in p.steps.iter().enumerate().zip(&est) {
         let c = plan::Confidence::of(i);
-        let est = lens::pack(root, &root.join(&t.node), lens::Depth::Rule)
-            .map_or(0, |k| k.cost.tokens);
         let (tried, kept) = plan::record(&t.node);
         let score = if tried == 0 {
             "untried".to_string()
@@ -1866,11 +1911,6 @@ fn plan_cmd(root: &Path, milestone: Option<&str>) -> ExitCode {
         println!(
             "      ~{est} tok context · invalidated by: {}\n",
             c.invalidated_by()
-        );
-        st.set(
-            "plan",
-            &(i + 1).to_string(),
-            format!("{} {} {}", t.node.display(), t.id, c.label().trim()),
         );
     }
     if p.steps.is_empty() {
@@ -3289,6 +3329,29 @@ mod tests {
             |a: &[&str]| run_args(a.iter().map(|s| (*s).to_string()).collect());
         assert_eq!(m(&["plan", "--milestone", "M999"]), ExitCode::from(2));
         assert_eq!(m(&["plan", "--milestone"]), ExitCode::from(2));
+    }
+
+    /// `src/plan:V25`: `--format` is a mode, found wherever it sits, and a
+    /// value it does ⊥ know is usage -- ⊥ a silent fall back to the text form
+    /// a JSON caller then fails to parse.
+    #[test]
+    fn plan_format_is_positional_agnostic_and_strict() {
+        let s = |a: &[&str]| a.iter().map(|x| (*x).to_string()).collect();
+        let v: Vec<String> = s(&["--milestone", "M1", "--format", "json"]);
+        assert_eq!(take_format(&v), Ok((true, s(&["--milestone", "M1"]))));
+        let v: Vec<String> = s(&["--format", "json", "--milestone", "M1"]);
+        assert_eq!(take_format(&v), Ok((true, s(&["--milestone", "M1"]))));
+        let v: Vec<String> = s(&["--format", "text"]);
+        assert_eq!(take_format(&v), Ok((false, vec![])));
+        assert_eq!(take_format(&[]), Ok((false, vec![])));
+        let m =
+            |a: &[&str]| run_args(a.iter().map(|x| (*x).to_string()).collect());
+        assert_eq!(m(&["plan", "--format", "yaml"]), ExitCode::from(2));
+        assert_eq!(m(&["plan", "--format"]), ExitCode::from(2));
+        assert_eq!(
+            m(&["plan", "--triage", "--format", "json"]),
+            ExitCode::from(2)
+        );
     }
 
     #[test]

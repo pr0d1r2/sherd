@@ -56,7 +56,7 @@ T3|.|`sherd validate` — compose DAG, id, budget & coverage checks, examined co
 T4|.|`sherd init` — scaffold a `SPEC.md` w/ `§F` rows from child dirs|`.:V5`
 T5|.|`sherd route "<query>"` — resolve a query to a node, exit 3 ambiguous|V2
 T6|.|`sherd check` drift spec↔code|`.:V21`
-T7|.|`sherd graph --json`|`.:V83`
+T7|.|`sherd graph --json` — plumbing as `src/plan:V25` defines it|`.:V83`,`src/plan:V25`
 T8|.|`sherd review` verb over the last commit|`.:V48`
 T12|.|`src/cli/mod.rs` measures 20,082 tok of CODE against a 4,000 ceiling — 5x, & the largest code file in the tree. `V50` is a JUDGMENT & this is the review it exists to force: dispatch is 1 subject, but `check`'s own report families (`file_ceilings`, `check_node`, citations, slices) are another & already split into fns. decide SPLIT or RAISE-w/-reason, ⊥ leave it unread|`.:V50`,`.:R58`,V14
 
