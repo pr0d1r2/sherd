@@ -51,6 +51,19 @@ publish run surfaced two warnings that eleven gate steps had read past
 
 ## [Unreleased]
 
+### Added
+
+- **`sherd plan --format json`** (and `plan --milestone M --format json`)
+  prints the plan as one JSON object for a program to read: each step with
+  its rank, kind, node, id, text, believability, kept/tried record, context
+  tokens and an `invalidated_by` list, plus every unmanaged row with its
+  node, id and reason, and the milestone filter's `outside_milestones`
+  count. The root node is spelled `.`. The text form may change; the JSON
+  form only gains keys (`src/plan:V25`). An unknown `--format` is a usage
+  error (exit 2), never a fallback to text. Library: `plan::to_json`,
+  `Confidence::invalidators`. Requested in #36 by a task loop that had to
+  parse the text layout.
+
 ## [0.5.1] - 2026-09-21
 
 Still the `0.5` rung: what it promises -- every verb that never calls a model,
