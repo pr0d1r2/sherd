@@ -48,7 +48,7 @@ V13: a GENERATOR is tested by running it TWICE. once proves it writes; the 2nd r
 V15: a path from ARGV is ⊥ a location til resolved ABSOLUTE against the CWD, ONCE, before any walk | join reads it. `parent()` climbs a relative path to `""` ∴ an upward walk from one runs out of parents & returns its own START — the ARGUMENT — as the answer, & the caller then joins that argument on a 2nd time (`code/code`, B9). V5 says WHERE the root is; this says what the INPUT ! be. B5·B7·B9 are 1 family & each fix named a different half of the input — WHICH repo · WHICH position · WHICH FORM
 V16: `--version`/`-V` answer on STDOUT w/ exit 0 & name the version `Cargo.toml` declares, ⊥ a 2nd spelling of it. a binary that cannot say what it is forces its wrapper to parse the usage banner (B10)
 V17: a MISS ! teach the spelling that WORKS. `[dir]` is ROOT-relative (V15) ∴ `seam code` typed in `src/` looks for `<root>/code` & misses w/ `src/code` right there — honest, & a dead end (B9's RESIDUE). the fix is the MESSAGE, ⊥ the resolution: trying the CWD next makes what an argument MEANS depend on where the caller stands, which is B5·B7's ambiguity re-admitted. a name NO node carries gets ⊥ invented suggestion (V2); a name SEVERAL carry is LISTED, ⊥ guessed (`.:V20`)
-V18: `mod.rs` is DISPATCH — `USAGE`, `run_args` & the refusals that answer for a verb itself. a verb FAMILY lives in its own file beside it (`check`·`measure`·`steps`·`author`·`adopt`·`propose`·`args`) & a new verb joins the family it shares a subject with. its TESTS live in that file's `#[cfg(test)]`; a fixture 2+ families use lives in `fixtures.rs`, declared beside `mod tests` ∵ `.:V50` splits a file @ its FIRST `#[cfg(test)]` (`.:B29`). `.:V50` bills per FILE & a worker loads the file it edits ∴ 1 file of 20,521 tok made every verb cost every other verb. split 2026-09-27, ⊥ raised
+V18: `mod.rs` is DISPATCH — `USAGE`, `run_args` & the refusals that answer for a verb itself. a verb FAMILY lives in its own file beside it (`check`·`measure`·`steps`·`author`·`adopt`·`propose`·`args`) & a new verb joins the family it shares a subject with. its TESTS live in the `tests/` tree — `tests/<family>.rs`, `tests/dispatch.rs` for `mod.rs`, `tests/fixtures.rs` for what 2+ families share — each included as `#[cfg(test)] #[path] mod tests;` ∴ still a child module & reaches private fns (`.:V124`). `.:V50` bills per FILE & a worker loads the file it edits ∴ 1 file of 20,521 tok made every verb cost every other verb. split 2026-09-27, ⊥ raised
 
 ## §T TASKS
 
@@ -59,7 +59,7 @@ T5|.|`sherd route "<query>"` — resolve a query to a node, exit 3 ambiguous|V2
 T6|.|`sherd check` drift spec↔code|`.:V21`
 T7|.|`sherd graph --json` — plumbing as `src/plan:V25` defines it|`.:V83`,`src/plan:V25`
 T8|.|`sherd review` verb over the last commit|`.:V48`
-T14|.|3 family files carry tests over the 2,000 ceiling: `check.rs` 3,369 (15 tests — `check`·`validate`·`review` together) · `measure.rs` 2,468 · `args.rs` 2,324. `review` is the separable subject in `check.rs` — its own file w/ its tests. decide per file SPLIT or RAISE-w/-reason|`.:V50`,V18
+T14|.|3 test files over the 2,000 ceiling: `tests/check.rs` 3,552 (16 tests — `check`·`validate`·`review` together) · `tests/measure.rs` 2,387 · `tests/args.rs` 2,216. `review` is the separable subject in `check` — its own code file & test file. decide per file SPLIT or RAISE-w/-reason|`.:V50`,V18
 
 ## §B BUGS
 

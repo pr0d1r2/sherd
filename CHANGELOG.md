@@ -64,6 +64,17 @@ publish run surfaced two warnings that eleven gate steps had read past
   `Confidence::invalidators`. Requested in #36 by a task loop that had to
   parse the text layout.
 
+### Fixed
+
+- **`sherd check` measures a file in a `tests/` tree as tests** (V50).
+  A suite kept in its own file, included through `#[cfg(test)] mod
+  tests;`, carries no `#[cfg(test)]` of its own, so it was measured as
+  code, against a ceiling twice the test one. Test-ceiling findings
+  disappeared when a suite moved out of its implementation file. Any
+  file with a `tests` path component is now test code in full. In this
+  repository that surfaced `dev/tests/cli.rs`, over its ceiling all
+  along.
+
 ## [0.5.1] - 2026-09-21
 
 Still the `0.5` rung: what it promises -- every verb that never calls a model,
