@@ -31,11 +31,11 @@ fn split_proposes_and_refuses_to_apply() {
 }
 
 /// The structure-first proposal on a fixture whose modules the spec
-/// never names: `.:src/plan:B12` is that a row ranking sees nothing here,
+/// never names: `.:src/split:B1` is that a row ranking sees nothing here,
 /// while the code plainly declares two nodes.
 /// Every grade, including the bottom rung that always fires: a plain
 /// `mod` and a `pub(crate) mod` are both DECLARED, which is what
-/// `microlith` is made of (`.:src/plan:B13`).
+/// `microlith` is made of (`.:src/split:B2`).
 #[test]
 fn a_private_or_crate_visible_module_is_still_a_node() {
     let repo = routing_fixture("cli-split-grades");

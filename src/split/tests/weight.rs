@@ -1,6 +1,6 @@
 use super::*;
 
-/// The defect `src/plan:B14` names: this repository's root spec talks about `tdd`
+/// The defect `src/split:B3` names: this repository's root spec talks about `tdd`
 /// on dozens of rows, and the promotable-candidate path reported zero
 /// because `src/tdd` is already a node.
 #[test]
@@ -17,7 +17,7 @@ fn an_existing_node_still_has_a_weight_in_its_parent() {
     assert_eq!(row_weight(&spec, "wombat"), (0, 0));
 }
 
-/// `src/plan:B15`, first cause, on the example that row names: lowercasing split
+/// `src/split:B4`, first cause, on the example that row names: lowercasing split
 /// the filename `SPEC.md` into `spec`, so every row naming the FILE
 /// counted as a row about the NODE. Measured on this repository's own
 /// root spec the column read 54 where a case-sensitive count reads 27.
@@ -53,9 +53,9 @@ fn a_filename_is_not_a_row_about_the_node_it_spells() {
     }
 }
 
-/// `src/plan:B15`, second cause: `sync` GENERATES `§N` into every node and `§N`
+/// `src/split:B4`, second cause: `sync` GENERATES `§N` into every node and `§N`
 /// names every sibling, so counting it makes this function read its own
-/// generator's output and the loop never converges (`src/plan:V18`). `§F` is
+/// generator's output and the loop never converges (`src/split:V3`). `§F` is
 /// authored rather than generated and is excluded for the same reason --
 /// it is structure, not law.
 #[test]

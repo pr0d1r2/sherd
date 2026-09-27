@@ -26,9 +26,9 @@ pub(super) fn split_cmd(root: &Path, dir: &Path, apply: bool) -> ExitCode {
         fed::node_label(root, dir)
     );
 
-    // STRUCTURE FIRST (`.:src/plan:V17`): what the code already separated, then
+    // STRUCTURE FIRST (`.:src/split:V2`): what the code already separated, then
     // the prose weight of each. A module the spec never mentions is still a
-    // node; a ranking by rows cannot see it (`.:src/plan:B12`).
+    // node; a ranking by rows cannot see it (`.:src/split:B1`).
     let proposed = split::structure(dir);
     if proposed.is_empty() {
         println!("  no module declarations found -- nothing to propose");

@@ -15,7 +15,7 @@ fn an_already_federated_crate_proposes_its_directories() {
 
 /// A family with a shared hub: the `use crate::` intersection across all
 /// members, which is what makes eleven `*cmd` files one node instead of
-/// eleven (`src/plan:V17`).
+/// eleven (`src/split:V2`).
 #[test]
 fn a_family_is_proposed_with_the_hub_its_members_share() {
     let dir = std::env::temp_dir().join(format!(

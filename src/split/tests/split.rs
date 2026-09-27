@@ -7,7 +7,7 @@ fn a_module_named_by_no_row_is_not_a_candidate() {
     assert!(naming_rows(spec, "corpus").is_empty());
 }
 
-/// `src/plan:B17`: the evidence grade discriminates in ONE of six repositories
+/// `src/split:B5`: the evidence grade discriminates in ONE of six repositories
 /// measured. Everywhere else every module carries the same grade, which
 /// leaves the spec rows as the only signal -- and alphabetical order
 /// threw it away.
@@ -114,7 +114,7 @@ fn a_module_that_is_both_a_file_and_a_directory_is_flagged() {
 
 /// A FEDERATED tree proposes the nodes it already has, graded
 /// `directory`, and each still carries whatever weight the parent spec
-/// gives it. `src/plan:B14` is what the opposite assumption cost: excluding
+/// gives it. `src/split:B3` is what the opposite assumption cost: excluding
 /// already-nodes left the weight column reading zero for every one of
 /// them, in the only kind of repository where the question matters.
 #[test]

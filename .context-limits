@@ -122,6 +122,7 @@ src/plan       15200
 src/review     13000
 src/slice      12900
 src/spec       13200
+src/split      14700
 src/state      12500
 src/tdd        15100
 src/tokens     12800
@@ -162,3 +163,17 @@ src/wave       14200
 # AFTER, while its tests fall 20,093 -> 16,879. The scheduler sat after that
 # file's first test module, and V50 splits code from tests POSITIONALLY, so
 # 337 lines of production code were being counted as tests all along (`.:B29`).
+
+# NEW NODE 2026-09-27: `src/split` 14700, its first entry rather than a raise
+# of anything. Federation PROPOSAL split out of `src/plan` (`src/plan:T14`),
+# the second subject that row named; `wave` was the first to leave. Measured
+# at the split with `sherd budget`: chain 12,812 -- root 11,017 plus `src`
+# plus its own spec, which carries the six rules, three open tasks and
+# five bug rows that moved with the code. Unlisted it inherits `src`'s 12,300 and is OVER by
+# 512 on the day it is created, so it needs its own row; 14700 is the ~15%
+# slack this header asks for, the same margin `src/wave` got (12,277 ->
+# 14,200).
+#
+# `src/plan` keeps 15200 and is NOT lowered here, as with `wave`: its chain
+# fell to 12,537, but lowering a ceiling is its own decision, with its own
+# reason, and does not ride along with a move.

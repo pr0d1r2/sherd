@@ -288,7 +288,7 @@
 # and the broken-build case each earned their own name -- and the rest is
 # recorded. Coverage went 92.07 -> 92.14 buying it.
 #
-# RAISED 14.5 -> 14.6 on 2026-08-24 for `src/plan:B17` -- `rank()` and
+# RAISED 14.5 -> 14.6 on 2026-08-24 for `src/split:B5` -- `rank()` and
 # `uniform_evidence()`, plus their tests. The finding they answer was
 # measured across SIX repositories: the evidence ladder ranks nothing in five
 # of them, and `split` was ordering alphabetically, throwing away the only
