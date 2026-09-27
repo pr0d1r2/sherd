@@ -1840,7 +1840,7 @@ mod loop_tests {
     // The gate cluster moved to `src/land` (`.:T99`); these tests did not,
     // because the scripted-toolchain fixtures they drive live here and
     // copying a fixture into a second node is the duplication §C ends.
-    // `.:T101` moves the fixtures to `testrepo` and the tests follow them.
+    // `src/tdd:T20` moves the fixtures to `testrepo` and the tests follow them.
     // The gate cluster's tests, moved with it (`.:T99`). They exercise
     // `fmt_ok`, `lint_debt_ok` and `debt::recorded` against scripted
     // toolchains, and a test left behind in the node that no longer owns

@@ -32,7 +32,7 @@ sib|src/git|one git invocation shape — the repo a command acts on, & the env i
 
 ## §C CONSTRAINTS
 
-- ∀ step declares its profile. ⊥ one call sees spec + tests + impl together (`.:V87`).
+- ∀ step declares its profile. ⊥ one call sees spec + tests + impl together (`src/lens:V14`).
 - step 3 = LOCAL, deterministic, ZERO tokens (`.:V18`).
 
 ## §V INVARIANTS
@@ -76,6 +76,7 @@ T7|.|needs a hook change, ⊥ a function|B3
 T8|.|record per-request template overhead (~67 tok, measured) in entry-cost accounting|V2
 T13|~|FIRST MERIT WIN 2026-08-22, live, after 6 blockers fell (`.:src/state:B1`, B26-B29, `.:src/review:B6`): 5 round-trips, 20,559 tok, `MERGEABLE -- gates green + second lens`. it did ⊥ SURVIVE REVIEW: row said bounded BACKOFF, fn retries tight w/ none, no doc, lint 271→276 ∴ `hk` refuses what the loop calls mergeable. REMAINING: a rung whose output survives a READER|V23,`.:V106`
 T14|.|`sherd tdd` on `src/ollama` T3 failed 2x (8 round-trips, 17,551 tok, 4 compile errors incl `E0428` redefined). per `.:sit` a row failing twice is EVIDENCE ABOUT THE ROW — retry ⊥ productive until it is split|V23
+T20|.|move the scripted-toolchain fixtures (`scratch`·`scripted_cargo`·`write_exec`·`repo_fixture`·`node_fixture`) `src/tdd` tests → `testrepo`, then the 7 gate tests follow `gate_with`/`cargo_bin`, which already moved to `src/land`. today they sit in `src/tdd` testing `crate::land::` fns ∵ the fixtures do|`.:V74`,`.:B15`
 
 ## §B BUGS
 

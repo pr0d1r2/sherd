@@ -48,6 +48,9 @@ V13: a parser's test ! cover the char it CONSUMES, ⊥ only the sequence it docu
 V16: a `§N` lens is a `§F` CELL & is WRITTEN BACK as one — `escape_cell()` is V4's codec in reverse, i.e. `microlith::escape` ∴ `split_row(nav_section(x))` returns `x` (B13). the ROUND TRIP is the assertion, ⊥ the encoded bytes: upstream doubles EVERY `\` where the local writer doubled only the ones V4 would re-read, & both decode to the same cell
 V17: ONE codec, used in BOTH directions. a reader & a writer that are 2 readings of 1 sentence drift, & B13 is this node's recording of it — `nav_section()` wrote raw while `split_row()` unescaped, & 17 files carried the extra column. importing a codec the upstream EXPORTS as a set (its `B36`: a pipe row is the 1 construct a consumer cannot avoid re-reading) is how that stops being possible, ⊥ a rule to remember
 V18: a node is findable by the NAME a reader typed — `spelled()` matches a trailing run of components over `discover()`, & reads ⊥ the CWD ∴ the answer is the same wherever it was typed. it answers a MISS & never CHOOSES: the exact spelling is excluded (it is the one that worked), & 2 nodes ending in 1 name are both returned (`src/cli:V17`)
+V19: ignore globs (`target/`, `.git/`) ⊥ walked, ⊥ ceiling-checked. per-FILE ignores too (generated, vendored)
+V20: root `§N` — `up` = `-`, `self` = `.`, ⊥ sib
+V21: `§N`.lens = verbatim copy of that dir's `§F`-row lens. single source
 
 ## §T TASKS
 
@@ -58,7 +61,7 @@ T9|.|needs a query→child match rule before it has a signature|`.:V19`
 T10|.|promote an invariant from a leaf to the common ancestor|`.:V13`
 T11|.|report `§N` that differs from what `§F` derives|`.:V36`
 T12|.|BLOCKED — needs Rust source, ⊥ `§F` data. see B9|`.:V73`
-T13|~|replace the hand-rolled walk with `itok::walk`/`itok::glob`|`.:V23`
+T13|~|replace the hand-rolled walk with `itok::walk`/`itok::glob`|`src/fed:V19`
 T14|.|blocked — recomputing needs `crate::tokens`, ⊥ in this node's surface. see B10|`.:V21`
 T15|.|fixture: 4 levels deep, one module with two parents — self-repo is a tree|`.:V4`
 T16|.|parse `§N` rows, line-anchored|`.:V34`
@@ -66,7 +69,7 @@ T16|.|parse `§N` rows, line-anchored|`.:V34`
 ## §B BUGS
 
 id|date|cause|fix
-B1|2026-08-01|FIXED by replacement. `find_depth_violations` (LLM-authored) hand-rolled its own recursive walk w/ ⊥ ignore globs ∴ descends `target/`, `.git/` — violates `.:V23`. also a 2nd walker in the module that already has `walk()`, the two-readings defect, in the file whose own B-log names it|reuse `discover()`. FIRST CAUSE WRONG: I recorded 'it was ⊥ in the step-2 surface'. VERIFIED FALSE — `discover()` & `walk()` were BOTH in the prompt. the model saw them & duplicated anyway ∴ cause is that nothing ASKED it to reuse. `.:V59` on my own bug record
+B1|2026-08-01|FIXED by replacement. `find_depth_violations` (LLM-authored) hand-rolled its own recursive walk w/ ⊥ ignore globs ∴ descends `target/`, `.git/` — violates `src/fed:V19`. also a 2nd walker in the module that already has `walk()`, the two-readings defect, in the file whose own B-log names it|reuse `discover()`. FIRST CAUSE WRONG: I recorded 'it was ⊥ in the step-2 surface'. VERIFIED FALSE — `discover()` & `walk()` were BOTH in the prompt. the model saw them & duplicated anyway ∴ cause is that nothing ASKED it to reuse. `.:V59` on my own bug record
 B2|2026-08-01|FIXED by replacement. LLM-authored test wrote `temp_depth_test` in CWD, ⊥ a real temp dir ∴ races under parallel test runs & leaks the dir if the test panics before cleanup|`std::env::temp_dir()` + unique name, cleanup on drop
 B3|2026-08-01|FIXED by replacement. `find_depth_violations` read EVERY `*.md`, ⊥ only `SPEC.md` ∴ a federation table in a README is treated as authoritative|scope to `SPEC.md`, per `.:V5`/`.:V1`
 B4|2026-08-01|FIXED & hypothesis CONFIRMED. was twice — `check_edge_depth` & `missing_not_owns`, independent tasks, both re-scan the `§F` section itself — its own `in_f` loop & header skip — instead of calling `edges(text)` & checking `e.dir`. residual two-readings, milder than B1's duplicate walker but real|HYPOTHESIS: step 2 gets the FULL impl body ∴ sees `edges()`'s scan loop & IMITATES it. surface-by-example induces copying. VERIFIED: step 2 given SIGNATURES ⊥ bodies → `depth_violations(&[Edge])`, 5 lines ⊥ 30, COMPOSES w/ `edges()`, `in_f` 6→3. also 20% cheaper (max call 1,438→1,243)

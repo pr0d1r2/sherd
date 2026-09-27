@@ -170,16 +170,13 @@ V18: parse/DAG/budget/ceiling ⊥ call model. `--offline` → all cmds but prose
 V19: `route` descend one edge per step, reload only that child. ⊥ load whole tree
 V20: `route` ambiguous → exit 3 + candidates. `route` miss → exit 2 naming what was tried. ⊥ exit 0 empty
 V21: `§F`.tokens stale (≠ recomputed ±10%) → `check` flag
-V23: ignore globs (`target/`, `.git/`) ⊥ walked, ⊥ ceiling-checked. per-FILE ignores too (generated, vendored)
 V24: ∀ emitted token number ! carry method label. ⊥ bare int
 V25: `ollama` tier unreachable → fall back `bpe` + warn stderr. ⊥ fall to `dummy`, ⊥ silent
 V26: `§F`.tokens written & checked by same tier. tier switch → recompute all
 V27: this repo ! valid federation. `sherd validate` on self exit 0, CI gate
 V30: bootstrap — parse/DAG/budget land before self-spec written. ⊥ claim dogfood til self-validate green
 V34: ∀ non-root `SPEC.md` ! carry `§N` — `up` ≥1, `self` = 1, `sib` = ∀ co-child
-V35: root `§N` — `up` = `-`, `self` = `.`, ⊥ sib
 V36: `§F` authoritative, `§N` generated. mismatch → `§F` wins, `sync` rewrites. ⊥ hand-edit `§N`
-V38: `§N`.lens = verbatim copy of that dir's `§F`-row lens. single source
 V39: multi-parent → `up` 2+ rows. `sib` = union ∀ parent, deduped
 V40: `§N` alone ! answer "where am I, what is beside me" ⊥ opening another file
 — two axes —
@@ -217,19 +214,10 @@ V70: `cap.row` enforced BEFORE rationale is written, ⊥ after. a spec compacted
 — module as unit —
 V71: facade dir named by CAPABILITY ⊥ vendor — `src/tokens/` ⊥ `src/itok/`. reader asks "count tokens" ⊥ "itok" (V67), & a swapped dep makes a vendor name lie. vendor named in `owns`/`⊥owns`
 V72: ∀ external dep ! have ONE call site — its facade `mod.rs`. siblings private ∴ **compiler** enforces it (`error[E0603]`), ⊥ grep. VERIFIED cargo 1.96.1. guards the "rule never carried to a sibling path" class @ its source
-V76: lens pack ordered STABILITY-DESCENDING — root, ancestors, then node. an edit invalidates every token of prefill AFTER it (R15) ∴ volatile content LAST. `pack()` order is load-bearing, ⊥ cosmetic
 V77: federation's payoff on local hw is CACHE LOCALITY, ⊥ only fit. root+ancestor prefix byte-identical across ∀ node ∴ stays hot; only the leaf re-prefills. a monolith edited near its top pays full re-prefill EVERY turn (R15/R16)
-V78: FACET = stable classification of content (impl · tests · spec · agents · guard-infra · guard-local · human). a property of the FILE, fixed
-V79: facet value = token share × P(task ⊥ needs it). tests 34% × ~0.7 ≈ 24% · human 2.7% × ~0.95 ≈ 2.6% ∴ rank by the PRODUCT, ⊥ by size
-V80: more facets help ONLY where a facet matches how tasks cluster. a facet no task selects is a manifest to maintain — R4 rejected that once already
-V81: facets ! PARTITION — exhaustive & disjoint, same rule as sibling lenses (V64/V65). else content double-loads or vanishes between facets
 V82: SETTING enters a pack as CONTRACT ⊥ implementation — one line per guard (`line cap 80`, `clippy pedantic`, `coverage floor 98`). ~200 tok replaces ~31k. a guard the agent cannot SEE is B1
 V83: structural diagram GENERATED from `§F` (`graph --mermaid`), ⊥ authored. a hand-drawn architecture diagram is a second reading of what `§F` declares — microlith's founding defect
 V84: guard-infra encoding FLEET standard is materializable (flake input, content-addressed). repo-specific facts — tests, `.context-limits`, baselines — STAY. ⊥ materialize what encodes THIS repo
-V86: PROFILE = task-dependent SELECTION over facets. `set`/`setting` is the DEFAULT profile (`implement`), ⊥ a partition of the repo. `tests` ∈ setting under `implement` & ∈ set under `tdd` — the file ⊥ change, the TASK does
-V87: axes COMPOSE multiplicatively. facet alone fails TDD — MEASURED 81.4% of itok still loads (B3). facet × horizontal @ one node = 6.1%, 13x smaller ∴ neither axis alone is sufficient
-V89: pack layout = canonical facet ORDER, volatile last. widening mid-run re-prefills everything AFTER the insertion point ∴ declare the profile up front (V88) & build the pack once
-V90: MEASURED widening cost — append 4.12s (only new tok, prefix cached) vs prepend 8.60s (everything) on the same 11.6k pack = 2.1x, & the gap grows w/ prefix size
 V100: a principle a machine can CHECK belongs in a gate or a shape, ⊥ a prompt. MEASURED: structure never violated · gate evaded twice · prompt ignored entirely ∴ prefer structure > gate > prompt, & a principle that becomes a check should LEAVE the slice
 V96: assets classed by AUDIENCE, ⊥ only by concern. **worker** → the 20B prompt · **supervisor** → the higher agent only · **human** → readers. supervisor text in a worker prompt is wasted tokens AND instructions aimed at the wrong reader — "revert this" means nothing to a model writing one function
 V97: audience enforced by DISCOVERY, ⊥ convention. `.claude/`, `.github/`, `.codex/` ⊥ walked ∴ a `SPEC.md` dropped there can never become a node & can never reach a prompt
@@ -240,8 +228,6 @@ V95: a halt is COMMITTED (`--allow-empty`), ⊥ only printed. autonomous means n
 V93: the loop STOPS on: nothing actionable · same row failed 2x · `check` unclean · 2 aborts @ 10x · 2 reverts in a row. an "infinite loop" w/o stop conditions optimizes for whatever the gate rewards
 V94: nothing actionable → MAINTENANCE, ⊥ done. §B w/o §V · claims w/o runners · duplication · unmanaged rows · budgets · stale §R
 V91: ONE primitive at every axis — a cheap summary that supports a decision + a pointer to the expensive thing. horizontal `§F` owns/⊥owns → child. vertical rule → `SPEC.why.md`. facet contract line → implementation
-V88: profile DECLARED per task, ⊥ inferred. an inferred profile silently loads the wrong facets & the failure looks like a model that forgot
-V85: `AGENTS.md` ∈ SET, ⊥ SETTING. it says HOW to work ∴ needed while working. guardrails say what is CHECKED after ∴ ⊥ needed while working
 V74: §C claims ! have a runner. `fed::walk` contradicted §C for a whole session & no gate could see it (B1) — a constraint no check reads is a comment
 V75: format facts read from the CHECKER's own source, ⊥ a vendored `FORMAT.md`. the local copy was 6 sections while the dep shipped 7 (B2)
 V101: a dep ! resolve to an IMMUTABLE artifact — registry version + lock checksum. a sibling PATH dep is a shared working tree ∴ the gate's green is true only for the INSTANT it ran & expires silently when the sibling moves (B5). a new path dep ! carry a §B-recorded reason
@@ -291,7 +277,6 @@ T59|.|PAY THE DEBT: record rationale for V1-V63 into `SPEC.why.md` before it acc
 T64|.|setting-as-contract extraction — guard files → one line each|V82
 T67|.|materializability audit: which guard files are fleet standard vs repo facts|V84,R20
 T68|.|report caveman 22%-⊥-75% upstream to cavekit FORMAT.md|R23
-T69|.|profile declaration — flag > §T row > `sherd.toml` default. ⊥ inference|V88
 T73|.|`/titrate` machinery — `.sherd-frontier` record, believability re-keyed node → SHAPE, cost ledger w/ the denominator named (`.:B4`)|V103,V60
 T76|.|BUILDABILITY SWEEP: `sherd tdd` @ every node, N=3, record (node, rung, kept/tried) → `.sherd-frontier`. answers WHICH modules are buildable, ⊥ whether the idea works|V106,V103,R37
 T80|.|audit `§V` rows for what a TYPE could carry instead (V107). the rows that need prose precision are the ones no signature can hold|V107,R43
@@ -301,7 +286,6 @@ T88|.|`no-commit-to-branch --branch main` in the PRE-COMMIT set only — ⊥ `al
 T89|.|pub-fn ↔ test PAIRING via `sherd review` — reuse `public_fns`/`expected_calls`, ⊥ reimpl. catches what a % hides: a fn w/ NO test, carried by its neighbours|V72,V16
 T91|~|`src/cli` FIRST: 445 lines, 0 tests, 0% — found twice by different instruments (T85 density map, R50 coverage). biggest single lever on the floor & the node w/ no test module at all|R50,V16
 T92|~|`src/tdd`: move `RECORDED`/`VAGUE`/`SUBTLE`/`GEN_CORPUS`/`grade`/the titrations behind `#[cfg(test)]` — they are FIXTURES in the impl half — & decompose `drive_from` (267 lines, cognitive 21, worst in the repo). the source-reading half leaves via T93, ⊥ internally (R48)|V50,V109,V110,R48
-T101|.|move the scripted-toolchain fixtures (`scratch`·`scripted_cargo`·`write_exec`·`repo_fixture`·`node_fixture`) `src/tdd` tests → `testrepo`, then the 7 gate tests follow the code T99 moved. today they sit in `src/tdd` testing `crate::land::` fns ∵ the fixtures do|V74,B15
 T103|~|LADDER rungs as work: 0.4 = `split`+`sync` DONE · 0.5 = the MECHANICAL surface correct & reusable, measured on a foreign repo · 0.6 = settle · 0.7 = the model half resumes (V117) — & @ 0.7 the 1st question is `src/assay:T6`, whether a FIX SHAPE beats a `§V` ROW: the 4th variable of the `.:R44` gap & the only one untried (V121). 0.1-0.3 reached|V114,V117,V121
 T104|.|lint ratchet ! also count `--no-default-features` — 131 warnings on the SHIPPED binary are uncounted today|V118,B20
 T106|.|`wave` EXECUTION @ rung 0.7 — fan the scheduled rounds out to N workers, 1 worktree each, gate & merge in topological order; executor NAMED ⊥ assumed|V123,V117,R57,`src/wave:T1`,`src/ollama:T13`
@@ -312,7 +296,7 @@ T107|x|V50 splits a file @ the 1st `#[cfg(test)]` ∴ code BELOW a test module c
 id|date|cause|fix
 B1|2026-08-01|`fed::walk` hand-rolled while §C says fs walk = `itok::walk`/`itok::glob`, ⊥ reimpl. wrote it w/o reading itok's walk API — the exact belief-⊥-measurement trap V59 names, committed in the first commit that could commit it. ⊥ caught by `check`: no runner reads §C|V74. port to `itok::walk` or amend §C w/ the measured reason itok's walk ⊥ fit
 B2|2026-08-01|`§R` written as RECORDS w/ `id\|state\|record`. FORMAT 4.1.0 §R = RESEARCH `id\|topic\|finding\|src`. assumed from a stale local `FORMAT.md` (6 sections) while the dep shipped 4.1.0 (7). 16 violations on first `sherd check`, all real|read the CHECKER's own `SECTIONS`/`CANONICAL_WORDS`, ⊥ a vendored copy. §R now RESEARCH; closed options → `.spec-records` (R13)
-B3|2026-08-01|SPEC defect, mine: V78 written as a STATIC partition — SET = impl+spec+agents, SETTING = tests+guardrails — & committed. TDD breaks it: the test IS the work ∴ `tests` ∈ set, & nothing about the file changed. facet (property of the FILE) conflated w/ profile (property of the TASK). MEASURED after: `tdd` loads 81.4% of itok, `refactor` 80.9% ∴ the axis nearly collapses for 2 of 5 profiles|V78 now names the classification only; V86 adds PROFILE as the task-dependent selection; V87 records that facet × horizontal = 6.1% where facet alone = 81.4%. found by a READER asking about TDD, ⊥ by any check — no gate reads a partition's fitness for a workflow
+B3|2026-08-01|SPEC defect, mine: `src/lens:V8` written as a STATIC partition — SET = impl+spec+agents, SETTING = tests+guardrails — & committed. TDD breaks it: the test IS the work ∴ `tests` ∈ set, & nothing about the file changed. facet (property of the FILE) conflated w/ profile (property of the TASK). MEASURED after: `tdd` loads 81.4% of itok, `refactor` 80.9% ∴ the axis nearly collapses for 2 of 5 profiles|`src/lens:V8` now names the classification only; `src/lens:V13` adds PROFILE as the task-dependent selection; `src/lens:V14` records that facet × horizontal = 6.1% where facet alone = 81.4%. found by a READER asking about TDD, ⊥ by any check — no gate reads a partition's fitness for a workflow
 B4|2026-08-01|SPEC defect, mine, repeated across ~6 commit messages: claimed "95x on the binding constraint" comparing our max call to 157,071 — which is `itok`'s WHOLE-REPO tdd profile, ⊥ what a one-call prompt needs. MEASURED baseline for the same task = 2,659 tok ∴ real ratio 2.1x. compared against a straw man nobody would build|`sherd oneshot` built as the honest monolith arm; R29/R30 carry the measurement; V60 restated. GENERALLY: a ratio ! name what is in the DENOMINATOR & that thing ! be something someone would actually do
 B5|2026-08-05|HEAD stopped COMPILING w/ ⊥ sherd commit. `67fa9ad` (08-02 10:26) imported `microlith`'s inner `violation` module & the gate passed; microlith privatized it 9h later (`421ab02`, 08-02 19:16) ∴ E0603 on a tree already judged green, & already pushed. `../microlith` was a path dep ∴ no version could hold it still, & `Cargo.lock` read `0.4.0` for a sibling saying `0.5.0`|`microlith` = crates.io `0.5` + lock checksum (V101). `itok` too (T71) ∴ none left. `src/spec:B1` carries the import half
 B6|2026-08-18|gate ran `build` + `test` ONLY, from the first commit that had a hook — no fmt, no clippy — ∴ an entirely unformatted tree & 18 clippy findings accrued behind a verdict that read green every time. the ops lived as a shell BODY in `.githooks/pre-commit` ∴ the SET of checks was never reviewable data & nobody could see what was ⊥ there|ops → `hk.pkl`, file-scoped & readable; fmt + clippy gated & the debt paid (`790bcf6`). V102. `-D warnings` moved off `RUSTFLAGS` so it stops reaching `../itok`
