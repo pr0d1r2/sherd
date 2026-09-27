@@ -4,7 +4,7 @@
 //! contracts and every §T row about them was unreachable while this file had
 //! no `SPEC.md` to hold them.
 
-use crate::{code, fed, lens, plan, slice, spec, state, tokens, wave};
+use crate::{code, fed, lens, plan, slice, spec, split, state, tokens, wave};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 

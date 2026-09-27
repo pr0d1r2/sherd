@@ -49,16 +49,16 @@ fn a_private_or_crate_visible_module_is_still_a_node() {
     ) else {
         unreachable!("a lib.rs is writable")
     };
-    let found = plan::structure(root);
+    let found = split::structure(root);
     let grade =
         |n: &str| found.iter().find(|p| p.name == n).map(|p| p.evidence);
-    assert_eq!(grade("api"), Some(plan::Evidence::Published));
+    assert_eq!(grade("api"), Some(split::Evidence::Published));
     assert_eq!(
         grade("inner"),
-        Some(plan::Evidence::Declared),
+        Some(split::Evidence::Declared),
         "pub(crate) is not published"
     );
-    assert_eq!(grade("hidden"), Some(plan::Evidence::Declared));
+    assert_eq!(grade("hidden"), Some(split::Evidence::Declared));
 }
 
 #[test]
@@ -74,7 +74,7 @@ fn split_proposes_nodes_the_spec_never_mentions() {
     ) else {
         unreachable!("a lib.rs is writable")
     };
-    let found = plan::structure(root);
+    let found = split::structure(root);
     let names: Vec<&str> = found.iter().map(|p| p.name.as_str()).collect();
     assert_eq!(
         names,

@@ -27,6 +27,7 @@ pub mod plan;
 pub mod review;
 pub mod slice;
 pub mod spec;
+pub mod split;
 pub mod state;
 #[cfg(test)]
 pub mod testrepo;
