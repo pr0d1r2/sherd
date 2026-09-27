@@ -170,16 +170,13 @@ V18: parse/DAG/budget/ceiling ⊥ call model. `--offline` → all cmds but prose
 V19: `route` descend one edge per step, reload only that child. ⊥ load whole tree
 V20: `route` ambiguous → exit 3 + candidates. `route` miss → exit 2 naming what was tried. ⊥ exit 0 empty
 V21: `§F`.tokens stale (≠ recomputed ±10%) → `check` flag
-V23: ignore globs (`target/`, `.git/`) ⊥ walked, ⊥ ceiling-checked. per-FILE ignores too (generated, vendored)
 V24: ∀ emitted token number ! carry method label. ⊥ bare int
 V25: `ollama` tier unreachable → fall back `bpe` + warn stderr. ⊥ fall to `dummy`, ⊥ silent
 V26: `§F`.tokens written & checked by same tier. tier switch → recompute all
 V27: this repo ! valid federation. `sherd validate` on self exit 0, CI gate
 V30: bootstrap — parse/DAG/budget land before self-spec written. ⊥ claim dogfood til self-validate green
 V34: ∀ non-root `SPEC.md` ! carry `§N` — `up` ≥1, `self` = 1, `sib` = ∀ co-child
-V35: root `§N` — `up` = `-`, `self` = `.`, ⊥ sib
 V36: `§F` authoritative, `§N` generated. mismatch → `§F` wins, `sync` rewrites. ⊥ hand-edit `§N`
-V38: `§N`.lens = verbatim copy of that dir's `§F`-row lens. single source
 V39: multi-parent → `up` 2+ rows. `sib` = union ∀ parent, deduped
 V40: `§N` alone ! answer "where am I, what is beside me" ⊥ opening another file
 — two axes —

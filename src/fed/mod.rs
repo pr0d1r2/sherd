@@ -863,11 +863,11 @@ pub struct Nav {
 ///
 /// `§F` is authoritative and `§N` is generated (`.:V36`), so this never reads
 /// an existing `§N` -- it computes what one must say. The lens of each row is
-/// a verbatim copy of that directory's `§F` row `owns` cell (`.:V38`): one
+/// a verbatim copy of that directory's `§F` row `owns` cell (`src/fed:V21`): one
 /// source, and a nav table that cannot describe a node differently from the
 /// table that declares it.
 ///
-/// Root gets `up = -` and `self = .` with no siblings (`.:V35`); every other
+/// Root gets `up = -` and `self = .` with no siblings (`src/fed:V20`); every other
 /// node gets one `up` per ancestor, exactly one `self`, and one `sib` per
 /// co-child (`.:V34`).
 #[must_use]
