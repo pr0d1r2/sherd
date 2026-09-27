@@ -48,6 +48,7 @@ V13: a GENERATOR is tested by running it TWICE. once proves it writes; the 2nd r
 V15: a path from ARGV is ⊥ a location til resolved ABSOLUTE against the CWD, ONCE, before any walk | join reads it. `parent()` climbs a relative path to `""` ∴ an upward walk from one runs out of parents & returns its own START — the ARGUMENT — as the answer, & the caller then joins that argument on a 2nd time (`code/code`, B9). V5 says WHERE the root is; this says what the INPUT ! be. B5·B7·B9 are 1 family & each fix named a different half of the input — WHICH repo · WHICH position · WHICH FORM
 V16: `--version`/`-V` answer on STDOUT w/ exit 0 & name the version `Cargo.toml` declares, ⊥ a 2nd spelling of it. a binary that cannot say what it is forces its wrapper to parse the usage banner (B10)
 V17: a MISS ! teach the spelling that WORKS. `[dir]` is ROOT-relative (V15) ∴ `seam code` typed in `src/` looks for `<root>/code` & misses w/ `src/code` right there — honest, & a dead end (B9's RESIDUE). the fix is the MESSAGE, ⊥ the resolution: trying the CWD next makes what an argument MEANS depend on where the caller stands, which is B5·B7's ambiguity re-admitted. a name NO node carries gets ⊥ invented suggestion (V2); a name SEVERAL carry is LISTED, ⊥ guessed (`.:V20`)
+V18: `mod.rs` is DISPATCH — `USAGE`, `run_args` & the refusals that answer for a verb itself. a verb FAMILY lives in its own file beside it (`check`·`measure`·`steps`·`author`·`adopt`·`propose`·`args`) & a new verb joins the family it shares a subject with. `.:V50` bills per FILE & a worker loads the file it edits ∴ 1 file of 20,521 tok made every verb cost every other verb. split 2026-09-27, ⊥ raised
 
 ## §T TASKS
 
@@ -58,7 +59,7 @@ T5|.|`sherd route "<query>"` — resolve a query to a node, exit 3 ambiguous|V2
 T6|.|`sherd check` drift spec↔code|`.:V21`
 T7|.|`sherd graph --json` — plumbing as `src/plan:V25` defines it|`.:V83`,`src/plan:V25`
 T8|.|`sherd review` verb over the last commit|`.:V48`
-T12|.|`src/cli/mod.rs` measures 20,082 tok of CODE against a 4,000 ceiling — 5x, & the largest code file in the tree. `V50` is a JUDGMENT & this is the review it exists to force: dispatch is 1 subject, but `check`'s own report families (`file_ceilings`, `check_node`, citations, slices) are another & already split into fns. decide SPLIT or RAISE-w/-reason, ⊥ leave it unread|`.:V50`,`.:R58`,V14
+T13|.|the TESTS half of `src/cli/mod.rs` — 14,565 tok against a 2,000 ceiling, all still in `mod.rs` after V18 moved the code out. group them by the family they exercise & move each group into that family's file, ⊥ edit an assertion|`.:V50`,V18
 
 ## §B BUGS
 
