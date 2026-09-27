@@ -328,6 +328,7 @@ fn usage(msg: &str) -> ExitCode {
 }
 
 #[cfg(test)]
+#[path = "tests/fixtures.rs"]
 mod fixtures;
 
 #[cfg(test)]
