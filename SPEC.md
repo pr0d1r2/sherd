@@ -182,23 +182,23 @@ V40: `§N` alone ! answer "where am I, what is beside me" ⊥ opening another fi
 — two axes —
 V42: federation has 2 axes. **horizontal** = dir depth. **vertical** = detail (`rule` → `why` → evidence). node over budget → vertical FIRST, horizontal only if rule-only still over.
 V43: `§V`/`§B` statement = rule + rationale. rule inline @ `SPEC.md`, rationale @ `SPEC.why.md` keyed by id.
-V44: vertical split lossless **by reference ⊥ by deletion**. ∀ id ∈ `SPEC.md` → row ∈ `SPEC.why.md` | explicit `-`. rationale is where closed-option records live ∴ dropping it is the failure both sibling repos already guard
-V45: `lens --depth rule` default. `why` pulled on demand, ⊥ resident. entry cost is re-billed EVERY turn
+V44: vertical split lossless **by reference ⊥ by deletion**. ∀ id ∈ `SPEC.md` → row ∈ `SPEC.why.md` | explicit `-`. rationale is where closed-option records live
+V45: `lens --depth rule` default. `why` pulled on demand, ⊥ resident.
 V46: budget sized against MEASURED entry cost, ⊥ raw window. measured: harness overhead ~28,543 tok before any file ∴ `budget.lens` + entry ≤ 40% of 131,072
 — guards learned from `itok`/`microlith` §B —
 V47: `§F`/`§N` are FORMAT extensions. microlith `check` fixes section set `G C I R V T B` ∴ unknown section ! be negotiated upstream. ⊥ ship a dialect microlith cannot read
-V48: ∀ report ! state what was EXAMINED, ⊥ only what failed. node discovered & ⊥ parsed = FAIL, ⊥ skip. a pass on a section the parser cannot see is indistinguishable from a real pass
-V49: split (either axis) ! PROVE item-set preserved before write — ids(parent) ⊆ ⋃ ids(children ∪ parent′), asserted pre-write. per-file losslessness is blind to content vanishing BETWEEN files
+V48: ∀ report ! state what was EXAMINED, ⊥ only what failed. node discovered & ⊥ parsed = FAIL, ⊥ skip.
+V49: split (either axis) ! PROVE item-set preserved before write — ids(parent) ⊆ ⋃ ids(children ∪ parent′), asserted pre-write.
 V50: `.rs` file **code** > `ceiling.file` (default 4000 tok) → `check` violation, kind `judgment`. tests counted separately vs `ceiling.test` (2000). ⊥ one ceiling over both
-V51: `mod.rs`/`lib.rs` ceiling = `ceiling.mod` (default 1500) — tighter. it COMPOSES, ⊥ implements (`default.nix` does the same). `session/mod.rs` = 4,946 tok / 0% test = a default that grew a body
-V52: ceiling forces a REVIEW, ⊥ a shrink. raise = reviewed event, reason in the commit. a ceiling set a hair above current turns every addition into a raise & trains the reflex it exists to catch
-V53: `split` proposal ! report COUPLING after the cut, ⊥ sizes alone. a split that lowers bytes & raises cross-module refs is a regression
-V54: `Mechanical` ⊥ mean easy — it means the tool computes the SINGLE answer. where to cut a module is ⊥ computable ∴ every `split` direction is `Judgment`. an agent applying Judgment blindly silences the guard
+V51: `mod.rs`/`lib.rs` ceiling = `ceiling.mod` (default 1500) — tighter. it COMPOSES, ⊥ implements (`default.nix` does the same).
+V52: ceiling forces a REVIEW, ⊥ a shrink. raise = reviewed event, reason in the commit.
+V53: `split` proposal ! report COUPLING after the cut, ⊥ sizes alone.
+V54: `Mechanical` ⊥ mean easy — it means the tool computes the SINGLE answer. where to cut a module is ⊥ computable ∴ every `split` direction is `Judgment`.
 V55: ∀ printed id qualified (`sherd/V13`) — an unqualified id lands in the CONSUMER's namespace where it names a different rule. coordinates stay `file:line:`, id beside the message ⊥ inside them
 V56: guard & rule ! share a UNIT. ceiling in `itok` tokens, cap in chars, order in lines — each states its unit at the point it gates
 V57: CI globs by DATA DEPENDENCY ⊥ file extension. a step's glob ! name every input its tests read
 V58: grammar ⊥ ship til run over a corpus. `§F`/`§N` recognition measured over the 54-spec fleet & FP rate reported. a false positive naming the wrong rule costs more than a false negative
-V59: "X absorbs Y" ! name a MEASUREMENT ⊥ a belief. ⊥ delete|skip building Y til capability parity vs Y is written down. the deletion commit is where nobody re-checks
+V59: "X absorbs Y" ! name a MEASUREMENT ⊥ a belief. ⊥ delete|skip building Y til capability parity vs Y is written down.
 V60: premise MEASURED (R29/R32/R33): decomposition bounds the MAX CALL — 2.1x @ impl 1,118, 2.9x @ 5,218, widening w/ node size ∴ the claim is FITTING. ⊥ cheaper in total (varies w/ retries), ⊥ better in quality when both succeed. monolith 1/3 green vs decomposed 3/3
 V61: ∀ guard proven by a PLANTED violation + a companion proving it accepts real shapes. ⊥ proven by reading it
 V62: sibling divergence report — near-duplicate invariants across sibling nodes = V13 promotion candidates. V13 w/o a detector is a comment, ⊥ a guard
