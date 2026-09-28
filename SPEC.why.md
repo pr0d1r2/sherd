@@ -84,12 +84,12 @@ V106| (a) alone is what `budget` checks & is ⊥ SUFFICIENT — after T41 every 
 V107| MEASURED: where the type holds the rule (`enum Verdict{Fits{slack},Over{by}}`), vague wording costs 0; `Option<u64>` holds only `can fail` & its magic number still cost 100% (R45). prose precision is the fallback for what a type cannot hold, & it is worth 3.3x (R44)
 V108| the R44 → `src/tdd:T13` gap holds FIVE at once — pack size · signature given vs invented · tests hidden vs model-authored · judge in the loop · repair steps — ∴ ⊥ result across it is attributable & the honest form is one row per variable (R46). a 5-variable comparison that CONFIRMS a hypothesis is worth as little as one that refutes it
 V109|-
-V110|-
-V111|-
+V110| a SIBLING @ depth 2 pays root + `src` + itself & adds NOTHING to any existing chain ∴ promoting sideways LOWERS per-node cost & raises only the total-if-all-loaded, which nothing ever loads. a CHILD adds a level EVERY descendant pays EVERY turn (R6: hubs absorb 9.5%) ∴ depth is where splitting can RAISE the cost of working. — this repo can MEASURE that curve where ordinary refactoring cannot
+V111| MEASURED anti-correlated (R51): 0 of 3 wrong impls caught, 7 of 30 correct ones rejected. `src/tdd` step 1 authors the test that step 3's RED gate then requires ∴ the loop's red is satisfied by a test that does ⊥ measure the invariant, & `src/tdd:B2`/`B12` are that shape reported one at a time
 V112|-
 V113|-
-V114|-
-V115|-
+V114| pre-1.0 SemVer lets ANY minor break ∴ `0.4` vs `0.5` otherwise carries NOTHING a consumer can act on, & parity is the 1 bit the number carries FREE, before a changelog is read. ⊥ novel: Linux 2.x & GNOME shipped it ∴ a reader may already know it. `microlith` V34 states the same rule ∴ one reading serves both.
+V115| — an interface section that advertises 5 absent verbs & hides 10 present ones is worse than none, ∵ a reader trusts it (B17)
 V116|-
 V117|-
 V118|-
