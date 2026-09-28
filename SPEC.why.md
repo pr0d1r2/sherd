@@ -46,21 +46,21 @@ V56|-
 V57|-
 V58|-
 V59| the deletion commit is where nobody re-checks
-V60|-
+V60| — 2.1x @ impl 1,118, 2.9x @ 5,218, widening w/ node size
 V61|-
-V62|-
+V62| V13 w/o a detector is a comment, ⊥ a guard
 V63|-
-V64|-
+V64| else "matches no child" ⊥ mean "⊥ in subtree" & reader ! open all of them
 V65|-
-V66|-
-V67|-
-V68|-
-V69|-
-V70|-
-V71|-
-V72|-
-V77|-
-V82|-
+V66| a positive lens decides only DESCEND; a negative one decides STOP ∴ negative space is the byte that prevents loading. also guards the "rule never carried to a sibling path" class (5 of 15 `itok` bugs)
+V67| `parses SPEC.md` ⊥ answer "why are bulleted ids rejected"
+V68| the row is resident @ that altitude EVERY turn; the child costs only when opened
+V69| MEASURED: itok 656B/rule × 103 = 67.8KB; same COUNT @ 200B = 20.6KB ∴ per-row fatness (~5x) is the multiplier, ⊥ rule count
+V70| a spec compacted to satisfy a number trains the same reflex as a ceiling raised to satisfy one
+V71| reader asks "count tokens" ⊥ "itok" (V67), & a swapped dep makes a vendor name lie.
+V72| VERIFIED cargo 1.96.1. guards the "rule never carried to a sibling path" class @ its source
+V77| a monolith edited near its top pays full re-prefill EVERY turn (R15/R16)
+V82| a guard the agent cannot SEE is B1
 V83|-
 V84|-
 V100|-

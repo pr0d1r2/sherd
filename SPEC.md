@@ -199,23 +199,23 @@ V56: guard & rule ! share a UNIT. ceiling in `itok` tokens, cap in chars, order 
 V57: CI globs by DATA DEPENDENCY ⊥ file extension. a step's glob ! name every input its tests read
 V58: grammar ⊥ ship til run over a corpus. `§F`/`§N` recognition measured over the 54-spec fleet & FP rate reported. a false positive naming the wrong rule costs more than a false negative
 V59: "X absorbs Y" ! name a MEASUREMENT ⊥ a belief. ⊥ delete|skip building Y til capability parity vs Y is written down.
-V60: premise MEASURED (R29/R32/R33): decomposition bounds the MAX CALL — 2.1x @ impl 1,118, 2.9x @ 5,218, widening w/ node size ∴ the claim is FITTING. ⊥ cheaper in total (varies w/ retries), ⊥ better in quality when both succeed. monolith 1/3 green vs decomposed 3/3
+V60: premise MEASURED (R29/R32/R33): decomposition bounds the MAX CALL ∴ the claim is FITTING. ⊥ cheaper in total (varies w/ retries), ⊥ better in quality when both succeed. monolith 1/3 green vs decomposed 3/3
 V61: ∀ guard proven by a PLANTED violation + a companion proving it accepts real shapes. ⊥ proven by reading it
-V62: sibling divergence report — near-duplicate invariants across sibling nodes = V13 promotion candidates. V13 w/o a detector is a comment, ⊥ a guard
+V62: sibling divergence report — near-duplicate invariants across sibling nodes = V13 promotion candidates.
 V63: registry-owned identifier checked by ASKING the registry, before it appears anywhere a user can run
 — lens = decidable, ⊥ descriptive —
-V64: sibling `§F` lenses ! EXHAUSTIVE — ⋃ child domains + what parent keeps = parent domain. else "matches no child" ⊥ mean "⊥ in subtree" & reader ! open all of them
+V64: sibling `§F` lenses ! EXHAUSTIVE — ⋃ child domains + what parent keeps = parent domain.
 V65: sibling `§F` lenses ! DISJOINT — 2 siblings claiming one ground → `route` ! open both ∴ V19 one-edge descent unsound. overlap → `validate` exit 1
-V66: ∀ `§F` row ! state `⊥owns` + where it lives. a positive lens decides only DESCEND; a negative one decides STOP ∴ negative space is the byte that prevents loading. also guards the "rule never carried to a sibling path" class (5 of 15 `itok` bugs)
-V67: lens written in vocabulary of the QUESTION ⊥ the implementation. `parses SPEC.md` ⊥ answer "why are bulleted ids rejected"
-V68: `§F`.lens length scales w/ P(descend) × cost of a wrong descend, ⊥ w/ child size. the row is resident @ that altitude EVERY turn; the child costs only when opened
-V69: ∀ `§V`/`§R`/`§B` row inline ≤ `cap.row` (default 200B). rationale by reference → `SPEC.why.md`. MEASURED: itok 656B/rule × 103 = 67.8KB; same COUNT @ 200B = 20.6KB ∴ per-row fatness (~5x) is the multiplier, ⊥ rule count
-V70: `cap.row` enforced BEFORE rationale is written, ⊥ after. a spec compacted to satisfy a number trains the same reflex as a ceiling raised to satisfy one
+V66: ∀ `§F` row ! state `⊥owns` + where it lives.
+V67: lens written in vocabulary of the QUESTION ⊥ the implementation.
+V68: `§F`.lens length scales w/ P(descend) × cost of a wrong descend, ⊥ w/ child size.
+V69: ∀ `§V`/`§R`/`§B` row inline ≤ `cap.row` (default 200B). rationale by reference → `SPEC.why.md`.
+V70: `cap.row` enforced BEFORE rationale is written, ⊥ after.
 — module as unit —
-V71: facade dir named by CAPABILITY ⊥ vendor — `src/tokens/` ⊥ `src/itok/`. reader asks "count tokens" ⊥ "itok" (V67), & a swapped dep makes a vendor name lie. vendor named in `owns`/`⊥owns`
-V72: ∀ external dep ! have ONE call site — its facade `mod.rs`. siblings private ∴ **compiler** enforces it (`error[E0603]`), ⊥ grep. VERIFIED cargo 1.96.1. guards the "rule never carried to a sibling path" class @ its source
-V77: federation's payoff on local hw is CACHE LOCALITY, ⊥ only fit. root+ancestor prefix byte-identical across ∀ node ∴ stays hot; only the leaf re-prefills. a monolith edited near its top pays full re-prefill EVERY turn (R15/R16)
-V82: SETTING enters a pack as CONTRACT ⊥ implementation — one line per guard (`line cap 80`, `clippy pedantic`, `coverage floor 98`). ~200 tok replaces ~31k. a guard the agent cannot SEE is B1
+V71: facade dir named by CAPABILITY ⊥ vendor — `src/tokens/` ⊥ `src/itok/`. vendor named in `owns`/`⊥owns`
+V72: ∀ external dep ! have ONE call site — its facade `mod.rs`. siblings private ∴ **compiler** enforces it (`error[E0603]`), ⊥ grep.
+V77: federation's payoff on local hw is CACHE LOCALITY, ⊥ only fit. root+ancestor prefix byte-identical across ∀ node ∴ stays hot; only the leaf re-prefills.
+V82: SETTING enters a pack as CONTRACT ⊥ implementation — one line per guard (`line cap 80`, `clippy pedantic`, `coverage floor 98`). ~200 tok replaces ~31k.
 V83: structural diagram GENERATED from `§F` (`graph --mermaid`), ⊥ authored. a hand-drawn architecture diagram is a second reading of what `§F` declares — microlith's founding defect
 V84: guard-infra encoding FLEET standard is materializable (flake input, content-addressed). repo-specific facts — tests, `.context-limits`, baselines — STAY. ⊥ materialize what encodes THIS repo
 V100: a principle a machine can CHECK belongs in a gate or a shape, ⊥ a prompt. MEASURED: structure never violated · gate evaded twice · prompt ignored entirely ∴ prefer structure > gate > prompt, & a principle that becomes a check should LEAVE the slice
