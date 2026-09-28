@@ -49,6 +49,7 @@ V9: COVERAGE is the same ratchet MIRRORED — a floor that may only RISE where t
 ## §T TASKS
 
 id|status|task|cites
+T4|.|test file(s) over the 2,000 ceiling since `.:T108` gave `src/debt` its tree: `tests/debt.rs` 3,910. split by subject|`.:V50`,`.:V124`
 
 ## §B BUGS
 
