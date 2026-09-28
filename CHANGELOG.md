@@ -51,6 +51,22 @@ publish run surfaced two warnings that eleven gate steps had read past
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-09-28
+
+Still the `0.5` rung, and still a patch: the rung's promise -- every verb that
+never calls a model, correct and reusable as a library -- has not moved.
+`0.6` is where that surface settles. This release adds one machine-readable
+output (`plan --format json`), moves federation proposal into its own node
+without breaking a `0.5.1` caller, corrects what `sherd check` reports, and
+stops writing the state file into whatever worktree sherd runs in.
+
+`cargo semver-checks check-release --baseline-rev v0.5.1` requires no semver
+update. Nothing here changes an exit code: every finding whose count moves
+(V50 ceilings, `fed:V9` done rows) is advisory. A consumer that parses the
+advisory lines, or ratchets on their count, will see the numbers move --
+V50 up where suites live in a `tests/` tree, `fed:V9` down where `mth
+archive` has run.
+
 ### Added
 
 - **`sherd plan --format json`** (and `plan --milestone M --format json`)
@@ -66,13 +82,33 @@ publish run surfaced two warnings that eleven gate steps had read past
 
 ### Changed
 
-- **Federation proposal is its own node, `src/split`** (`src/plan:T14`).
+- **The default state file lives in the git common dir, not the cwd**
+  (`src/state:V4`, `src/state:B3`, #62). It is now `SHERD_STATE` if set,
+  else `<git-common-dir>/sherd-state` inside a repository, else
+  `.sherd-state` in the cwd outside one. Before, the fallback was always a
+  cwd-relative `.sherd-state`, so sherd run inside another repository wrote
+  into that worktree. The consumer's `.gitignore` did not list it and its
+  `.crate` shipped it: microlith's `package` gate step failed on exactly
+  that. **What a consumer does:** delete any `.sherd-state` left in a
+  worktree, because it is no longer read. The store is a cache, so the only
+  cost is one cold start. Nothing needs adding to `.gitignore`, since the
+  git dir is never tracked or packaged. `SHERD_STATE` still overrides, and
+  every worktree of a repository shares one store. Library:
+  `state::resolve`, `state::git_common_dir`.
+
+- **Federation proposal is its own node, `src/split`** (the task was
+  `src/plan:T14`, done in 31b6fcd and removed per `src/fed:V9`).
   `structure`, `row_weight`, `rank`, `uniform_evidence`, `Evidence`,
   `Proposed`, `Ranked`, `propose` and `Proposal` moved from `sherd::plan`
   to `sherd::split`. `sherd::plan` re-exports all nine, so code written
   against `0.5.1` still compiles; new code should name `sherd::split`. The
   `split` and `plan --triage` commands are unchanged. `src/plan`
   now owns one subject, what to attempt next.
+
+- **Contributor-facing: every node's tests live in its own `tests/` tree**
+  (V124, `.:T108`), and `src/cli` is split by verb family (`src/cli:V18`).
+  No public item moved; the crate's own V50 findings changed with the
+  layout, which is what the `tests/` fix under Fixed is about.
 
 ### Fixed
 
@@ -89,6 +125,15 @@ publish run surfaced two warnings that eleven gate steps had read past
   file with a `tests` path component is now test code in full. In this
   repository that surfaced `dev/tests/cli.rs`, over its ceiling all
   along.
+
+- **`sherd check` no longer reports `mth archive` stubs as done rows**
+  (`src/fed:V9`, `src/fed:B14`, #60). `mth archive` moves a finished row's
+  text to `SPEC-ARCHIVE.md` and leaves a stub (`T88|x|ARCHIVED to
+  SPEC-ARCHIVE.md|V42`), so a milestone still finds the row and every
+  citation still resolves (`microlith/V48`). Each stub was flagged as
+  history, and the only way to clear the finding was to delete the row,
+  which breaks V48. In xenolith that was 115 advisory findings. A done row
+  that still carries its text is flagged as before.
 
 ## [0.5.1] - 2026-09-21
 
