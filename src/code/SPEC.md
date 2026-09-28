@@ -74,6 +74,7 @@ id|status|task|cites
 T2|.|audit `.:review` for parse logic still hiding in a FINDING builder — `unwired` gave up `is_called` & may ⊥ be the only one|V2,V3
 T4|.|relocate the OWNING rows: `.:src/tdd:V7` (split_module) · `.:src/tdd:B13`/`B18` (expected_calls) · `.:src/review:B1`/`B2` (call detection). they constrain code that lives HERE now, & a reader of this node cannot see why `expected_calls` is 75 lines without them (V4). NOTE this LOWERS `.:tdd` & raises this chain — measure both (`.:V110`)|V4,`.:V110`
 T5|x|`seam` — per node dir, the `pub` types a sibling names; emit the vocabulary a parallel build needs, report-only|`.:R57`
+T6|.|test file(s) over the 2,000 ceiling since `.:T108` gave `src/code` its tree: `tests/code.rs` 3,679. split by subject|`.:V50`,`.:V124`
 
 ## §B BUGS
 
