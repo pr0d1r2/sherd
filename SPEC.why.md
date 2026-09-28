@@ -75,14 +75,14 @@ V94|-
 V91|-
 V74| `fed::walk` contradicted §C for a whole session & no gate could see it (B1)
 V75| the local copy was 6 sections while the dep shipped 7 (B2)
-V101|-
-V102|-
-V103|-
+V101| a sibling PATH dep is a shared working tree ∴ the gate's green is true only for the INSTANT it ran & expires silently when the sibling moves (B5).
+V102| green names only what RAN ∴ an op nobody declared is invisible, ⊥ merely absent — fmt & clippy were missing for the project's whole life & every verdict looked identical (B6)
+V103| a granularize-until-success loop converges on TRIVIA by construction (`src/tdd:B2` = a judge loosening from "proves the invariant" to "would compile").
 V104|-
-V105|-
-V106|-
-V107|-
-V108|-
+V105| `Depth::Rule` is §I's default & selected nothing for the project's whole life ∴ every pack shipped archive & every ceiling was measured against it (B8).
+V106| (a) alone is what `budget` checks & is ⊥ SUFFICIENT — after T41 every chain is ≤10% of working & 0 merit wins remain.
+V107| MEASURED: where the type holds the rule (`enum Verdict{Fits{slack},Over{by}}`), vague wording costs 0; `Option<u64>` holds only `can fail` & its magic number still cost 100% (R45). prose precision is the fallback for what a type cannot hold, & it is worth 3.3x (R44)
+V108| the R44 → `src/tdd:T13` gap holds FIVE at once — pack size · signature given vs invented · tests hidden vs model-authored · judge in the loop · repair steps — ∴ ⊥ result across it is attributable & the honest form is one row per variable (R46). a 5-variable comparison that CONFIRMS a hypothesis is worth as little as one that refutes it
 V109|-
 V110|-
 V111|-
