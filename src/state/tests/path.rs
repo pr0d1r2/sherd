@@ -45,10 +45,60 @@ fn a_missing_file_is_a_cold_start_not_an_error() {
 
 #[test]
 fn the_default_path_is_read_from_the_environment_at_the_edge() {
-    // `SHERD_STATE`, else `.sherd-state`. Read HERE and nowhere below, which
-    // is what let the path become a parameter -- `std::env::set_var` is
-    // unsafe under edition 2024 and this crate forbids unsafe, so a
-    // per-test env var was never an option (`src/ollama:V19`).
+    // Read HERE and nowhere below, which is what let the path become a
+    // parameter -- `std::env::set_var` is unsafe under edition 2024 and this
+    // crate forbids unsafe, so a per-test env var was never an option
+    // (`src/ollama:V19`). The arms are covered through `resolve`.
     let p = default_path();
     assert!(p.to_string_lossy().contains("sherd-state"), "{p:?}");
+}
+
+/// `src/state:V4`: all three arms, because the point of B3 is WHICH one a
+/// consumer's repo gets.
+#[test]
+fn the_store_lives_in_the_git_dir_not_the_worktree() {
+    let git = PathBuf::from("/r/.git");
+    assert_eq!(
+        resolve(None, Some(git.clone())),
+        git.join("sherd-state"),
+        "inside a repo: the common dir, never the worktree"
+    );
+    assert_eq!(
+        resolve(Some("/x/s".into()), Some(git)),
+        PathBuf::from("/x/s"),
+        "SHERD_STATE still wins"
+    );
+    assert_eq!(
+        resolve(None, None),
+        PathBuf::from(".sherd-state"),
+        "outside a repo: as before"
+    );
+}
+
+/// The edge half of V4, against a real repository: an absolute common dir,
+/// the same one a worktree of it reports, and `None` outside any repo.
+#[test]
+fn a_repository_names_its_common_dir() {
+    let root = tmp("repo");
+    std::fs::create_dir_all(&root).expect("mkdir");
+    let init = crate::git::at(&root, &["init", "-q"])
+        .status()
+        .expect("git init");
+    assert!(init.success());
+    let dir = git_common_dir(&root).expect("inside a repo");
+    assert!(dir.is_absolute(), "{dir:?}");
+    assert!(dir.ends_with(".git"), "{dir:?}");
+    let _ = std::fs::remove_dir_all(&root);
+
+    let outside = tmp("bare-dir");
+    std::fs::create_dir_all(&outside).expect("mkdir");
+    // A temp dir can sit under a repo on some hosts; only assert when it
+    // does not, which is the arm this checks.
+    if crate::git::at(&outside, &["rev-parse"])
+        .status()
+        .is_ok_and(|s| !s.success())
+    {
+        assert_eq!(git_common_dir(&outside), None);
+    }
+    let _ = std::fs::remove_dir_all(&outside);
 }

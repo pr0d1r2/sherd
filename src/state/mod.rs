@@ -1,5 +1,5 @@
 //! One cached, idempotent state file for every command that needs to remember
-//! something: `.sherd-state`.
+//! something: `sherd-state` in the git common dir (`src/state:V4`).
 //!
 //! Line-oriented and greppable, like `.context-limits` and `.spec-records` in
 //! the sibling repos -- not JSON, so the core stays free of `serde` (§C: the
@@ -19,7 +19,7 @@
 
 use std::collections::BTreeMap;
 use std::hash::{Hash, Hasher};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// `(kind, key) -> value`. `BTreeMap` so serialisation is ordered, which is
 /// what makes the file byte-stable across runs.
@@ -40,15 +40,46 @@ pub struct State {
     path: PathBuf,
 }
 
-/// The default state file: `SHERD_STATE`, else `.sherd-state` beside the repo.
+/// The default state file: `SHERD_STATE`, else `sherd-state` in the git
+/// common dir, else `.sherd-state` in the cwd (`src/state:V4`).
 ///
 /// Read at the EDGE only. Everything below takes the path as a value, the
 /// same split `tdd::cargo_bin`/`gate_with` uses for the toolchain.
 #[must_use]
 pub fn default_path() -> PathBuf {
-    PathBuf::from(
-        std::env::var("SHERD_STATE").unwrap_or_else(|_| ".sherd-state".into()),
+    resolve(
+        std::env::var("SHERD_STATE").ok(),
+        git_common_dir(Path::new(".")),
     )
+}
+
+/// Which file the default store is, given what the edge read.
+///
+/// The cwd-relative `.sherd-state` wrote into whatever repo sherd ran in, and
+/// a consumer's `.crate` shipped it (`src/state:B3`). The git common dir is
+/// never tracked or packaged, and every worktree shares it.
+#[must_use]
+pub fn resolve(env: Option<String>, git_common: Option<PathBuf>) -> PathBuf {
+    match (env, git_common) {
+        (Some(p), _) => PathBuf::from(p),
+        (None, Some(dir)) => dir.join("sherd-state"),
+        (None, None) => PathBuf::from(".sherd-state"),
+    }
+}
+
+/// The git common dir of the repository holding `dir`, absolute, or `None`
+/// outside one.
+#[must_use]
+pub fn git_common_dir(dir: &Path) -> Option<PathBuf> {
+    let out = crate::git::at(
+        dir,
+        &["rev-parse", "--path-format=absolute", "--git-common-dir"],
+    )
+    .output()
+    .ok()?;
+    let s = String::from_utf8(out.stdout).ok()?;
+    let s = s.trim();
+    (out.status.success() && !s.is_empty()).then(|| PathBuf::from(s))
 }
 
 impl State {
