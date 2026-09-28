@@ -18,7 +18,7 @@
 #   code 98.3 · lens 94.5 · spec 92.5 · tokens 88.9 · state 88.0 · fed 87.1
 #   ollama 70.9 · tdd 69.0 · plan 66.5 · slice 63.6 · review 63.0
 #   land 55.2 · assay 54.0 · cli 0.0
-lines 92.27
+lines 92.18
 #
 # MEASUREMENT VARIANCE, observed rather than assumed: two runs of the same
 # tree reported 71.27% and 71.17%. Three later runs all reported 71.17%. The
@@ -149,18 +149,26 @@ lines 92.27
 # by one hundredth. Rather than chase it with a test that asserts nothing,
 # the number is written down with its cause.
 
-# DROPPED 92.33 -> 92.27 on 2026-09-28, recorded, and the cause is the
+# DROPPED 92.33 -> 92.18 on 2026-09-28, recorded, and the cause is the
 # DENOMINATOR, measured rather than assumed. `.:T108` moves each node's
 # inline tests into its `tests/` tree (`.:V124`), and cargo-llvm-cov
 # excludes `tests/` directories by default -- the moved files do not appear
 # in its report at all. Test code executes itself, so it had been counted
 # as ~100% covered lines.
 #
-#   origin/main  lines 10,667  missed 813  92.38%
-#   src/code T108 lines 10,390  missed 803  92.27%
+# MEASURED IN A CLEAN TREE -- a fresh clone, as CI checks out:
 #
-# 277 lines left the count, 10 of them never executed (test-only
-# `unreachable!` branches), so MISSED fell by 10: no production line lost
+#   origin/main        lines 10,667  missed 813  92.38%
+#   src/code T108      lines 10,390  missed 812  92.18%
+#
+# 277 lines left the count and MISSED fell by one: no production line lost
 # coverage. The old figure was inflated by counting tests as covered code;
 # each remaining T108 node will lower it again for the same reason. Each of
 # those drops has to show the same thing: missed lines did not rise.
+#
+# This was first recorded as 92.27, measured in the working checkout, and
+# CI refused it at 92.18 on all three platforms. The checkout covers 9 more
+# lines of `src/ollama` (121 missed vs 130 in a fresh clone): its tests read
+# local state an ignored file holds, the non-hermetic suite noted above. The
+# base had been measured in a clean worktree and the branch in the dirty
+# checkout -- two environments, one comparison. Measure BOTH clean.
