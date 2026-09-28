@@ -91,10 +91,10 @@ V113|-
 V114| pre-1.0 SemVer lets ANY minor break ∴ `0.4` vs `0.5` otherwise carries NOTHING a consumer can act on, & parity is the 1 bit the number carries FREE, before a changelog is read. ⊥ novel: Linux 2.x & GNOME shipped it ∴ a reader may already know it. `microlith` V34 states the same rule ∴ one reading serves both.
 V115| — an interface section that advertises 5 absent verbs & hides 10 present ones is worse than none, ∵ a reader trusts it (B17)
 V116|-
-V117|-
+V117| the 2 halves answer different KINDS of question: whether a dir DAG parses, budgets & validates is settled by TESTS, while whether a 20B writes code that survives review is a RESEARCH result that may take months ∴ tying a release to the 2nd holds the 1st hostage, & the 1st is the half a consumer can reuse.
 V118|-
-V119|-
-V120|-
+V119| the 2nd file also gives `plan::structure` the `Declared` evidence it asks for: `split src/assay` \& `split src/cli` both answer "no module declarations found" ∵ nobody drew a line, & the tool refuses to guess (`src/split:V1`). ∴ the fix to a node's SIZE is the same edit as the fix to the tool being BLIND to it.
+V120| MEASURED: node impl 903 (`lens`) → 13,413 (`assay`), a 14x spread, while the gated number — the CHAIN — spans 9,922 → 12,480, a 26% spread ∵ every chain pays root + parent + self ∴ node variance is DAMPED by construction. `lens` @ 903 is one of the cleanest nodes here & equalising would merge it into something. equal size is a CONSEQUENCE of equal-grained concerns, ⊥ a cause of health. — `src/tdd` 31 bug rows vs `src/code` 0 says where defects live; size alone said nothing
 V121|-
 V122|-
 V73|-
