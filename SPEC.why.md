@@ -95,8 +95,8 @@ V117| the 2 halves answer different KINDS of question: whether a dir DAG parses,
 V118|-
 V119| the 2nd file also gives `plan::structure` the `Declared` evidence it asks for: `split src/assay` \& `split src/cli` both answer "no module declarations found" ∵ nobody drew a line, & the tool refuses to guess (`src/split:V1`). ∴ the fix to a node's SIZE is the same edit as the fix to the tool being BLIND to it.
 V120| MEASURED: node impl 903 (`lens`) → 13,413 (`assay`), a 14x spread, while the gated number — the CHAIN — spans 9,922 → 12,480, a 26% spread ∵ every chain pays root + parent + self ∴ node variance is DAMPED by construction. `lens` @ 903 is one of the cleanest nodes here & equalising would merge it into something. equal size is a CONSEQUENCE of equal-grained concerns, ⊥ a cause of health. — `src/tdd` 31 bug rows vs `src/code` 0 says where defects live; size alone said nothing
-V121|-
-V122|-
-V73|-
-V123|-
-V124|-
+V121| MEASURED ceiling on the pipeline half: of 265 warnings, 111 are `too_many_lines` (a judgement over SEAMS, ⊥ a transform) & 47 arithmetic that is correct code ∴ the automatable residue is the indexing/duplication/status family, ~40-60 sites.
+V122| MEASURED: 9 pedantic findings across 2 files `actionlint` had passed on EVERY commit of their lives (B28). the ledger is empty here by MEASUREMENT (`sherd` has no required status checks ∴ naming a job costs nothing), ⊥ by having no rule to write down
+V73| — 30 files → 60 is ceremony
+V123| hardcoding the writer ships 2 decisions as 1 ∴ neither measures alone.
+V124| a FACET is a property of the FILE (`src/lens:V8`) ∴ a file mixing code & tests has none & V50 must GUESS the cut (B29).
