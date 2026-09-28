@@ -317,3 +317,21 @@ fn validate_passes_a_clean_tree_and_fails_a_broken_one() {
     );
     assert_eq!(validate(repo.path()), ExitCode::from(1));
 }
+
+/// `.:V44` is enforced, not only stated: a `SPEC.why.md` that leaves a `§V`
+/// id unanswered fails `check`. `src/review` carried 1 why row for 10 rules
+/// for as long as the rule existed, because nothing read the file but `lens`.
+#[test]
+fn a_why_file_missing_a_rule_fails_check() -> Result<(), String> {
+    let r = crate::testrepo::TestRepo::new("cli-v44")?;
+    r.write(
+        "SPEC.md",
+        "# SPEC\n\n## \u{a7}G GOAL\n\nwhy\n\n## \u{a7}V INVARIANTS\n\nV1: a ! hold\nV2: b ! hold\n",
+    )?;
+    r.write("SPEC.why.md", "V1|because\n")?;
+    r.commit("a why file one row short")?;
+    assert_eq!(check(r.path()), ExitCode::from(1));
+    r.write("SPEC.why.md", "V1|because\nV2|-\n")?;
+    assert_eq!(check(r.path()), ExitCode::SUCCESS);
+    Ok(())
+}

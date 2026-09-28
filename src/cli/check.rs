@@ -247,6 +247,32 @@ pub(super) fn check_node(
         );
     }
     bad.saturating_add(check_federation(node, path, text))
+        .saturating_add(check_why(node, text))
+}
+
+/// `.:V44`: where a node keeps a `SPEC.why.md`, every `§V` id has a row in
+/// it -- `-` counts -- and no row names a rule that is gone. Absent file,
+/// nothing to check (`src/cli:V12`).
+fn check_why(node: &Path, text: &str) -> usize {
+    let path = node.join("SPEC.why.md");
+    let Ok(why) = std::fs::read_to_string(&path) else {
+        return 0;
+    };
+    let (missing, orphan) = spec::why_gaps(text, &why);
+    for id in &missing {
+        println!(
+            "{}: sherd/V44: {id} has no row -- rationale is kept by \
+             reference, and `-` is an answer",
+            path.display()
+        );
+    }
+    for id in &orphan {
+        println!(
+            "{}: sherd/V44: {id} answers no rule in SPEC.md",
+            path.display()
+        );
+    }
+    missing.len().saturating_add(orphan.len())
 }
 
 /// `§F` structure: duplicate rows (fed V12) and child dirs with no row (fed

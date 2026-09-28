@@ -225,3 +225,27 @@ fn check_runs_against_microlith() {
     // returns microlith's own Violation type.
     let _: Vec<Violation> = check(SAMPLE);
 }
+
+/// `.:V44`: a vertical split is lossless BY REFERENCE -- every `§V` id in
+/// `SPEC.md` has a row in `SPEC.why.md`, even if that row is only `-`. A
+/// missing row is rationale that went nowhere; an orphan row is rationale
+/// for a rule that no longer exists.
+#[test]
+fn why_gaps_names_missing_and_orphan_rows() {
+    let spec = "## \u{a7}V INVARIANTS\n\nV1: one\nV2: two\nV3: three\n\n\
+                ## \u{a7}T TASKS\n\nid|status|task|cites\nT1|.|x|-\n";
+    let why = "V1|because\nV3|-\nV9|a rule that left\n";
+    assert_eq!(
+        why_gaps(spec, why),
+        (vec!["V2".to_string()], vec!["V9".to_string()])
+    );
+}
+
+/// A `§T` or `§B` id is not a rule and needs no why row; an explicit `-` is
+/// a complete answer.
+#[test]
+fn why_gaps_is_clean_when_every_rule_is_answered() {
+    let spec = "## \u{a7}V INVARIANTS\n\nV1: one\nV2: two\n\n\
+                ## \u{a7}B BUGS\n\nid|date|cause|fix\nB1|2026-01-01|x|y\n";
+    assert_eq!(why_gaps(spec, "V1|-\nV2|measured\n"), (vec![], vec![]));
+}

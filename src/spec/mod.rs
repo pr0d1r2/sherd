@@ -495,6 +495,35 @@ pub fn rows(spec: &str) -> Vec<Row> {
     out
 }
 
+/// `.:V44`'s two failures for a node that keeps a `SPEC.why.md`, as
+/// `(missing, orphan)`: `§V` ids with no why row, and why rows naming no
+/// `§V` id. A row of `-` is an answer. Both files are read by [`rows`], so
+/// what counts as a row is the one definition this node has (V1).
+#[must_use]
+pub fn why_gaps(spec: &str, why: &str) -> (Vec<String>, Vec<String>) {
+    let rules: Vec<String> = rows(spec)
+        .into_iter()
+        .filter(|r| r.section == 'V')
+        .map(|r| r.id)
+        .collect();
+    let answered: Vec<String> = rows(why)
+        .into_iter()
+        .map(|r| r.id)
+        .filter(|id| id.starts_with('V'))
+        .collect();
+    let missing = rules
+        .iter()
+        .filter(|id| !answered.contains(id))
+        .cloned()
+        .collect();
+    let orphan = answered
+        .iter()
+        .filter(|id| !rules.contains(id))
+        .cloned()
+        .collect();
+    (missing, orphan)
+}
+
 /// The letter of a `## §X NAME` heading, or `None` for any other line.
 fn section_letter(line: &str) -> Option<char> {
     line.strip_prefix("## \u{a7}")?.chars().next()
