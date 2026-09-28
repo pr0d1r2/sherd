@@ -216,20 +216,20 @@ V71: facade dir named by CAPABILITY ⊥ vendor — `src/tokens/` ⊥ `src/itok/`
 V72: ∀ external dep ! have ONE call site — its facade `mod.rs`. siblings private ∴ **compiler** enforces it (`error[E0603]`), ⊥ grep.
 V77: federation's payoff on local hw is CACHE LOCALITY, ⊥ only fit. root+ancestor prefix byte-identical across ∀ node ∴ stays hot; only the leaf re-prefills.
 V82: SETTING enters a pack as CONTRACT ⊥ implementation — one line per guard (`line cap 80`, `clippy pedantic`, `coverage floor 98`). ~200 tok replaces ~31k.
-V83: structural diagram GENERATED from `§F` (`graph --mermaid`), ⊥ authored. a hand-drawn architecture diagram is a second reading of what `§F` declares — microlith's founding defect
+V83: structural diagram GENERATED from `§F` (`graph --mermaid`), ⊥ authored.
 V84: guard-infra encoding FLEET standard is materializable (flake input, content-addressed). repo-specific facts — tests, `.context-limits`, baselines — STAY. ⊥ materialize what encodes THIS repo
-V100: a principle a machine can CHECK belongs in a gate or a shape, ⊥ a prompt. MEASURED: structure never violated · gate evaded twice · prompt ignored entirely ∴ prefer structure > gate > prompt, & a principle that becomes a check should LEAVE the slice
-V96: assets classed by AUDIENCE, ⊥ only by concern. **worker** → the 20B prompt · **supervisor** → the higher agent only · **human** → readers. supervisor text in a worker prompt is wasted tokens AND instructions aimed at the wrong reader — "revert this" means nothing to a model writing one function
+V100: a principle a machine can CHECK belongs in a gate or a shape, ⊥ a prompt. ∴ prefer structure > gate > prompt, & a principle that becomes a check should LEAVE the slice
+V96: assets classed by AUDIENCE, ⊥ only by concern. **worker** → the 20B prompt · **supervisor** → the higher agent only · **human** → readers.
 V97: audience enforced by DISCOVERY, ⊥ convention. `.claude/`, `.github/`, `.codex/` ⊥ walked ∴ a `SPEC.md` dropped there can never become a node & can never reach a prompt
-V92: TWO brains, split by what each can do. local 20B writes code from a narrow context; the higher agent JUDGES. MEASURED: gates passed wrong code 3x (stub w/ a doc comment saying so · data-laundering `sanitize_first_cell` · wrong-field test) & a human-level reader caught all 3
-V98: a run duration is a FLOOR, ⊥ a ceiling. finish the cycle in flight, then check the clock — a run killed between `apply` and its review leaves generated code uncommitted, which already happened once (`src/fed:B7`)
+V92: TWO brains, split by what each can do. local 20B writes code from a narrow context; the higher agent JUDGES.
+V98: a run duration is a FLOOR, ⊥ a ceiling. finish the cycle in flight, then check the clock
 V99: a run ENDS in a summary commit — cycles, what was applied & judged, anchors planted, halt cause, cost, what is next. autonomous means the report ! survive where a human finds it, same argument as V95
 V95: a halt is COMMITTED (`--allow-empty`), ⊥ only printed. autonomous means nobody reads stdout ∴ the reason must survive in git where a human finds it later
-V93: the loop STOPS on: nothing actionable · same row failed 2x · `check` unclean · 2 aborts @ 10x · 2 reverts in a row. an "infinite loop" w/o stop conditions optimizes for whatever the gate rewards
+V93: the loop STOPS on: nothing actionable · same row failed 2x · `check` unclean · 2 aborts @ 10x · 2 reverts in a row.
 V94: nothing actionable → MAINTENANCE, ⊥ done. §B w/o §V · claims w/o runners · duplication · unmanaged rows · budgets · stale §R
 V91: ONE primitive at every axis — a cheap summary that supports a decision + a pointer to the expensive thing. horizontal `§F` owns/⊥owns → child. vertical rule → `SPEC.why.md`. facet contract line → implementation
-V74: §C claims ! have a runner. `fed::walk` contradicted §C for a whole session & no gate could see it (B1) — a constraint no check reads is a comment
-V75: format facts read from the CHECKER's own source, ⊥ a vendored `FORMAT.md`. the local copy was 6 sections while the dep shipped 7 (B2)
+V74: §C claims ! have a runner. — a constraint no check reads is a comment
+V75: format facts read from the CHECKER's own source, ⊥ a vendored `FORMAT.md`.
 V101: a dep ! resolve to an IMMUTABLE artifact — registry version + lock checksum. a sibling PATH dep is a shared working tree ∴ the gate's green is true only for the INSTANT it ran & expires silently when the sibling moves (B5). a new path dep ! carry a §B-recorded reason
 V102: a gate ! declare its OP SET as data, ⊥ bury it in a hook body. green names only what RAN ∴ an op nobody declared is invisible, ⊥ merely absent — fmt & clippy were missing for the project's whole life & every verdict looked identical (B6)
 V103: the criterion ⊥ WEAKEN as the rung narrows — a rung-4 task judged against the same `§V` as a rung-1 one, else the descent proves nothing. a granularize-until-success loop converges on TRIVIA by construction (`src/tdd:B2` = a judge loosening from "proves the invariant" to "would compile"). success below the verifiability floor is recorded UNVERIFIED, ⊥ kept

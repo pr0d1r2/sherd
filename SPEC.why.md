@@ -61,20 +61,20 @@ V71| reader asks "count tokens" ⊥ "itok" (V67), & a swapped dep makes a vendor
 V72| VERIFIED cargo 1.96.1. guards the "rule never carried to a sibling path" class @ its source
 V77| a monolith edited near its top pays full re-prefill EVERY turn (R15/R16)
 V82| a guard the agent cannot SEE is B1
-V83|-
+V83| a hand-drawn architecture diagram is a second reading of what `§F` declares — microlith's founding defect
 V84|-
-V100|-
-V96|-
+V100| MEASURED: structure never violated · gate evaded twice · prompt ignored entirely
+V96| supervisor text in a worker prompt is wasted tokens AND instructions aimed at the wrong reader — "revert this" means nothing to a model writing one function
 V97|-
-V92|-
-V98|-
+V92| MEASURED: gates passed wrong code 3x (stub w/ a doc comment saying so · data-laundering `sanitize_first_cell` · wrong-field test) & a human-level reader caught all 3
+V98| — a run killed between `apply` and its review leaves generated code uncommitted, which already happened once (`src/fed:B7`)
 V99|-
 V95|-
-V93|-
+V93| an "infinite loop" w/o stop conditions optimizes for whatever the gate rewards
 V94|-
 V91|-
-V74|-
-V75|-
+V74| `fed::walk` contradicted §C for a whole session & no gate could see it (B1)
+V75| the local copy was 6 sections while the dep shipped 7 (B2)
 V101|-
 V102|-
 V103|-
