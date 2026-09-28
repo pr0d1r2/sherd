@@ -237,6 +237,11 @@ pub fn declares(spec: &str, id: &str) -> bool {
     })
 }
 
+/// The task text `mth archive` leaves when it moves a finished row to
+/// `SPEC-ARCHIVE.md`. microlith keeps its copy private, and the release sherd
+/// pins predates it, so the bytes are restated here.
+const ARCHIVE_STUB: &str = "ARCHIVED to SPEC-ARCHIVE.md";
+
 /// `§T` rows marked done, which `src/fed:V9` says do not belong there.
 ///
 /// A `§T` row states REMAINING work. A finished one reads to a machine as work
@@ -244,6 +249,9 @@ pub fn declares(spec: &str, id: &str) -> bool {
 /// every turn. The record of what was finished is the commit trail.
 ///
 /// Returns id and the head of the task text, enough to find the row.
+///
+/// An archive stub is skipped: `mth archive` moved its text and left the row
+/// so milestones and citations still resolve (`microlith/V48`, `src/fed:B14`).
 #[must_use]
 pub fn completed_tasks(spec: &str) -> Vec<(String, String)> {
     let mut out = Vec::new();
@@ -257,7 +265,7 @@ pub fn completed_tasks(spec: &str) -> Vec<(String, String)> {
         let [id, "x", task, ..] = cells.as_slice() else {
             continue;
         };
-        if in_t && id.starts_with('T') {
+        if in_t && id.starts_with('T') && task.trim() != ARCHIVE_STUB {
             out.push(((*id).to_string(), task.chars().take(52).collect()));
         }
     }
