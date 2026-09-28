@@ -9,7 +9,7 @@
 
 [![gate hk](https://img.shields.io/badge/gate-hk-6E4AFF)](hk.pkl)
 [![gate steps 34](https://img.shields.io/badge/gate_steps-34-6E4AFF)](hk.pkl)
-[![coverage floor 91.7%](https://img.shields.io/badge/coverage_floor-%E2%89%A591.7%25-brightgreen)](.coverage)
+[![coverage floor 91.5%](https://img.shields.io/badge/coverage_floor-%E2%89%A591.5%25-brightgreen)](.coverage)
 [![lint debt 14.7/KLoC](https://img.shields.io/badge/lint_debt-%E2%89%A414.7%2FKLoC-orange)](.lint-debt)
 [![federated nodes 22](https://img.shields.io/badge/federated_nodes-22-6E4AFF)](SPEC.md)
 
