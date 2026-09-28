@@ -33,6 +33,7 @@ V7: a change SELECTS the blocks it can have invalidated — ∀ block declares i
 id|status|task|cites
 T3|.|EXTRACT to a fleet crate once a 2nd repo wants it. ∀ fn here is already a pure fn over `&str` ∴ the move is a move, ⊥ a rewrite. `itok`/`microlith` each carry their own copy of a badge generator TODAY (`.:R20`'s duplication, one rung up)|V1
 T5|.|`dev/tests/cli.rs` holds 2,746 tok of tests against the 2,000 ceiling — hidden until `.:V50` read a `tests/` file as tests (`.:V124`). split by subject|`.:V50`,`.:V124`
+T6|.|test file(s) over the 2,000 ceiling since `.:T108` gave `dev` its tree: `tests/badge.rs` 2,398. split by subject|`.:V50`,`.:V124`
 
 ## §B BUGS
 
