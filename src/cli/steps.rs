@@ -208,13 +208,13 @@ pub(super) fn triage_cmd(root: &Path) -> ExitCode {
     for (t, k, p) in &rows {
         let id = format!("{} {}", t.node.display(), t.id);
         match p {
-            plan::Proposal::Move(n) => {
+            split::Proposal::Move(n) => {
                 moves.entry(n).or_default().push((id, t.text.clone()))
             }
-            plan::Proposal::Decompose(ns) => {
+            split::Proposal::Decompose(ns) => {
                 decompose.push((id, t.text.clone(), ns.join(" + ")))
             }
-            plan::Proposal::Keep => keep.push((id, t.text.clone(), k.why())),
+            split::Proposal::Keep => keep.push((id, t.text.clone(), k.why())),
         }
     }
     println!(

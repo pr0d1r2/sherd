@@ -9,6 +9,7 @@
 dir|owns|⊥owns|tokens
 tokens|`itok` facade, counts w/ method label, entry cost, working budget|spec structure, federation edges|-
 spec|`microlith` facade, §-section split, structural check, fmt|token counts, `§F`/`§N`|-
+split|PROPOSE a federation — modules the code separated, the rows naming each, a home for an unmanaged row|applying a split, planning steps, routing a query|-
 fed|`§F` parse, edges, chain root→node, `SPEC.md` discovery|counting, rendering|-
 adopt|foreign single-file spec → federation: row placement, citation rewrite, conservation|structure discovery (`fed`), parsing (`spec`), counting (`tokens`)|-
 lens|pack assembly, depth `rule`\|`why`, budget verdict|parsing, counting internals|-

@@ -11,7 +11,7 @@
 [![gate steps 34](https://img.shields.io/badge/gate_steps-34-6E4AFF)](hk.pkl)
 [![coverage floor 92.3%](https://img.shields.io/badge/coverage_floor-%E2%89%A592.3%25-brightgreen)](.coverage)
 [![lint debt 14.7/KLoC](https://img.shields.io/badge/lint_debt-%E2%89%A414.7%2FKLoC-orange)](.lint-debt)
-[![federated nodes 21](https://img.shields.io/badge/federated_nodes-21-6E4AFF)](SPEC.md)
+[![federated nodes 22](https://img.shields.io/badge/federated_nodes-22-6E4AFF)](SPEC.md)
 
 [![nix flake](https://img.shields.io/badge/nix-flake-5277C3?logo=nixos&logoColor=white)](flake.nix)
 [![nixpkgs 26.05 (2026-09-17 - ecc58f3)](https://img.shields.io/badge/nixpkgs-26.05_(2026--09--17_--_ecc58f3)-5277C3?logo=nixos&logoColor=white)](flake.lock)
@@ -74,6 +74,7 @@ nodes it was missing while this sentence claimed otherwise.
 |-- src
 |   |-- tokens
 |   |-- spec
+|   |-- split
 |   |-- fed
 |   |-- adopt
 |   |-- lens
@@ -104,6 +105,7 @@ graph TD
     dev[dev]
     src_tokens[tokens]
     src_spec[spec]
+    src_split[split]
     src_fed[fed]
     src_adopt[adopt]
     src_lens[lens]
@@ -124,6 +126,7 @@ graph TD
     root --> dev
     src --> src_tokens
     src --> src_spec
+    src --> src_split
     src --> src_fed
     src --> src_adopt
     src --> src_lens
@@ -153,6 +156,7 @@ knows when to stop looking. Also generated, by `sherd graph --table`:
 | `dev` | repo-maintaining tooling, `publish = false` — README generation | anything a consumer installs |
 | `src/tokens` | `itok` facade, counts w/ method label, entry cost, working budget | spec structure, federation edges |
 | `src/spec` | `microlith` facade, §-section split, structural check, fmt | token counts, `§F`/`§N` |
+| `src/split` | PROPOSE a federation — modules the code separated, the rows naming each, a home for an unmanaged row | applying a split, planning steps, routing a query |
 | `src/fed` | `§F` parse, edges, chain root→node, `SPEC.md` discovery | counting, rendering |
 | `src/adopt` | foreign single-file spec → federation: row placement, citation rewrite, conservation | structure discovery (`fed`), parsing (`spec`), counting (`tokens`) |
 | `src/lens` | pack assembly, depth `rule`\|`why`, budget verdict | parsing, counting internals |

@@ -31,11 +31,11 @@ fn split_proposes_and_refuses_to_apply() {
 }
 
 /// The structure-first proposal on a fixture whose modules the spec
-/// never names: `.:src/plan:B12` is that a row ranking sees nothing here,
+/// never names: `.:src/split:B1` is that a row ranking sees nothing here,
 /// while the code plainly declares two nodes.
 /// Every grade, including the bottom rung that always fires: a plain
 /// `mod` and a `pub(crate) mod` are both DECLARED, which is what
-/// `microlith` is made of (`.:src/plan:B13`).
+/// `microlith` is made of (`.:src/split:B2`).
 #[test]
 fn a_private_or_crate_visible_module_is_still_a_node() {
     let repo = routing_fixture("cli-split-grades");
@@ -49,16 +49,16 @@ fn a_private_or_crate_visible_module_is_still_a_node() {
     ) else {
         unreachable!("a lib.rs is writable")
     };
-    let found = plan::structure(root);
+    let found = split::structure(root);
     let grade =
         |n: &str| found.iter().find(|p| p.name == n).map(|p| p.evidence);
-    assert_eq!(grade("api"), Some(plan::Evidence::Published));
+    assert_eq!(grade("api"), Some(split::Evidence::Published));
     assert_eq!(
         grade("inner"),
-        Some(plan::Evidence::Declared),
+        Some(split::Evidence::Declared),
         "pub(crate) is not published"
     );
-    assert_eq!(grade("hidden"), Some(plan::Evidence::Declared));
+    assert_eq!(grade("hidden"), Some(split::Evidence::Declared));
 }
 
 #[test]
@@ -74,7 +74,7 @@ fn split_proposes_nodes_the_spec_never_mentions() {
     ) else {
         unreachable!("a lib.rs is writable")
     };
-    let found = plan::structure(root);
+    let found = split::structure(root);
     let names: Vec<&str> = found.iter().map(|p| p.name.as_str()).collect();
     assert_eq!(
         names,

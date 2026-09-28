@@ -64,6 +64,16 @@ publish run surfaced two warnings that eleven gate steps had read past
   `Confidence::invalidators`. Requested in #36 by a task loop that had to
   parse the text layout.
 
+### Changed
+
+- **Federation proposal is its own node, `src/split`** (`src/plan:T14`).
+  `structure`, `row_weight`, `rank`, `uniform_evidence`, `Evidence`,
+  `Proposed`, `Ranked`, `propose` and `Proposal` moved from `sherd::plan`
+  to `sherd::split`. `sherd::plan` re-exports all nine, so code written
+  against `0.5.1` still compiles; new code should name `sherd::split`. The
+  `split` and `plan --triage` commands are unchanged. `src/plan`
+  now owns one subject, what to attempt next.
+
 ### Fixed
 
 - **`sherd check` measures a file in a `tests/` tree as tests** (V50).

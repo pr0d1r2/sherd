@@ -26,10 +26,10 @@ pub(super) fn split_cmd(root: &Path, dir: &Path, apply: bool) -> ExitCode {
         fed::node_label(root, dir)
     );
 
-    // STRUCTURE FIRST (`.:src/plan:V17`): what the code already separated, then
+    // STRUCTURE FIRST (`.:src/split:V2`): what the code already separated, then
     // the prose weight of each. A module the spec never mentions is still a
-    // node; a ranking by rows cannot see it (`.:src/plan:B12`).
-    let proposed = plan::structure(dir);
+    // node; a ranking by rows cannot see it (`.:src/split:B1`).
+    let proposed = split::structure(dir);
     if proposed.is_empty() {
         println!("  no module declarations found -- nothing to propose");
         return ExitCode::SUCCESS;
@@ -222,15 +222,15 @@ pub(super) fn node_types(node: &Path, nodes: &[PathBuf]) -> Vec<code::PubType> {
 /// `rows` is EVIDENCE ABOUT a node rather than the reason for it -- a `0`
 /// there means the spec never mentions a module the author already split
 /// out, which is a gap in the spec and not a reason to skip the node.
-pub(super) fn print_structure(proposed: &[plan::Proposed], spec: &str) {
+pub(super) fn print_structure(proposed: &[split::Proposed], spec: &str) {
     // Heaviest FIRST. The evidence grade discriminates in ONE of six
     // repositories measured -- `itok` -- and in the other five every module
     // carries the same grade, which leaves the row weight as the only signal
     // present. Alphabetical order threw it away: `metope` spans 0 to 58 rows
     // and put its 58-row node first by luck of the letter b (`plan:B16`).
-    let mut ranked: Vec<(&plan::Proposed, (usize, u64))> = proposed
+    let mut ranked: Vec<(&split::Proposed, (usize, u64))> = proposed
         .iter()
-        .map(|p| (p, plan::row_weight(spec, &p.name)))
+        .map(|p| (p, split::row_weight(spec, &p.name)))
         .collect();
     ranked.sort_by(|a, b| {
         b.1.0
@@ -262,16 +262,17 @@ pub(super) fn print_structure(proposed: &[plan::Proposed], spec: &str) {
         }
     }
     let named: usize = proposed.iter().map(|p| p.members.len()).sum();
-    let tally =
-        |e: plan::Evidence| proposed.iter().filter(|p| p.evidence == e).count();
+    let tally = |e: split::Evidence| {
+        proposed.iter().filter(|p| p.evidence == e).count()
+    };
     println!(
         "\n  {} node(s) over {named} module(s): {} directory · {} pub mod · \
          {} family · {} declared.",
         proposed.len(),
-        tally(plan::Evidence::Drawn),
-        tally(plan::Evidence::Published),
-        tally(plan::Evidence::Cohesion),
-        tally(plan::Evidence::Declared),
+        tally(split::Evidence::Drawn),
+        tally(split::Evidence::Published),
+        tally(split::Evidence::Cohesion),
+        tally(split::Evidence::Declared),
     );
     println!(
         "  Evidence is how explicitly the author drew the boundary. A \
@@ -281,7 +282,7 @@ pub(super) fn print_structure(proposed: &[plan::Proposed], spec: &str) {
     );
     // A grade every module shares ranks nothing. Say so, or a reader takes
     // the order for a verdict (`plan:B16`).
-    if plan::uniform_evidence(proposed) {
+    if split::uniform_evidence(proposed) {
         println!(
             "  Every module carries the SAME grade, so it ranks nothing here \
              -- the order above is by spec rows, which is the only signal \
