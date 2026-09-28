@@ -55,23 +55,31 @@ pub fn split_module(src: &str) -> (&str, &str) {
 /// function.
 #[must_use]
 pub fn split_regions(src: &str) -> (String, String) {
-    let mut code = String::new();
-    let mut tests = String::new();
-    let mut in_tests = false;
+    let (mut code, mut tests) = (String::new(), String::new());
+    // `head`: still in the attributes, before the item's own first line.
+    let (mut in_tests, mut head) = (false, false);
     for line in src.lines() {
         if !in_tests && line.starts_with("#[cfg(test)]") {
-            in_tests = true;
+            (in_tests, head) = (true, true);
         }
         let half = if in_tests { &mut tests } else { &mut code };
         half.push_str(line);
         half.push('\n');
-        // The close of the attributed item. Anything nested is indented, so
-        // this is the end of the region rather than of a block inside it.
-        if in_tests && line == "}" {
-            in_tests = false;
-        }
+        let item_line = head && !line.starts_with(['#', '/']);
+        head &= !item_line;
+        in_tests &= !region_ends(line, item_line);
     }
     (code, tests)
+}
+
+/// Does this line close a `#[cfg(test)]` region?
+///
+/// The item's own first line decides its shape: a body-less item (`mod x;`)
+/// ends there, with no `}` to wait for -- waiting swallowed the next item.
+/// Otherwise the item closes at its `}` in column 0; anything nested is
+/// indented, and a `;` inside the body is content.
+fn region_ends(line: &str, item_line: bool) -> bool {
+    line == "}" || (item_line && line.ends_with(';'))
 }
 
 /// The `pub fn` names a source declares.
@@ -750,6 +758,25 @@ mod tests {
         );
         assert!(tests.contains("fn helper"), "{tests}");
         assert!(!tests.contains("pub fn b"), "{tests}");
+    }
+
+    /// A body-less item -- `#[cfg(test)] #[path = "tests/x.rs"] mod x;`,
+    /// the form `.:V124` puts a suite in -- has no `}` of its own. Waiting
+    /// for one closed the region at the NEXT item's brace, and every line of
+    /// production code in between was measured as tests.
+    #[test]
+    fn a_bodyless_test_module_closes_at_its_semicolon() {
+        let src = "pub fn a() {}\n\
+                   #[cfg(test)]\n\
+                   #[path = \"tests/x.rs\"]\n\
+                   mod x;\n\
+                   pub fn b() {\n    1\n}\n";
+        let (code, tests) = split_regions(src);
+        assert!(
+            code.contains("pub fn b"),
+            "production code after the declaration: {code}"
+        );
+        assert!(tests.contains("mod x;"), "{tests}");
     }
 
     /// V1 holds for the measure as it does for the cut: a marker indented or
