@@ -66,6 +66,7 @@ T13|~|replace the hand-rolled walk with `itok::walk`/`itok::glob`|`src/fed:V19`
 T14|.|blocked — recomputing needs `crate::tokens`, ⊥ in this node's surface. see B10|`.:V21`
 T15|.|fixture: 4 levels deep, one module with two parents — self-repo is a tree|`.:V4`
 T16|.|parse `§N` rows, line-anchored|`.:V34`
+T18|.|`tests/fed.rs` holds 3,649 tok of tests against the 2,000 ceiling — 19 tests over `§F` parsing, discovery, chains & the structural checks, 1 file since `.:T108` gave the node its tree. split by subject|`.:V50`,`.:V124`
 
 ## §B BUGS
 
