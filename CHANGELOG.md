@@ -76,6 +76,11 @@ publish run surfaced two warnings that eleven gate steps had read past
 
 ### Fixed
 
+- **A body-less `#[cfg(test)] mod x;` no longer hides the code after it**
+  (V50, `src/code:B2`). The code/tests split waited for the attributed
+  item's closing `}`, and a declaration has none, so the next production
+  item was counted as tests. It now closes at the declaration's own `;`.
+
 - **`sherd check` measures a file in a `tests/` tree as tests** (V50).
   A suite kept in its own file, included through `#[cfg(test)] mod
   tests;`, carries no `#[cfg(test)]` of its own, so it was measured as
