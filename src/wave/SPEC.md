@@ -55,6 +55,7 @@ V4: a TYPE-ONLY import is an EDGE & ⊥ a WAIT. `use crate::lint::Level` names a
 id|status|task|cites
 T1|.|the EXECUTOR half — frozen til rung 0.7 (`.:V117`). it lands HERE, ⊥ in the planner|`.:V123`
 T2|.|`wave --json` — the rounds as data, for a runner that is ⊥ a human|`.:V83`
+T3|.|test file(s) over the 2,000 ceiling since `.:T108` gave `src/wave` its tree: `tests/wave.rs` 2,124. split by subject|`.:V50`,`.:V124`
 
 ## §B BUGS
 
