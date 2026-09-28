@@ -160,12 +160,12 @@ V8: lens pack (chain + child `§F` lens) ≤ `budget.lens` (default 12000)
 V9: node over `budget.node` → `check` emit split hint naming candidate child dirs
 V10: ids namespaced by dir path — `src/plan:V3` ≠ `src/spec:V3` (both real, both V3). bare id = current node
 V11: cross-node cite ! namespaced. bare cross-node cite → exit 1
-V12: ∀ id monotonic **within node**. ⊥ reuse. APPEND ⊥ insert — insertion moves every citation below it
+V12: ∀ id monotonic **within node**. ⊥ reuse. APPEND ⊥ insert
 V13: invariant crossing 2+ children → ! live @ common ancestor, ⊥ duplicated per child
 V14: bug @ leaf → `§B` @ leaf. cause spans 2+ nodes → invariant promoted to ancestor
 V15: `lens` output self-contained @ its altitude — ⊥ require sibling|child body to act
 V16: dir w/ source & ⊥ own `SPEC.md` → ! covered by nearest ancestor `§F`.lens, else `validate` warn
-V17: token count via `itok` tier ≥ `bpe`. `dummy` (bytes/4) ⊥ for any gate — 15-30% off
+V17: token count via `itok` tier ≥ `bpe`. `dummy` (bytes/4) ⊥ for any gate
 V18: parse/DAG/budget/ceiling ⊥ call model. `--offline` → all cmds but prose gen work
 V19: `route` descend one edge per step, reload only that child. ⊥ load whole tree
 V20: `route` ambiguous → exit 3 + candidates. `route` miss → exit 2 naming what was tried. ⊥ exit 0 empty
@@ -180,8 +180,8 @@ V36: `§F` authoritative, `§N` generated. mismatch → `§F` wins, `sync` rewri
 V39: multi-parent → `up` 2+ rows. `sib` = union ∀ parent, deduped
 V40: `§N` alone ! answer "where am I, what is beside me" ⊥ opening another file
 — two axes —
-V42: federation has 2 axes. **horizontal** = dir depth. **vertical** = detail (`rule` → `why` → evidence). node over budget → vertical FIRST, horizontal only if rule-only still over. MEASURED 3x that horizontal ⊥ the lever: itok 59% of §V bytes stay @ root · itok 66% of stmts · sherd own 64%
-V43: `§V`/`§B` statement = rule + rationale. rule inline @ `SPEC.md`, rationale @ `SPEC.why.md` keyed by id. MEASURED: rationale = 80% of `itok` §V, 73% of `microlith` ∴ vertical buys 5x vs horizontal 1.7x
+V42: federation has 2 axes. **horizontal** = dir depth. **vertical** = detail (`rule` → `why` → evidence). node over budget → vertical FIRST, horizontal only if rule-only still over.
+V43: `§V`/`§B` statement = rule + rationale. rule inline @ `SPEC.md`, rationale @ `SPEC.why.md` keyed by id.
 V44: vertical split lossless **by reference ⊥ by deletion**. ∀ id ∈ `SPEC.md` → row ∈ `SPEC.why.md` | explicit `-`. rationale is where closed-option records live ∴ dropping it is the failure both sibling repos already guard
 V45: `lens --depth rule` default. `why` pulled on demand, ⊥ resident. entry cost is re-billed EVERY turn
 V46: budget sized against MEASURED entry cost, ⊥ raw window. measured: harness overhead ~28,543 tok before any file ∴ `budget.lens` + entry ≤ 40% of 131,072

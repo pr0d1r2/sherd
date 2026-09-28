@@ -9,12 +9,12 @@ V8|-
 V9|-
 V10|-
 V11|-
-V12|-
+V12| — insertion moves every citation below it
 V13|-
 V14|-
 V15|-
 V16|-
-V17|-
+V17| — 15-30% off
 V18|-
 V19|-
 V20|-
@@ -28,8 +28,8 @@ V34|-
 V36|-
 V39|-
 V40|-
-V42|-
-V43|-
+V42| MEASURED 3x that horizontal ⊥ the lever: itok 59% of §V bytes stay @ root · itok 66% of stmts · sherd own 64%
+V43| MEASURED: rationale = 80% of `itok` §V, 73% of `microlith` ∴ vertical buys 5x vs horizontal 1.7x
 V44|-
 V45|-
 V46|-
