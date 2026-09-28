@@ -57,7 +57,8 @@ Still the `0.5` rung, and still a patch: the rung's promise -- every verb that
 never calls a model, correct and reusable as a library -- has not moved.
 `0.6` is where that surface settles. This release adds one machine-readable
 output (`plan --format json`), moves federation proposal into its own node
-without breaking a `0.5.1` caller, and corrects what `sherd check` reports.
+without breaking a `0.5.1` caller, corrects what `sherd check` reports, and
+stops writing the state file into whatever worktree sherd runs in.
 
 `cargo semver-checks check-release --baseline-rev v0.5.1` requires no semver
 update. Nothing here changes an exit code: every finding whose count moves
@@ -80,6 +81,20 @@ archive` has run.
   parse the text layout.
 
 ### Changed
+
+- **The default state file lives in the git common dir, not the cwd**
+  (`src/state:V4`, `src/state:B3`, #62). It is now `SHERD_STATE` if set,
+  else `<git-common-dir>/sherd-state` inside a repository, else
+  `.sherd-state` in the cwd outside one. Before, the fallback was always a
+  cwd-relative `.sherd-state`, so sherd run inside another repository wrote
+  into that worktree. The consumer's `.gitignore` did not list it and its
+  `.crate` shipped it: microlith's `package` gate step failed on exactly
+  that. **What a consumer does:** delete any `.sherd-state` left in a
+  worktree, because it is no longer read. The store is a cache, so the only
+  cost is one cold start. Nothing needs adding to `.gitignore`, since the
+  git dir is never tracked or packaged. `SHERD_STATE` still overrides, and
+  every worktree of a repository shares one store. Library:
+  `state::resolve`, `state::git_common_dir`.
 
 - **Federation proposal is its own node, `src/split`** (the task was
   `src/plan:T14`, done in 31b6fcd and removed per `src/fed:V9`).
