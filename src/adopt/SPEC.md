@@ -45,7 +45,9 @@ V9: a MILESTONE RANGE (`T1-T3`) the map would SPLIT is refused UP FRONT & the ce
 
 ## §T TASKS
 
+id|status|task|cites
 T8|.|V2's COMMON ANCESTOR half — a row 2 nodes claim EQUALLY lands @ root today, ⊥ @ the node ABOVE both. `src/parse` & `src/render` tying should mean `src`, & sending it to `.` files a rule about rendering next to the repo's goal. the tie is already DETECTED (`best` returns none on it) ∴ what is missing is the walk up, ⊥ the signal|V2,`src/fed:T10`
+T9|.|test file(s) over the 2,000 ceiling since `.:T108` gave `src/adopt` its tree: `tests/adopt.rs` 3,496. split by subject|`.:V50`,`.:V124`
 
 ## §B BUGS
 
