@@ -95,6 +95,20 @@ fn a_finished_task_is_not_remaining_work() {
     assert!(completed_tasks(b).is_empty(), "§T only");
 }
 
+/// `src/fed:B14`: `mth archive` moves a finished row's text and leaves a stub, so a
+/// milestone still finds the row and its citations resolve (`microlith/V48`).
+/// The stub carries no task text, so it is not history.
+#[test]
+fn an_archive_stub_is_not_history() {
+    let s = "## \u{a7}T TASKS\nid|status|task|cites\n\
+                 T88|x|ARCHIVED to SPEC-ARCHIVE.md|V42\n\
+                 T89|x|the thing landed|V1\n";
+    let done = completed_tasks(s);
+    // The positive case (`src/fed:V10`): a done row with its text is flagged.
+    assert_eq!(done.len(), 1, "{done:?}");
+    assert_eq!(done.first().map(|d| d.0.as_str()), Some("T89"));
+}
+
 use std::path::Path;
 
 /// The defect `B2` names, on the tree that measured it: every citation in
