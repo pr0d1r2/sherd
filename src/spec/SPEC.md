@@ -54,6 +54,7 @@ T2|.|capability-parity audit vs `microlith`, written down|V3
 T3|.|`--records` baseline wiring for closed-option survival|V1
 T4|.|check closed-option records survive an edit, via `--records`|`.:V44`
 T5|.|`SPEC.why.md` format — one rationale per `§V`/`§B` id|`.:V43`
+T10|.|test file(s) over the 2,000 ceiling since `.:T108` gave `src/spec` its tree: `tests/spec.rs` 2,221. split by subject|`.:V50`,`.:V124`
 
 ## §B BUGS
 
