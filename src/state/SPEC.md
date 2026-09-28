@@ -38,6 +38,7 @@ V3: a CAPPED log ! carry its own ORDER in the key. eviction reads the key & noth
 ## §T TASKS
 
 id|status|task|cites
+T2|.|test file(s) over the 2,000 ceiling since `.:T108` gave `src/state` its tree: `tests/state.rs` 2,604. split by subject|`.:V50`,`.:V124`
 
 ## §B BUGS
 
