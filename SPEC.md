@@ -291,7 +291,7 @@ T103|~|LADDER rungs as work: 0.4 = `split`+`sync` DONE · 0.5 = the MECHANICAL s
 T104|.|lint ratchet ! also count `--no-default-features` — 131 warnings on the SHIPPED binary are uncounted today|V118,B20
 T106|.|`wave` EXECUTION @ rung 0.7 — fan the scheduled rounds out to N workers, 1 worktree each, gate & merge in topological order; executor NAMED ⊥ assumed|V123,V117,R57,`src/wave:T1`,`src/ollama:T13`
 T107|x|V50 splits a file @ the 1st `#[cfg(test)]` ∴ code BELOW a test module counts as tests (B29). sum every non-test region, re-measure|V50
-T108|.|move each node's inline `mod tests { }` into its `tests/` tree per V124, 1 PR per node — still inline: `dev`·`src/adopt`·`src/git`·`src/lens`·`src/slice`·`src/state`·`src/tokens`·`src/wave`; `src/assay`·`src/ollama`·`src/tdd` @ `0.7` (V117)|V124,V50
+T108|.|move each node's inline `mod tests { }` into its `tests/` tree per V124, 1 PR per node — still inline: `dev`·`src/git`·`src/lens`·`src/slice`·`src/state`·`src/tokens`·`src/wave`; `src/assay`·`src/ollama`·`src/tdd` @ `0.7` (V117)|V124,V50
 
 ## §B BUGS
 
