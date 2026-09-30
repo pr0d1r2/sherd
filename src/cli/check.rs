@@ -25,8 +25,13 @@ pub(super) fn validate_specs(nodes: &[PathBuf]) -> usize {
     let mut bad: usize = 0;
     for node in nodes {
         let path = node.join("SPEC.md");
-        let Ok(text) = std::fs::read_to_string(&path) else {
-            continue;
+        let text = match std::fs::read_to_string(&path) {
+            Ok(t) => t,
+            Err(e) => {
+                unread(&path, &e);
+                bad = bad.saturating_add(1);
+                continue;
+            }
         };
         for v in spec::check(&text) {
             println!("{}:{}: {v}", path.display(), v.line);
@@ -301,13 +306,29 @@ pub(super) fn check_federation(node: &Path, path: &Path, text: &str) -> usize {
     bad
 }
 
+/// A discovered node whose `SPEC.md` could not be read. A FAIL, never a
+/// skip (`.:V48`): skipping it reported a clean tree that was never read
+/// (`.:B31`).
+pub(super) fn unread(path: &Path, e: &std::io::Error) {
+    println!(
+        "{}: sherd/V48: cannot read -- {e}. a node discovered & not read \
+         is a failure, not a node with nothing wrong",
+        path.display()
+    );
+}
+
 pub(super) fn check(root: &Path) -> ExitCode {
     let nodes = fed::discover(root);
     let mut bad: usize = 0;
     for node in &nodes {
         let path = node.join("SPEC.md");
-        let Ok(text) = std::fs::read_to_string(&path) else {
-            continue;
+        let text = match std::fs::read_to_string(&path) {
+            Ok(t) => t,
+            Err(e) => {
+                unread(&path, &e);
+                bad = bad.saturating_add(1);
+                continue;
+            }
         };
         bad = bad.saturating_add(check_node(root, node, &path, &text));
     }

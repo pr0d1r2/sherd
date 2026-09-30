@@ -81,6 +81,14 @@ publish run surfaced two warnings that eleven gate steps had read past
   `land::gate` and `land::gate_with` return `Ok` for such a tree where they
   returned `Err`.
 
+- **`sherd check` and `sherd validate` fail on a node they cannot read**
+  (`.:V48`, `.:B31`). A discovered node whose `SPEC.md` could not be read,
+  for example because it is not UTF-8, was skipped, and the tree passed:
+  `2 nodes examined · 0 violations`, exit 0. It is now one violation,
+  printed as `<path>: sherd/V48: cannot read -- <error>`, and exit 1.
+  `sherd land`'s gate counts it the same way. A tree that was green only
+  because a node could not be read now fails.
+
 ## [0.5.2] - 2026-09-28
 
 Still the `0.5` rung, and still a patch: the rung's promise -- every verb that

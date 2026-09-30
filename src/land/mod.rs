@@ -377,9 +377,9 @@ pub fn gate_with(root: &Path, cargo: &str) -> Result<(bool, String), String> {
     let mut viol = 0;
     let nodes = fed::discover(root);
     for n in &nodes {
-        if let Ok(t) = std::fs::read_to_string(n.join("SPEC.md")) {
-            viol += spec::check(&t).len();
-        }
+        // An unreadable node is a violation, never a skip (`.:V48`, `.:B31`).
+        viol += std::fs::read_to_string(n.join("SPEC.md"))
+            .map_or(1, |t| spec::check(&t).len());
     }
     report.push_str(&format!(
         "\n=== sherd check: {} === {} nodes examined, {viol} violations\n",
