@@ -18,8 +18,8 @@
 #   code 98.3 · lens 94.5 · spec 92.5 · tokens 88.9 · state 88.0 · fed 87.1
 #   ollama 70.9 · tdd 69.0 · plan 66.5 · slice 63.6 · review 63.0
 #   land 55.2 · assay 54.0 · cli 0.0
-lines 92.70
-lines-default 96.84
+lines 92.76
+lines-default 96.86
 #
 # MEASUREMENT VARIANCE, observed rather than assumed: two runs of the same
 # tree reported 71.27% and 71.17%. Three later runs all reported 71.17%. The
@@ -253,3 +253,8 @@ lines-default 96.84
 # RAISED lines 92.69 -> 92.70 on 2026-09-30, `src/lens:B2`. lines-default holds
 # at 96.84. Clean clone of c878b58: all 8439 lines, 616 missed; default 5606
 # lines, 177 missed -- the new lines are all covered.
+
+# RAISED lines 92.70 -> 92.76 and lines-default 96.84 -> 96.86 on 2026-09-30,
+# `.:B32`: the busy-retry behind `testrepo::write_script` is tested with a
+# scripted probe. Clean clone of eef51ed: all 8497 lines, 615 missed; default
+# 5669 lines, 178 missed.
