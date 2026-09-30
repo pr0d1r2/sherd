@@ -31,37 +31,63 @@ pub(super) fn coverage_cmd(
     mode: Option<&str>,
     cargo: &str,
 ) -> ExitCode {
-    let Some(now) = crate::debt::coverage(root, cargo) else {
-        eprintln!(
-            "sherd: could not read a coverage total -- that is an ERROR, \
-             not a floor breach (sherd/tdd:V26)"
-        );
-        return ExitCode::from(2);
-    };
-    let Some(was) = crate::debt::recorded_floor(root) else {
-        let path = root.join(".coverage");
-        eprintln!("sherd: {}: no `lines` row to read", path.display());
-        return ExitCode::from(2);
-    };
-    if mode == Some("--record") {
-        return match crate::debt::record_coverage(root, now) {
-            Ok(msg) => {
-                println!("{msg}");
-                ExitCode::SUCCESS
+    use crate::debt::Build;
+    // Every build that has a floor row is measured (`src/debt:V4`, `B8`).
+    // `lines` is required. `lines-default` is optional: its absence is
+    // REPORTED and never a failure (V12), so a `.coverage` written before
+    // the row existed still checks.
+    let mut code = 0u8;
+    for build in Build::BOTH {
+        let row = build.row();
+        let Some(was) = crate::debt::recorded_floor_of(root, build) else {
+            if build == Build::All {
+                let path = root.join(".coverage");
+                eprintln!("sherd: {}: no `lines` row to read", path.display());
+                return ExitCode::from(2);
             }
-            Err(e) => {
-                eprintln!("sherd: {e}");
-                ExitCode::from(1)
-            }
+            println!("  {row}: no floor recorded (none required)");
+            continue;
         };
+        let Some(now) = crate::debt::coverage_of(root, cargo, build) else {
+            eprintln!(
+                "sherd: could not read a coverage total for `{row}` -- that \
+                 is an ERROR, not a floor breach (sherd/tdd:V26)"
+            );
+            return ExitCode::from(2);
+        };
+        let one = if mode == Some("--record") {
+            record_coverage(root, build, now)
+        } else {
+            check_coverage(row, now, was)
+        };
+        code = code.max(one);
     }
+    ExitCode::from(code)
+}
+
+/// `--record` for one build: raise its row, refusing a drop.
+fn record_coverage(root: &Path, build: crate::debt::Build, now: usize) -> u8 {
+    match crate::debt::record_coverage_of(root, build, now) {
+        Ok(msg) => {
+            println!("{msg}");
+            0
+        }
+        Err(e) => {
+            eprintln!("sherd: {e}");
+            1
+        }
+    }
+}
+
+/// `--check` for one build, naming the row either way (`.:V48`).
+fn check_coverage(row: &str, now: usize, was: usize) -> u8 {
     let (ok, report) = crate::debt::coverage_verdict(now, was);
     if ok {
-        println!("{report}");
-        return ExitCode::SUCCESS;
+        println!("  {row}: {}", report.trim_start());
+        return 0;
     }
-    eprintln!("{report}");
-    ExitCode::from(1)
+    eprintln!("{row}: {report}");
+    1
 }
 
 /// `sherd debt [--check|--record]` -- the ratchet, as `hk` runs it.

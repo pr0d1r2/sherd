@@ -208,6 +208,37 @@ fn the_coverage_verb_checks_records_and_refuses() -> Result<(), String> {
     Ok(())
 }
 
+/// `src/debt:V4` at the verb: with a `lines-default` row the DEFAULT build
+/// is checked too, and a drop there fails even while `lines` holds (`src/debt:B8`).
+#[test]
+fn the_coverage_verb_checks_the_default_build_when_it_has_a_floor()
+-> Result<(), String> {
+    let r = crate::testrepo::TestRepo::new("cli-cov-default")?;
+    let fake =
+        crate::debt::coverage_tests::two_builds(r.path(), "90.89", "94.06")?;
+
+    r.write(".coverage", "lines 90.89\nlines-default 94.10\n")?;
+    assert_eq!(
+        coverage_cmd(r.path(), Some("--check"), &fake),
+        ExitCode::from(1),
+        "94.06 under a 94.10 floor fails though `lines` holds"
+    );
+
+    r.write(".coverage", "lines 90.00\nlines-default 94.00\n")?;
+    assert_eq!(
+        coverage_cmd(r.path(), Some("--check"), &fake),
+        ExitCode::SUCCESS
+    );
+    assert_eq!(
+        coverage_cmd(r.path(), Some("--record"), &fake),
+        ExitCode::SUCCESS
+    );
+    let after = std::fs::read_to_string(r.path().join(".coverage"))
+        .map_err(|e| e.to_string())?;
+    assert_eq!(after, "lines 90.89\nlines-default 94.06\n");
+    Ok(())
+}
+
 #[test]
 fn route_reports_a_hit_a_miss_and_an_ambiguity_by_exit_code() {
     let repo = routing_fixture("cli-route");

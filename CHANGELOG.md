@@ -59,6 +59,16 @@ publish run surfaced two warnings that eleven gate steps had read past
   violation. A node without a why file is not checked. Library:
   `spec::why_gaps`.
 
+- **`sherd coverage` measures the default build too** (`src/debt:V4`,
+  `src/debt:B8`). A `.coverage` may carry a `lines-default` row next to
+  `lines`; when it does, `--check` and `--record` run `cargo llvm-cov`
+  without feature flags as well, and a drop in either build fails. Without
+  the row the verb reports "no floor recorded (none required)" and behaves
+  as before, apart from each output line now naming its row. Library:
+  `debt::Build`, `coverage_of`, `recorded_floor_of`, `record_coverage_of`;
+  `coverage`, `recorded_floor` and `record_coverage` are unchanged and
+  measure `--all-features`. `record_coverage`'s messages now name the row.
+
 ### Fixed
 
 - **`sherd land` no longer refuses a repository with no `.sherd-slices`**
