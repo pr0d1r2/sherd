@@ -283,7 +283,50 @@ fn tenths(v: &str) -> Option<usize> {
 /// five hundredths, which is more than most of today's real changes.
 pub const COVERAGE_SCALE: usize = 100;
 
-/// `cargo llvm-cov`'s TOTAL line percentage, in hundredths.
+/// Which build a coverage figure is OF (`V4`).
+///
+/// The floor measured `--all-features` alone while `default = []` is what
+/// `cargo install` ships, so code the shipped binary runs could lose every
+/// test that reached it and no floor moved (`B8`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Build {
+    /// `--all-features`: the model half included. `.coverage`'s `lines` row.
+    All,
+    /// The default features, `[]` here: what a consumer installs.
+    /// `.coverage`'s `lines-default` row.
+    Default,
+}
+
+impl Build {
+    /// Both, in the order the gate reports them.
+    pub const BOTH: [Self; 2] = [Self::All, Self::Default];
+
+    /// The `.coverage` row this build's floor lives in.
+    #[must_use]
+    pub const fn row(self) -> &'static str {
+        match self {
+            Self::All => "lines",
+            Self::Default => "lines-default",
+        }
+    }
+
+    /// The feature flags `cargo llvm-cov` takes for this build.
+    const fn flags(self) -> &'static [&'static str] {
+        match self {
+            Self::All => &["--all-features"],
+            Self::Default => &[],
+        }
+    }
+}
+
+/// `cargo llvm-cov`'s TOTAL line percentage, in hundredths, for the
+/// `--all-features` build. See [`coverage_of`].
+#[must_use]
+pub fn coverage(root: &Path, cargo: &str) -> Option<usize> {
+    coverage_of(root, cargo, Build::All)
+}
+
+/// `cargo llvm-cov`'s TOTAL line percentage for `build`, in hundredths.
 ///
 /// The MIRROR of `density`: this one may only RISE. Everything else is the
 /// same shape, which is why it lives here (`T2`).
@@ -291,14 +334,11 @@ pub const COVERAGE_SCALE: usize = 100;
 /// `None` when the tool could not run or printed no TOTAL -- a gate that did
 /// not EXECUTE is an ERROR, not a floor breach (`src/tdd:V26`).
 #[must_use]
-pub fn coverage(root: &Path, cargo: &str) -> Option<usize> {
+pub fn coverage_of(root: &Path, cargo: &str, build: Build) -> Option<usize> {
     let o = Command::new(cargo)
-        .args([
-            "llvm-cov",
-            "--workspace",
-            "--all-features",
-            "--summary-only",
-        ])
+        .args(["llvm-cov", "--workspace"])
+        .args(build.flags())
+        .arg("--summary-only")
         .current_dir(root)
         .output()
         .ok()?;
@@ -311,12 +351,20 @@ pub fn coverage(root: &Path, cargo: &str) -> Option<usize> {
     hundredths(total.split_whitespace().nth(9)?.trim_end_matches('%'))
 }
 
-/// The floor `.coverage` records, in hundredths.
+/// The floor `.coverage` records for `--all-features`, in hundredths.
 #[must_use]
 pub fn recorded_floor(root: &Path) -> Option<usize> {
+    recorded_floor_of(root, Build::All)
+}
+
+/// The floor `.coverage` records for `build`, in hundredths. `None` when the
+/// file or the row is absent.
+#[must_use]
+pub fn recorded_floor_of(root: &Path, build: Build) -> Option<usize> {
     let text = std::fs::read_to_string(root.join(".coverage")).ok()?;
-    text.lines()
-        .find_map(|l| hundredths(l.strip_prefix("lines ")?))
+    text.lines().find_map(|l| {
+        hundredths(l.strip_prefix(build.row())?.strip_prefix(' ')?)
+    })
 }
 
 /// `"92.27"` as `9227`. One decimal or none still parses.
@@ -361,27 +409,42 @@ pub fn coverage_verdict(now: usize, was: usize) -> (bool, String) {
     )
 }
 
-/// Rewrite `.coverage`'s number, refusing a DROP.
+/// [`record_coverage_of`] for `--all-features`.
 ///
 /// # Errors
-/// The file could not be read or written, or coverage fell -- recording a
-/// drop is filing down the ratchet's own teeth.
+/// See [`record_coverage_of`].
 pub fn record_coverage(root: &Path, now: usize) -> Result<String, String> {
+    record_coverage_of(root, Build::All, now)
+}
+
+/// Rewrite the `build` row of `.coverage`, refusing a DROP. Every other line,
+/// the other build's row included, is kept as it was.
+///
+/// # Errors
+/// The file could not be read or written, the row is absent, or coverage
+/// fell -- recording a drop is filing down the ratchet's own teeth.
+pub fn record_coverage_of(
+    root: &Path,
+    build: Build,
+    now: usize,
+) -> Result<String, String> {
     let path = root.join(".coverage");
     let text = std::fs::read_to_string(&path).map_err(|e| format!("{e}"))?;
-    let was = recorded_floor(root)
-        .ok_or_else(|| "no `lines` row to record into".to_string())?;
+    let row = build.row();
+    let was = recorded_floor_of(root, build)
+        .ok_or_else(|| format!("no `{row}` row to record into"))?;
     if !coverage_verdict(now, was).0 {
         return Err(format!(
-            "refusing to RECORD a drop, {}% -> {}%. Cover the gap, or edit \
-             .coverage by hand with the reason.",
+            "refusing to RECORD a drop in `{row}`, {}% -> {}%. Cover the \
+             gap, or edit .coverage by hand with the reason.",
             percent(was),
             percent(now)
         ));
     }
+    let prefix = format!("{row} ");
     let out: String = text.lines().fold(String::new(), |mut acc, l| {
-        if l.starts_with("lines ") {
-            acc.push_str(&format!("lines {}", percent(now)));
+        if l.starts_with(&prefix) {
+            acc.push_str(&format!("{row} {}", percent(now)));
         } else {
             acc.push_str(l);
         }
@@ -389,9 +452,13 @@ pub fn record_coverage(root: &Path, now: usize) -> Result<String, String> {
         acc
     });
     std::fs::write(&path, &out).map_err(|e| format!("{e}"))?;
-    Ok(format!("recorded coverage {}%", percent(now)))
+    Ok(format!("recorded `{row}` coverage {}%", percent(now)))
 }
 
 #[cfg(test)]
 #[path = "tests/debt.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "tests/coverage.rs"]
+pub(crate) mod coverage_tests;
