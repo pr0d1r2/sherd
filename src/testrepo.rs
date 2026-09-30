@@ -49,26 +49,42 @@ use std::process::Command;
 /// descriptor, and the file is safe for every later run.
 ///
 /// # Errors
-/// The write or chmod failed, or the file stayed busy through every probe.
+/// The write or chmod failed, the probe could not run, or the file stayed
+/// busy through every probe.
 pub fn write_script(path: &Path, body: &str) -> Result<String, String> {
-    std::fs::write(path, body)
-        .map_err(|e| format!("write {}: {e}", path.display()))?;
+    let named = |e: std::io::Error| format!("{}: {e}", path.display());
+    std::fs::write(path, body).map_err(named)?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(path, PermissionsExt::from_mode(0o755))
-            .map_err(|e| format!("chmod {}: {e}", path.display()))?;
+            .map_err(named)?;
     }
-    for _ in 0..100 {
-        match Command::new(path).arg("--sherd-probe").output() {
+    let probe = || Command::new(path).arg("--sherd-probe").output().map(drop);
+    once_it_runs(probe, 100).map_err(named)?;
+    Ok(path.display().to_string())
+}
+
+/// Call `probe` until it stops failing with `ExecutableFileBusy`, at most
+/// `tries` times, 10 ms apart. The last result is returned as it came, so a
+/// file still busy after every try is that error and any other failure is
+/// returned at once. Split from [`write_script`] so the retry can be tested
+/// with a scripted probe: the busy case never happens on macOS.
+fn once_it_runs(
+    mut probe: impl FnMut() -> std::io::Result<()>,
+    tries: u32,
+) -> std::io::Result<()> {
+    let mut last = probe();
+    for _ in 1..tries {
+        match &last {
             Err(e) if e.kind() == std::io::ErrorKind::ExecutableFileBusy => {
                 std::thread::sleep(std::time::Duration::from_millis(10));
+                last = probe();
             }
-            Err(e) => return Err(format!("probe {}: {e}", path.display())),
-            Ok(_) => return Ok(path.display().to_string()),
+            _ => break,
         }
     }
-    Err(format!("{}: still busy after 100 probes", path.display()))
+    last
 }
 
 /// A temp git repo that deletes itself.
@@ -215,5 +231,58 @@ mod tests {
             dir.display(),
             root.display()
         );
+    }
+}
+
+#[cfg(test)]
+mod script_tests {
+    use super::once_it_runs;
+    use std::io::{Error, ErrorKind};
+
+    /// A probe that fails with `kind` for its first `n` calls, then runs.
+    fn failing(
+        n: u32,
+        kind: ErrorKind,
+    ) -> (
+        impl FnMut() -> std::io::Result<()>,
+        std::rc::Rc<std::cell::Cell<u32>>,
+    ) {
+        let calls = std::rc::Rc::new(std::cell::Cell::new(0));
+        let seen = std::rc::Rc::clone(&calls);
+        let probe = move || {
+            seen.set(seen.get() + 1);
+            if seen.get() <= n {
+                Err(Error::from(kind))
+            } else {
+                Ok(())
+            }
+        };
+        (probe, calls)
+    }
+
+    /// Busy, busy, then it runs: retried until it does, and no further.
+    #[test]
+    fn a_busy_file_is_retried_until_it_runs() {
+        let (probe, calls) = failing(2, ErrorKind::ExecutableFileBusy);
+        assert!(once_it_runs(probe, 100).is_ok());
+        assert_eq!(calls.get(), 3);
+    }
+
+    /// Busy on every try: the busy error comes back after `tries` calls.
+    #[test]
+    fn a_file_busy_on_every_try_is_that_error() {
+        let (probe, calls) = failing(u32::MAX, ErrorKind::ExecutableFileBusy);
+        let err = once_it_runs(probe, 3).err().map(|e| e.kind());
+        assert_eq!(err, Some(ErrorKind::ExecutableFileBusy));
+        assert_eq!(calls.get(), 3);
+    }
+
+    /// Any other failure is not retried: it returns after one call.
+    #[test]
+    fn another_failure_returns_at_once() {
+        let (probe, calls) = failing(u32::MAX, ErrorKind::NotFound);
+        let err = once_it_runs(probe, 100).err().map(|e| e.kind());
+        assert_eq!(err, Some(ErrorKind::NotFound));
+        assert_eq!(calls.get(), 1);
     }
 }
