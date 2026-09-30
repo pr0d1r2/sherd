@@ -334,3 +334,7 @@ mod fixtures;
 #[cfg(test)]
 #[path = "tests/dispatch.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "tests/routes.rs"]
+mod routes;
