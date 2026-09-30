@@ -321,6 +321,7 @@ fn validate_passes_a_clean_tree_and_fails_a_broken_one() {
 /// `.:V44` is enforced, not only stated: a `SPEC.why.md` that leaves a `§V`
 /// id unanswered fails `check`. `src/review` carried 1 why row for 10 rules
 /// for as long as the rule existed, because nothing read the file but `lens`.
+/// An orphan row -- rationale for a rule that is gone -- fails it too.
 #[test]
 fn a_why_file_missing_a_rule_fails_check() -> Result<(), String> {
     let r = crate::testrepo::TestRepo::new("cli-v44")?;
@@ -330,6 +331,8 @@ fn a_why_file_missing_a_rule_fails_check() -> Result<(), String> {
     )?;
     r.write("SPEC.why.md", "V1|because\n")?;
     r.commit("a why file one row short")?;
+    assert_eq!(check(r.path()), ExitCode::from(1));
+    r.write("SPEC.why.md", "V1|because\nV2|-\nV3|a rule that left\n")?;
     assert_eq!(check(r.path()), ExitCode::from(1));
     r.write("SPEC.why.md", "V1|because\nV2|-\n")?;
     assert_eq!(check(r.path()), ExitCode::SUCCESS);
