@@ -104,3 +104,16 @@ fn a_model_verb_in_the_default_build_is_usage() {
         assert_eq!(run_args(argv(&[verb])), ExitCode::from(2), "{verb}");
     }
 }
+
+/// `lens` on a dir that is no node is a MISS (2), the same answer `budget`
+/// gives (`src/cli:V2`, `src/lens:B2`). It printed the root's pack, exit 0.
+#[test]
+fn lens_on_a_dir_that_is_no_node_is_a_miss() -> Result<(), String> {
+    let r = TestRepo::new("route-lens-miss")?;
+    assert_eq!(
+        lens_cmd(r.path(), &r.path().join("nowhere"), lens::Depth::Rule),
+        ExitCode::from(2)
+    );
+    assert_eq!(run_args(argv(&["lens", "nowhere"])), ExitCode::from(2));
+    Ok(())
+}

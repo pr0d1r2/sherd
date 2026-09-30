@@ -117,3 +117,21 @@ fn chain_of_repo_root_is_at_least_the_root_spec() {
         "root SPEC.md must exist (V5)"
     );
 }
+
+/// `V5`: a node that is not there is an error, never its ancestors' pack
+/// under its name. `pack(root, "nowhere")` returned the ROOT chain, so
+/// `sherd lens nowhere` printed the root's rules as that node's (`B2`).
+#[test]
+fn a_dir_with_no_spec_is_an_error_not_its_ancestors_pack() -> Result<(), String>
+{
+    let r = crate::testrepo::TestRepo::new("lens-nowhere")?;
+    let err = pack(r.path(), &r.path().join("nowhere"), Depth::Rule)
+        .err()
+        .ok_or("a missing node was packed")?;
+    assert!(err.to_string().contains("nowhere"), "{err}");
+    assert!(
+        pack(r.path(), r.path(), Depth::Rule).is_ok(),
+        "the root packs"
+    );
+    Ok(())
+}

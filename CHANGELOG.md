@@ -96,6 +96,13 @@ publish run surfaced two warnings that eleven gate steps had read past
   for "a migration is pending" and "it wrote". A wrapper acting on 1 now
   sees 2 for these. A map `adopt` reads and refuses still exits 1.
 
+- **`sherd lens <dir>` on a directory that is not a node exits 2** (`src/lens:V5`,
+  `src/lens:B2`). It printed the pack of the nearest ancestor under the
+  requested name and exited 0, so a mistyped node gave a worker another
+  node's rules. It now reports the miss the way `sherd budget` does, with
+  the spelling that would have matched. Library: `lens::pack` returns a
+  `NotFound` error for a `dir` with no `SPEC.md`, where it returned `Ok`.
+
 ## [0.5.2] - 2026-09-28
 
 Still the `0.5` rung, and still a patch: the rung's promise -- every verb that
