@@ -126,3 +126,15 @@ fn the_default_toolchain_runs_and_a_tree_without_a_crate_is_red()
     assert!(report.contains("=== cargo test: FAIL ==="), "{report}");
     Ok(())
 }
+
+/// `.:V48` at the gate: a node whose `SPEC.md` cannot be read is a failed
+/// `sherd check`, not a node with no violations (`.:B31`).
+#[test]
+fn a_node_that_cannot_be_read_makes_the_gate_red() -> Result<(), String> {
+    let r = crate::cli::unread::unreadable_node("gate-unread")?;
+    let cargo = toolchain(r.path(), (0, 0, 0), "")?;
+    let (ok, report) = gate_with(r.path(), &cargo)?;
+    assert!(!ok, "{report}");
+    assert!(report.contains("=== sherd check: FAIL ==="), "{report}");
+    Ok(())
+}

@@ -269,11 +269,12 @@ fn an_edge_that_skips_a_level_is_a_finding() {
     assert_eq!(validate_edges(repo.path()), 1);
 }
 
-/// A node whose `SPEC.md` cannot be READ is skipped rather than counted
-/// as a violation: `validate` reports what it examined, and an
-/// unreadable file was not examined (`.:V48`).
+/// A node whose `SPEC.md` cannot be READ -- here a directory stands where
+/// the file belongs -- is a VIOLATION: V48 reads "node discovered & ⊥
+/// parsed = FAIL, ⊥ skip". This test asserted the skip (0) from 2026-08-23
+/// on, citing V48 for the opposite of what V48 said (`.:B31`).
 #[test]
-fn a_node_whose_spec_cannot_be_read_is_skipped() {
+fn a_node_whose_spec_cannot_be_read_is_a_violation() {
     let repo = routing_fixture("cli-unreadable");
     let spec = repo.path().join("alpha").join("SPEC.md");
     let Ok(()) = std::fs::remove_file(&spec) else {
@@ -282,7 +283,7 @@ fn a_node_whose_spec_cannot_be_read_is_skipped() {
     let Ok(()) = std::fs::create_dir_all(&spec) else {
         unreachable!("a directory can take its place")
     };
-    assert_eq!(validate_specs(&[repo.path().join("alpha")]), 0);
+    assert_eq!(validate_specs(&[repo.path().join("alpha")]), 1);
 }
 
 /// The drift half, which the other two `validate` tests never reach: a
