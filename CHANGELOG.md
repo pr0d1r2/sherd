@@ -51,6 +51,14 @@ publish run surfaced two warnings that eleven gate steps had read past
 
 ## [Unreleased]
 
+### Added
+
+- **`sherd check` enforces V44 for any node that keeps a `SPEC.why.md`.**
+  Every `§V` id in `SPEC.md` must have a row in `SPEC.why.md` (a row of `-`
+  counts), and no why row may name a rule that is gone. Each gap is a
+  violation. A node without a why file is not checked. Library:
+  `spec::why_gaps`.
+
 ## [0.5.2] - 2026-09-28
 
 Still the `0.5` rung, and still a patch: the rung's promise -- every verb that
