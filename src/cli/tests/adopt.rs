@@ -71,3 +71,45 @@ fn a_source_this_reader_cannot_parse_is_usage_not_nothing_to_move()
     assert_eq!(run_args(with), ExitCode::from(2));
     Ok(())
 }
+
+/// `src/cli:V1`: 1 is a VERDICT -- for `adopt`, a migration pending or
+/// written. A verb that could not read its INPUT has no verdict to give, so
+/// that is 2, as `coverage` and `debt` already answer (`src/cli:B11`). A
+/// missing map exited 1, which a wrapper reads as "migration pending".
+#[test]
+fn input_adopt_cannot_read_is_usage_not_a_pending_migration()
+-> Result<(), String> {
+    let r = adopt_fixture()?;
+    let dir = r.path().display().to_string();
+    let with_map = |map: &str| {
+        vec![
+            "adopt".to_string(),
+            dir.clone(),
+            "--map".to_string(),
+            map.to_string(),
+        ]
+    };
+    let missing = r.path().join("no-such-map").display().to_string();
+    assert_eq!(run_args(with_map(&missing)), ExitCode::from(2), "no map");
+
+    let bad = r.path().join("bad-map");
+    std::fs::write(&bad, "one-field-only\n").map_err(|e| e.to_string())?;
+    let bad = bad.display().to_string();
+    assert_eq!(run_args(with_map(&bad)), ExitCode::from(2), "bad map");
+
+    // A dir with no SPEC.md and no repository above it: nothing to adopt.
+    // Outside the fixture, or the root walk finds the fixture's own spec.
+    let bare = std::env::temp_dir()
+        .join(format!("sherd-adopt-bare-{}", std::process::id()));
+    std::fs::create_dir_all(&bare).map_err(|e| e.to_string())?;
+    let code = run_args(vec!["adopt".to_string(), bare.display().to_string()]);
+    let _ = std::fs::remove_dir_all(&bare);
+    assert_eq!(code, ExitCode::from(2), "no source");
+
+    // A map the verb READ and refuses is still a verdict: 1.
+    let refused = r.path().join("refused-map");
+    std::fs::write(&refused, "V1 no-such-node\n").map_err(|e| e.to_string())?;
+    let refused = refused.display().to_string();
+    assert_eq!(run_args(with_map(&refused)), ExitCode::from(1), "refused");
+    Ok(())
+}

@@ -138,3 +138,15 @@ fn sync_writes_once_then_reports_clean() {
     assert_eq!(sync_cmd(root, None, false), ExitCode::SUCCESS, "idempotent");
     assert_eq!(sync_cmd(root, None, true), ExitCode::SUCCESS, "clean");
 }
+
+/// `sync` exits 1 when it WROTE (or, under `--check`, found a node stale).
+/// A node it could not read is neither, so it is 2 (`src/cli:V1`, `B11`).
+#[test]
+fn a_node_sync_cannot_read_is_usage_not_stale() -> Result<(), String> {
+    let r = crate::testrepo::TestRepo::new("cli-sync-unread")?;
+    let node = r.path().join("a");
+    std::fs::create_dir_all(node.join("SPEC.md")).map_err(|e| e.to_string())?;
+    assert_eq!(sync_cmd(r.path(), Some(&node), true), ExitCode::from(2));
+    assert_eq!(sync_cmd(r.path(), Some(&node), false), ExitCode::from(2));
+    Ok(())
+}

@@ -61,8 +61,10 @@ pub(super) fn sync_cmd(
     check: bool,
 ) -> ExitCode {
     let targets = dir.map_or_else(|| fed::discover(root), |d| vec![d.clone()]);
+    // 1 means it WROTE, or found a node stale. A node it could not read or
+    // write is neither, so 2 (`src/cli:V1`, `B11`).
     let Ok(wrote) = sync_all(root, &targets, check) else {
-        return ExitCode::from(1);
+        return ExitCode::from(2);
     };
     println!(
         "\n  {} nodes examined · {wrote} {}",

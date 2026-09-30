@@ -89,6 +89,13 @@ publish run surfaced two warnings that eleven gate steps had read past
   `sherd land`'s gate counts it the same way. A tree that was green only
   because a node could not be read now fails.
 
+- **`sherd adopt` and `sherd sync` exit 2, not 1, when they cannot read
+  their input** (`src/cli:V1`, `src/cli:B11`). `adopt` with a missing or
+  malformed `--map`, or on a directory with no `SPEC.md`, and `sync` on a
+  node whose `SPEC.md` cannot be read, all exited 1, which these verbs use
+  for "a migration is pending" and "it wrote". A wrapper acting on 1 now
+  sees 2 for these. A map `adopt` reads and refuses still exits 1.
+
 ## [0.5.2] - 2026-09-28
 
 Still the `0.5` rung, and still a patch: the rung's promise -- every verb that
