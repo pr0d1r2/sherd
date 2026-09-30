@@ -59,6 +59,18 @@ publish run surfaced two warnings that eleven gate steps had read past
   violation. A node without a why file is not checked. Library:
   `spec::why_gaps`.
 
+### Fixed
+
+- **`sherd land` no longer refuses a repository with no `.sherd-slices`**
+  (`src/land:V12`, `src/land:B6`). Its gate treated the missing slice
+  registry as an error, so `land` refused with `.sherd-slices: No such file
+  or directory` in every repository that never declared a slice. The gate
+  now reads that absence the way `sherd slice --check` and `validate`
+  already did: it reports `slice: none required` and goes on. A registry
+  that exists and cannot be parsed is still an error. Library:
+  `land::gate` and `land::gate_with` return `Ok` for such a tree where they
+  returned `Err`.
+
 ## [0.5.2] - 2026-09-28
 
 Still the `0.5` rung, and still a patch: the rung's promise -- every verb that
