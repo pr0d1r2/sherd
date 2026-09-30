@@ -18,8 +18,8 @@
 #   code 98.3 · lens 94.5 · spec 92.5 · tokens 88.9 · state 88.0 · fed 87.1
 #   ollama 70.9 · tdd 69.0 · plan 66.5 · slice 63.6 · review 63.0
 #   land 55.2 · assay 54.0 · cli 0.0
-lines 91.70
-lines-default 95.34
+lines 92.69
+lines-default 96.84
 #
 # MEASUREMENT VARIANCE, observed rather than assumed: two runs of the same
 # tree reported 71.27% and 71.17%. Three later runs all reported 71.17%. The
@@ -245,3 +245,7 @@ lines-default 95.34
 # `src/cli:B11`: adopt's input-error paths and sync's unreadable node are
 # tested. Clean clone of bec90d0: all 8429 lines, 700 missed; default 5596
 # lines, 261 missed.
+
+# RAISED lines 91.70 -> 92.69 and lines-default 95.34 -> 96.84 on 2026-09-30:
+# src/cli's refusal and finding paths are tested through their verbs. Clean
+# clone of a70b4f2: all 8429 lines, 616 missed; default 5596 lines, 177 missed.
