@@ -18,8 +18,8 @@
 #   code 98.3 · lens 94.5 · spec 92.5 · tokens 88.9 · state 88.0 · fed 87.1
 #   ollama 70.9 · tdd 69.0 · plan 66.5 · slice 63.6 · review 63.0
 #   land 55.2 · assay 54.0 · cli 0.0
-lines 91.03
-lines-default 94.25
+lines 91.47
+lines-default 95.00
 #
 # MEASUREMENT VARIANCE, observed rather than assumed: two runs of the same
 # tree reported 71.27% and 71.17%. Three later runs all reported 71.17%. The
@@ -231,3 +231,7 @@ lines-default 94.25
 # `src/debt:B8`. `lines-default` is the DEFAULT build, what `cargo install`
 # ships; `lines` stays `--all-features`. Clean clone of f07f537: all 8413 lines,
 # 755 missed; default 5580 lines, 321 missed. The raise is B8's own tests.
+
+# RAISED lines 91.03 -> 91.47 and lines-default 94.25 -> 95.00 on 2026-09-30:
+# `src/cli/tests/routes.rs` drives the dispatch arms no test entered. Clean
+# clone of 3d2f6f1: all 8413 lines, 718 missed; default 5580 lines, 279 missed.
