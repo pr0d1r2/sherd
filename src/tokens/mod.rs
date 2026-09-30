@@ -110,14 +110,16 @@ impl Ceilings {
     /// were never shown (`src/cli:B8`).
     ///
     /// # Errors
-    /// Propagates a parse failure.
+    /// Propagates a parse failure, and a file that is THERE but cannot be
+    /// read (`V5`, `B1`): only `NotFound` is a cold start.
     pub fn load(root: &std::path::Path) -> Result<Self, String> {
         match std::fs::read_to_string(root.join(".context-limits")) {
             Ok(t) => Self::parse(&t),
-            Err(_) => Ok(Self {
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Self {
                 cold: true,
                 ..Self::default_only()
             }),
+            Err(e) => Err(format!(".context-limits: {e}")),
         }
     }
 

@@ -103,6 +103,13 @@ publish run surfaced two warnings that eleven gate steps had read past
   the spelling that would have matched. Library: `lens::pack` returns a
   `NotFound` error for a `dir` with no `SPEC.md`, where it returned `Ok`.
 
+- **An unreadable `.context-limits` is an error, not a cold start**
+  (`src/tokens:V5`, `src/tokens:B1`). Any failure to read the file was
+  taken as "no file", so one that exists and cannot be read silently
+  became the default ceilings. Only a missing file is a cold start now;
+  `sherd budget` reports any other read error and exits 1. Library:
+  `tokens::Ceilings::load` returns `Err` for it.
+
 ## [0.5.2] - 2026-09-28
 
 Still the `0.5` rung, and still a patch: the rung's promise -- every verb that

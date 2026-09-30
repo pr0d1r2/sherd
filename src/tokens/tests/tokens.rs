@@ -86,6 +86,21 @@ fn a_missing_file_is_a_cold_start() {
     assert_eq!(c.for_path("anything"), DEFAULT_NODE);
 }
 
+/// `V5`: ABSENT is a cold start; PRESENT and unreadable is an error. Every
+/// read error was taken for absence, so a `.context-limits` nobody could
+/// read silently became the default ceilings (`B1`).
+#[test]
+fn an_unreadable_file_is_an_error_not_a_cold_start() -> Result<(), String> {
+    let r = crate::testrepo::TestRepo::new("tokens-unreadable")?;
+    std::fs::create_dir_all(r.path().join(".context-limits"))
+        .map_err(|e| e.to_string())?;
+    let err = Ceilings::load(r.path())
+        .err()
+        .ok_or("an unreadable .context-limits read as a cold start")?;
+    assert!(err.contains(".context-limits"), "names the file: {err}");
+    Ok(())
+}
+
 #[test]
 fn working_saturates_when_window_smaller_than_entry() {
     assert_eq!(working(16_384), 0);
