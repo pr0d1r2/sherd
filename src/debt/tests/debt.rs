@@ -304,16 +304,9 @@ fn recording_debt_with_no_ratchet_is_an_error() {
 fn scripted_cargo(dir: &Path, out: &str) -> String {
     let p = dir.join("fake-cargo");
     let body = format!("#!/bin/sh\ncat <<'EOF' >&2\n{out}\nEOF\nexit 0\n");
-    let _ = std::fs::write(&p, body);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(
-            &p,
-            std::fs::Permissions::from_mode(0o755),
-        );
-    }
-    p.display().to_string()
+    // A failed write surfaces as the measurement the test asserts on.
+    crate::testrepo::write_script(&p, &body)
+        .unwrap_or_else(|_| p.display().to_string())
 }
 
 /// `V3`: a count from a build that did NOT COMPILE is not a measurement.

@@ -18,14 +18,7 @@ fn toolchain(
          clippy) printf '%s\\n' '{lint}' >&2; exit {clippy} ;;\n\
          esac\nexit 0\n"
     );
-    std::fs::write(&p, body).map_err(|e| format!("write: {e}"))?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&p, PermissionsExt::from_mode(0o755))
-            .map_err(|e| format!("chmod: {e}"))?;
-    }
-    Ok(p.display().to_string())
+    crate::testrepo::write_script(&p, &body)
 }
 
 /// `V12`: a repo with no `.sherd-slices` has no slices to drift, so the gate

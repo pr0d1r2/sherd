@@ -1471,14 +1471,7 @@ mod loop_tests {
     }
 
     fn write_exec(path: &Path, body: &str) -> Result<(), String> {
-        std::fs::write(path, body).map_err(|e| format!("write: {e}"))?;
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(path, PermissionsExt::from_mode(0o755))
-                .map_err(|e| format!("chmod: {e}"))?;
-        }
-        Ok(())
+        crate::testrepo::write_script(path, body).map(|_| ())
     }
 
     /// A `cargo` that fails its first `red_times` invocations, then passes.

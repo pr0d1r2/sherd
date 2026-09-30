@@ -35,6 +35,42 @@ pub fn dogfood(body: impl FnOnce()) {
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+/// Write an executable script at `path` and return it once it can be RUN.
+///
+/// Every scripted toolchain in the suite is written and then executed at
+/// once, while other tests spawn processes on other threads. On Linux, a
+/// child forked while this file was still open for writing holds that
+/// descriptor until it execs, and exec of a file open for writing fails with
+/// `ETXTBSY`. The verb under test sees a toolchain that would not start and
+/// answers exit 2 -- an intermittent red on ubuntu only (`.:B32`).
+///
+/// So the script is PROBED here, with an argument no script handles, until
+/// it execs. Once one exec has succeeded no process holds the write
+/// descriptor, and the file is safe for every later run.
+///
+/// # Errors
+/// The write or chmod failed, or the file stayed busy through every probe.
+pub fn write_script(path: &Path, body: &str) -> Result<String, String> {
+    std::fs::write(path, body)
+        .map_err(|e| format!("write {}: {e}", path.display()))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(path, PermissionsExt::from_mode(0o755))
+            .map_err(|e| format!("chmod {}: {e}", path.display()))?;
+    }
+    for _ in 0..100 {
+        match Command::new(path).arg("--sherd-probe").output() {
+            Err(e) if e.kind() == std::io::ErrorKind::ExecutableFileBusy => {
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+            Err(e) => return Err(format!("probe {}: {e}", path.display())),
+            Ok(_) => return Ok(path.display().to_string()),
+        }
+    }
+    Err(format!("{}: still busy after 100 probes", path.display()))
+}
+
 /// A temp git repo that deletes itself.
 pub struct TestRepo {
     /// Repo root.

@@ -152,15 +152,10 @@ fn push_to_a_broken_remote() -> Result<(), String> {
 /// A gate that is always green, so the merge is what gets tested.
 fn green_gate(dir: &Path) -> Result<String, String> {
     let p = dir.join("green-cargo");
-    std::fs::write(&p, "#!/bin/sh\necho 'test result: ok'\nexit 0\n")
-        .map_err(|e| format!("write: {e}"))?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&p, PermissionsExt::from_mode(0o755))
-            .map_err(|e| format!("chmod: {e}"))?;
-    }
-    Ok(p.display().to_string())
+    crate::testrepo::write_script(
+        &p,
+        "#!/bin/sh\necho 'test result: ok'\nexit 0\n",
+    )
 }
 
 /// A branch that has earned it FAST-FORWARDS onto main.
