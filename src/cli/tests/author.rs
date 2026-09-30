@@ -150,3 +150,44 @@ fn a_node_sync_cannot_read_is_usage_not_stale() -> Result<(), String> {
     assert_eq!(sync_cmd(r.path(), Some(&node), false), ExitCode::from(2));
     Ok(())
 }
+
+/// A tree with one slice: `out.txt` is the lead paragraph of `doc.md`.
+fn slice_fixture(tag: &str) -> Result<crate::testrepo::TestRepo, String> {
+    let r = crate::testrepo::TestRepo::new(tag)?;
+    r.write("doc.md", "First paragraph.\n\nSecond paragraph.\n")?;
+    r.write(".sherd-slices", "out.txt doc.md lead:1\n")?;
+    Ok(r)
+}
+
+/// The whole `slice` round trip through the verb: generate, check clean,
+/// hand-edit the output, check DRIFT (1), list. `--check` exiting 1 on drift
+/// is what the gate's `slice` step relies on, and no test had reached it.
+#[test]
+fn slice_generates_then_check_catches_a_hand_edit() -> Result<(), String> {
+    let r = slice_fixture("cli-slice")?;
+    assert_eq!(slice_cmd(r.path(), ""), ExitCode::SUCCESS, "generate");
+    let out = std::fs::read_to_string(r.path().join("out.txt"))
+        .map_err(|e| e.to_string())?;
+    assert!(out.contains("First paragraph."), "{out}");
+    assert!(!out.contains("Second paragraph."), "lead:1 is one: {out}");
+    assert_eq!(slice_cmd(r.path(), "--check"), ExitCode::SUCCESS, "clean");
+
+    r.write("out.txt", "edited by hand\n")?;
+    assert_eq!(slice_cmd(r.path(), "--check"), ExitCode::from(1), "drift");
+    assert_eq!(slice_cmd(r.path(), "--list"), ExitCode::SUCCESS);
+    Ok(())
+}
+
+/// A registry line that is not `<output> <source> <rule>` is usage (2);
+/// a declaration whose source matches nothing cannot be rendered (1).
+#[test]
+fn slice_refuses_a_malformed_registry_and_a_missing_source()
+-> Result<(), String> {
+    let r = slice_fixture("cli-slice-bad")?;
+    r.write(".sherd-slices", "out.txt doc.md\n")?;
+    assert_eq!(slice_cmd(r.path(), "--check"), ExitCode::from(2));
+
+    r.write(".sherd-slices", "out.txt missing/*.md lead:1\n")?;
+    assert_eq!(slice_cmd(r.path(), "--check"), ExitCode::from(1));
+    Ok(())
+}

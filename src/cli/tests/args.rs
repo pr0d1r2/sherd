@@ -201,3 +201,20 @@ fn a_miss_names_the_spelling_that_would_have_worked() {
     assert!(none.contains("matched no node"), "{none}");
     assert_eq!(none.lines().count(), 1, "{none}");
 }
+
+/// Several nodes end in the name typed, so there is no single answer: all
+/// are named and none is picked (`.:V20`).
+#[test]
+fn a_miss_with_several_candidates_names_them_all() -> Result<(), String> {
+    let r = crate::testrepo::TestRepo::new("cli-miss-many")?;
+    r.write("a/code/SPEC.md", "# SPEC\n")?;
+    r.write("b/code/SPEC.md", "# SPEC\n")?;
+    let msg = no_node(r.path(), &r.path().join("code"));
+    assert!(msg.contains("nodes with that name:"), "{msg}");
+    assert!(
+        msg.contains("`a/code`") && msg.contains("`b/code`"),
+        "{msg}"
+    );
+    assert!(!msg.contains("did you mean"), "no single guess: {msg}");
+    Ok(())
+}

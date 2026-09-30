@@ -147,3 +147,9 @@ fn a_type_belongs_to_the_nearest_node_not_to_every_ancestor() {
 fn seam_on_a_dir_matching_no_node_is_usage() {
     assert_eq!(run_args(argv(&["seam", "no-such-dir"])), ExitCode::from(2));
 }
+
+/// `wave` over a dir naming no node is usage, the same shape as `seam`.
+#[test]
+fn wave_on_a_dir_matching_no_node_is_usage() {
+    assert_eq!(run_args(argv(&["wave", "no-such-dir"])), ExitCode::from(2));
+}

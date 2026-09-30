@@ -1,3 +1,4 @@
+use super::super::fixtures::argv;
 use super::*;
 
 /// `adopt` writes into ANOTHER repository, so the dir is not optional and
@@ -111,5 +112,71 @@ fn input_adopt_cannot_read_is_usage_not_a_pending_migration()
     std::fs::write(&refused, "V1 no-such-node\n").map_err(|e| e.to_string())?;
     let refused = refused.display().to_string();
     assert_eq!(run_args(with_map(&refused)), ExitCode::from(1), "refused");
+    Ok(())
+}
+
+/// `--check --map`: every refusal and NOTHING written. A map that would
+/// apply cleanly exits 0 and leaves the source as it was; a refused one
+/// exits 1 (`src/adopt:V2`).
+#[test]
+fn a_dry_run_reports_and_writes_nothing() -> Result<(), String> {
+    let r = adopt_fixture()?;
+    let before = std::fs::read_to_string(r.path().join("SPEC.md"))
+        .map_err(|e| e.to_string())?;
+    let dry = |map: &str| -> Result<ExitCode, String> {
+        let p = r.path().join("map");
+        std::fs::write(&p, map).map_err(|e| e.to_string())?;
+        Ok(run_args(argv(&[
+            "adopt",
+            &r.path().display().to_string(),
+            "--map",
+            &p.display().to_string(),
+            "--check",
+        ])))
+    };
+    assert_eq!(dry("V1 src\n")?, ExitCode::SUCCESS, "would apply");
+    assert_eq!(dry("V1 no-such-node\n")?, ExitCode::from(1), "refused");
+    let after = std::fs::read_to_string(r.path().join("SPEC.md"))
+        .map_err(|e| e.to_string())?;
+    assert_eq!(before, after, "--check wrote");
+    Ok(())
+}
+
+/// A row no node claims stays at root and is NAMED (`src/adopt:V2`); the
+/// proposal still exits 1 because V1 has a home to go to.
+#[test]
+fn a_row_nobody_claims_is_named_and_stays() -> Result<(), String> {
+    let r = adopt_fixture()?;
+    r.write(
+        "SPEC.md",
+        "# SPEC\n\n## \u{a7}G GOAL\n\nx\n\n## \u{a7}F FEDERATION\n\n\
+             dir|owns|\u{22a5}owns|tokens\nsrc|parser input|the goal|-\n\n\
+             ## \u{a7}V INVARIANTS\n\nV1: the parser rejects bad input\n\
+             V2: the weather is nice\n",
+    )?;
+    let p = crate::adopt::propose(r.path())?;
+    assert_eq!(p.unplaced, vec!["V2".to_string()]);
+    assert_eq!(adopt_propose(r.path()), ExitCode::from(1));
+    Ok(())
+}
+
+/// More than three unreadable rows: three are quoted and the rest counted,
+/// and the answer is still usage (2), never "nothing to move".
+#[test]
+fn many_unreadable_rows_are_counted_not_all_quoted() -> Result<(), String> {
+    let r = adopt_fixture()?;
+    let rows: String = (1..=5)
+        .map(|n| format!("| T{n} | . | task {n} | - |\n"))
+        .collect();
+    r.write(
+        "SPEC.md",
+        &format!(
+            "# SPEC\n\n## \u{a7}G GOAL\n\nx\n\n## \u{a7}T TASKS\n\n\
+             | id | status | task | cites |\n| --- | --- | --- | --- |\n{rows}"
+        ),
+    )?;
+    let found = crate::adopt::unreadable(r.path())?;
+    assert_eq!(found.len(), 5);
+    assert_eq!(adopt_unreadable(r.path(), &found), ExitCode::from(2));
     Ok(())
 }
