@@ -181,11 +181,14 @@ fn check_ff() -> Result<(), String> {
     r.commit("one commit, no pub fn, no findings")?;
     let head = r.git(&["rev-parse", "HEAD"])?;
     // No `pub fn` means no node attribution, so this must REFUSE on
-    // V4's unknown-is-not-trustworthy rather than merge.
-    assert!(
-        land_with(r.path(), false, &cargo).is_err(),
-        "an unattributable branch does not land unattended"
-    );
+    // V4's unknown-is-not-trustworthy rather than merge. The REASON is
+    // asserted: `is_err()` alone passed from the day it was written, on
+    // the gate's missing `.sherd-slices`, and never reached the rule it
+    // names (B6).
+    let err = land_with(r.path(), false, &cargo)
+        .err()
+        .ok_or("an unattributable branch landed unattended")?;
+    assert!(err.contains("cannot attribute this branch"), "{err}");
     assert_eq!(r.git(&["rev-parse", "HEAD"])?, head, "V9: untouched");
     Ok(())
 }

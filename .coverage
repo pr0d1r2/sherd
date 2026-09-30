@@ -18,7 +18,7 @@
 #   code 98.3 · lens 94.5 · spec 92.5 · tokens 88.9 · state 88.0 · fed 87.1
 #   ollama 70.9 · tdd 69.0 · plan 66.5 · slice 63.6 · review 63.0
 #   land 55.2 · assay 54.0 · cli 0.0
-lines 90.73
+lines 90.89
 #
 # MEASUREMENT VARIANCE, observed rather than assumed: two runs of the same
 # tree reported 71.27% and 71.17%. Three later runs all reported 71.17%. The
@@ -220,3 +220,8 @@ lines 90.73
 # DROPPED 91.00 -> 90.73 on 2026-09-28, `dev`'s T108 move: the same
 # denominator effect as above. lines 8598 -> 8306, missed 774 -> 770 -- missed
 # did not rise, so no production line lost coverage.
+
+# RAISED 90.73 -> 90.89 on 2026-09-30, `src/land:B6`: `tests/gate.rs` drives
+# the gate in the DEFAULT build. Clean clone: lines 8372 -> 8376, missed
+# 770 -> 763. The default build moved more (missed 373 -> 329), and this
+# floor cannot see it -- it measures `--all-features` only.
