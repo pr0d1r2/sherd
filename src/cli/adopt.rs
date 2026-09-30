@@ -25,7 +25,7 @@ pub(super) fn adopt_cmd(root: &Path, args: &[String]) -> ExitCode {
             return adopt_unreadable(root, &found);
         }
         Ok(_) => {}
-        Err(e) => return adopt_failed(&e),
+        Err(e) => return adopt_unusable(&e),
     }
     match flag_value(args, "--map") {
         None => adopt_propose(root),
@@ -73,7 +73,7 @@ pub(super) fn flag_value<'a>(
 pub(super) fn adopt_propose(root: &Path) -> ExitCode {
     let proposal = match crate::adopt::propose(root) {
         Ok(p) => p,
-        Err(e) => return adopt_failed(&e),
+        Err(e) => return adopt_unusable(&e),
     };
     for p in &proposal.placements {
         println!("{} {}\t# {}", p.id, p.home, p.why.join(" "));
@@ -106,7 +106,7 @@ pub(super) fn adopt_summary(p: &crate::adopt::Proposal) {
 pub(super) fn adopt_with_map(root: &Path, file: &str, dry: bool) -> ExitCode {
     let map = match read_map_file(file) {
         Ok(m) => m,
-        Err(e) => return adopt_failed(&e),
+        Err(e) => return adopt_unusable(&e),
     };
     if dry {
         return adopt_dry(root, &map);
@@ -161,9 +161,19 @@ pub(super) fn adopt_wrote(r: &crate::adopt::Report) -> ExitCode {
     ExitCode::from(1)
 }
 
+/// A migration the verb READ and could not make: a refused map, a rejected
+/// output, a failed write. 1, a verdict about this tree.
 pub(super) fn adopt_failed(msg: &str) -> ExitCode {
     eprintln!("{msg}");
     ExitCode::from(1)
+}
+
+/// Input the verb could not read -- no source `SPEC.md`, a missing or
+/// malformed map. There is no verdict to give, so 2 (`src/cli:V1`, `B11`):
+/// 1 here means a migration is pending, and a wrapper acts on that.
+pub(super) fn adopt_unusable(msg: &str) -> ExitCode {
+    eprintln!("{msg}");
+    ExitCode::from(2)
 }
 
 #[cfg(test)]
