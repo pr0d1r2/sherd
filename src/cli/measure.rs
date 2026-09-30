@@ -253,6 +253,12 @@ pub(super) fn lens_cmd(
             print!("{}", p.text);
             ExitCode::SUCCESS
         }
+        // The miss `budget` reports, with the spelling that would have
+        // worked (`V2`, `src/lens:B2`).
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            eprintln!("{}", no_node(root, dir));
+            ExitCode::from(2)
+        }
         Err(e) => {
             eprintln!("sherd: {}: {e}", dir.display());
             ExitCode::from(2)

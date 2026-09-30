@@ -31,9 +31,21 @@ pub struct Pack {
 /// the one-line lens of each child.
 ///
 /// # Errors
-/// Propagates read failures -- a node that cannot be read is a failure, not
-/// a skipped zero (V48).
+/// `NotFound` when `dir` carries no `SPEC.md` -- it is not a node, and its
+/// ancestors' pack is not its pack (V5, B2). Otherwise propagates read
+/// failures -- a node that cannot be read is a failure, not a skipped zero
+/// (V48).
 pub fn pack(root: &Path, dir: &Path, depth: Depth) -> std::io::Result<Pack> {
+    // `V5`: a node that is not there is an error. `fed::chain` walks the
+    // ANCESTORS that exist, so without this a missing node packed as its
+    // parent under its own name (`B2`).
+    let own = dir.join("SPEC.md");
+    if !own.is_file() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            format!("{}: no SPEC.md -- not a node", dir.display()),
+        ));
+    }
     let chain = fed::chain(root, dir);
     let mut text = String::new();
     for spec in &chain {
