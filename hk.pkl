@@ -434,9 +434,15 @@ local all = (fast) {
     depends = List("package")
     check = """
       cargo package --allow-dirty --no-verify >/dev/null 2>&1 || { echo 'hk: `cargo package` failed -- see the `package` step, this one cannot run without a tarball.' >&2; exit 1; }
-      crate=$(ls -1 target/package/*.crate 2>/dev/null | head -1)
-      [ -n "$crate" ] || { echo 'hk: no .crate in target/package -- nothing to test.' >&2; exit 1; }
-      crate=$PWD/$crate
+      # The tarball `cargo package` just wrote, BY NAME AND VERSION. A glob's
+      # first match is the OLDEST: target/package keeps every release's
+      # .crate, so `head -1` tested `sherd-0.5.0-rc.1` in any checkout that
+      # had packaged a later release, and reported green (B30). CI has one
+      # tarball, so only local runs were wrong.
+      name=$(taplo get -f Cargo.toml package.name) && version=$(taplo get -f Cargo.toml package.version) || { echo 'hk: cannot read package.name/version from Cargo.toml.' >&2; exit 1; }
+      crate=$PWD/target/package/$name-$version.crate
+      [ -f "$crate" ] || { echo "hk: $crate is missing -- cargo package did not write the tarball for THIS version." >&2; exit 1; }
+      echo "package-suite: testing $name-$version.crate"
       target=$PWD/target/package-suite
       d=$(mktemp -d) || exit 1
       trap 'rm -rf "$d"' EXIT
