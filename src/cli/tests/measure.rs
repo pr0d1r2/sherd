@@ -98,18 +98,10 @@ fn the_debt_verb_checks_records_and_refuses() -> Result<(), String> {
     )?;
     r.commit("a tree with a ratchet")?;
     let fake = r.path().join("fake-cargo");
-    std::fs::write(
+    let fake = crate::testrepo::write_script(
         &fake,
         "#!/bin/sh\necho 'src/a.rs:1:1: warning: too many lines (35/15)' >&2\nexit 0\n",
-    )
-    .map_err(|e| e.to_string())?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&fake, std::fs::Permissions::from_mode(0o755))
-            .map_err(|e| e.to_string())?;
-    }
-    let fake = fake.display().to_string();
+    )?;
 
     // 1 warning over 100 lines is 10.0 per KLoC, and 20 excess lines is
     // 20.0% -- both under the recorded ceilings.
@@ -167,18 +159,10 @@ fn the_coverage_verb_checks_records_and_refuses() -> Result<(), String> {
     r.write(".coverage", "# the reason\nlines 90.00\n")?;
     r.commit("a tree with a floor")?;
     let fake = r.path().join("fake-cargo");
-    std::fs::write(
+    let fake = crate::testrepo::write_script(
         &fake,
         "#!/bin/sh\necho 'TOTAL 1 2 3.00% 4 5 6.00% 7 8 92.50% 0 0 -'\nexit 0\n",
-    )
-    .map_err(|e| e.to_string())?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&fake, std::fs::Permissions::from_mode(0o755))
-            .map_err(|e| e.to_string())?;
-    }
-    let fake = fake.display().to_string();
+    )?;
 
     // 92.50 is above the recorded 90.00.
     assert_eq!(
@@ -251,18 +235,10 @@ fn route_reports_a_hit_a_miss_and_an_ambiguity_by_exit_code() {
 /// A scripted `cargo` printing `stderr` and exiting 0.
 fn scripted(dir: &Path, stdout: &str, stderr: &str) -> Result<String, String> {
     let p = dir.join("scripted-cargo");
-    std::fs::write(
+    crate::testrepo::write_script(
         &p,
-        format!("#!/bin/sh\necho '{stdout}'\necho '{stderr}' >&2\nexit 0\n"),
+        &format!("#!/bin/sh\necho '{stdout}'\necho '{stderr}' >&2\nexit 0\n"),
     )
-    .map_err(|e| e.to_string())?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755))
-            .map_err(|e| e.to_string())?;
-    }
-    Ok(p.display().to_string())
 }
 
 /// The ratchets REFUSE the wrong direction through the verb: density above

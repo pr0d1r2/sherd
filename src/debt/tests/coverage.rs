@@ -17,14 +17,7 @@ pub(crate) fn two_builds(
          esac\n\
          echo \"TOTAL 1 2 3.00% 4 5 6.00% 7 8 $pct% 0 0 -\"\nexit 0\n"
     );
-    std::fs::write(&p, body).map_err(|e| format!("write: {e}"))?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&p, PermissionsExt::from_mode(0o755))
-            .map_err(|e| format!("chmod: {e}"))?;
-    }
-    Ok(p.display().to_string())
+    crate::testrepo::write_script(&p, &body)
 }
 
 /// `V4`: each build is measured with its OWN flags. The default build is
