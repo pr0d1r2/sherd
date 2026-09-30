@@ -18,8 +18,8 @@
 #   code 98.3 · lens 94.5 · spec 92.5 · tokens 88.9 · state 88.0 · fed 87.1
 #   ollama 70.9 · tdd 69.0 · plan 66.5 · slice 63.6 · review 63.0
 #   land 55.2 · assay 54.0 · cli 0.0
-lines 92.76
-lines-default 96.86
+lines 92.83
+lines-default 96.97
 #
 # MEASUREMENT VARIANCE, observed rather than assumed: two runs of the same
 # tree reported 71.27% and 71.17%. Three later runs all reported 71.17%. The
@@ -258,3 +258,8 @@ lines-default 96.86
 # `.:B32`: the busy-retry behind `testrepo::write_script` is tested with a
 # scripted probe. Clean clone of eef51ed: all 8497 lines, 615 missed; default
 # 5669 lines, 178 missed.
+
+# RAISED lines 92.76 -> 92.83 and lines-default 96.86 -> 96.97 on 2026-09-30:
+# `tests/binary.rs` runs the installed binary, so `src/main.rs` and `cli::run`
+# are covered. Clean clone of 9dc5a9d: all 8497 lines, 609 missed; default
+# 5669 lines, 172 missed.
