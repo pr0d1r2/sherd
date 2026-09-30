@@ -52,3 +52,8 @@ T4|.|apply a tighter ceiling to `mod.rs`/`lib.rs`|`.:V51`
 T6|.|needs `sherd.toml` and a TOML parser — neither exists|V2
 T7|.|needs a compile-fail test, ⊥ a function|`.:V72`
 T8|.|entry cost BEFORE & AFTER an adoption — root+chain vs the single file it replaced — ∵ `§N`+`§F` are always-on RESIDUE & the saving can be NEGATIVE on a small tree. this number is what says a migration PAID|`src/adopt:V1`
+
+## §B BUGS
+
+id|date|cause|fix
+B1|2026-09-30|`Ceilings::load` matched `Err(_)` on reading `.context-limits` ∴ EVERY read error was a cold start: a file that EXISTS & cannot be read (a directory in its place, a permission) silently became the default ceilings, & `budget`/`check`/`lens` measured against numbers nobody wrote. found testing `budget`'s refusals in #72|V5. only `NotFound` is a cold start; any other read error is `Err(".context-limits: <error>")`, which `budget` reports w/ exit 1
