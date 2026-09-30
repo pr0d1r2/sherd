@@ -247,3 +247,83 @@ fn route_reports_a_hit_a_miss_and_an_ambiguity_by_exit_code() {
     assert_eq!(route_cmd(root, "wombat"), ExitCode::from(2));
     assert_eq!(route_cmd(root, "widgets gizmos"), ExitCode::from(3));
 }
+
+/// A scripted `cargo` printing `stderr` and exiting 0.
+fn scripted(dir: &Path, stdout: &str, stderr: &str) -> Result<String, String> {
+    let p = dir.join("scripted-cargo");
+    std::fs::write(
+        &p,
+        format!("#!/bin/sh\necho '{stdout}'\necho '{stderr}' >&2\nexit 0\n"),
+    )
+    .map_err(|e| e.to_string())?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755))
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(p.display().to_string())
+}
+
+/// The ratchets REFUSE the wrong direction through the verb: density above
+/// its ceiling fails `--check` and `--record` alike (`src/debt:V6`), and a
+/// coverage drop cannot be recorded (`src/debt:V9`).
+#[test]
+fn the_ratchet_verbs_refuse_the_wrong_direction() -> Result<(), String> {
+    let r = crate::testrepo::TestRepo::new("cli-ratchet-refuse")?;
+    r.write("src/a.rs", &"fn f() {}\n".repeat(100))?;
+    r.write(".lint-debt", "density 5.0\nshape 25.0\n")?;
+    r.write(".coverage", "lines 95.00\n")?;
+    let lint = scripted(
+        r.path(),
+        "",
+        "src/a.rs:1:1: warning: too many lines (35/15)",
+    )?;
+    // 1 warning over 100 lines is 10.0 per KLoC, over the 5.0 ceiling.
+    assert_eq!(
+        debt_cmd(r.path(), Some("--check"), &lint),
+        ExitCode::from(1)
+    );
+    assert_eq!(
+        debt_cmd(r.path(), Some("--record"), &lint),
+        ExitCode::from(1)
+    );
+
+    let cov =
+        scripted(r.path(), "TOTAL 1 2 3.00% 4 5 6.00% 7 8 92.50% 0 0 -", "")?;
+    assert_eq!(
+        coverage_cmd(r.path(), Some("--record"), &cov),
+        ExitCode::from(1),
+        "95.00 -> 92.50 is a drop"
+    );
+    let after = std::fs::read_to_string(r.path().join(".coverage"))
+        .map_err(|e| e.to_string())?;
+    assert_eq!(after, "lines 95.00\n", "the refused drop was not written");
+    Ok(())
+}
+
+/// `budget` over a node it cannot pack, or a ceilings file it cannot
+/// parse, is 1 -- unmeasured is never "within budget" (`.:V48`).
+#[test]
+fn budget_fails_on_what_it_cannot_measure() -> Result<(), String> {
+    let r = routing_fixture("cli-budget-fail");
+    r.write(".context-limits", "not a ceiling row\n")?;
+    assert_eq!(budget(r.path(), r.path().to_path_buf()), ExitCode::from(1));
+
+    // Discovered and unreadable: not UTF-8. (A directory named SPEC.md is
+    // never discovered as a node, so it would test nothing here.)
+    let r = routing_fixture("cli-budget-unread");
+    std::fs::write(r.path().join("alpha/SPEC.md"), b"\xff\xfe")
+        .map_err(|e| e.to_string())?;
+    assert_eq!(budget(r.path(), r.path().to_path_buf()), ExitCode::from(1));
+    Ok(())
+}
+
+/// `route` on a repository with one node says there is nothing to route to
+/// (`.:B19`) -- still a miss, exit 2 (`src/cli:V2`).
+#[test]
+fn route_on_a_single_node_repo_is_a_miss() -> Result<(), String> {
+    let r = crate::testrepo::TestRepo::new("cli-single-node")?;
+    assert_eq!(route_cmd(r.path(), "anything"), ExitCode::from(2));
+    Ok(())
+}

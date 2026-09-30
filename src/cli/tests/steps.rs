@@ -30,3 +30,39 @@ fn plan_format_is_positional_agnostic_and_strict() {
         ExitCode::from(2)
     );
 }
+
+/// Two nodes: `a` declares milestone M1 over its T1, `b` declares none and
+/// has an open row of its own.
+fn milestone_fixture() -> Result<crate::testrepo::TestRepo, String> {
+    let r = crate::testrepo::TestRepo::new("cli-plan-ms")?;
+    r.write(
+        "SPEC.md",
+        "# SPEC\n\n## \u{a7}G GOAL\n\ntoy\n\n## \u{a7}F FEDERATION\n\n\
+         dir|owns|\u{22a5}owns|tokens\na|alpha|beta|-\nb|beta|alpha|-\n",
+    )?;
+    r.write(
+        "a/SPEC.md",
+        "# SPEC\n\n## \u{a7}G GOAL\n\nalpha\n\n## \u{a7}T TASKS\n\n\
+         | id | scope | tasks | done-when |\n|----|-------|-------|-----------|\n\
+         | M1 | first | T1 | shipped |\n\nid|status|task|cites\nT1|.|one|-\n",
+    )?;
+    r.write(
+        "b/SPEC.md",
+        "# SPEC\n\n## \u{a7}G GOAL\n\nbeta\n\n## \u{a7}T TASKS\n\n\
+         id|status|task|cites\nT1|.|unscheduled|-\n",
+    )?;
+    Ok(r)
+}
+
+/// A milestone plan with rows outside it renders in text and in JSON, and
+/// both exit 0. The COUNT of rows set aside is asserted where it is
+/// computed, `src/plan`'s `a_milestone_keeps_its_own_rows_...` (V24);
+/// this holds the verb's two output paths.
+#[test]
+fn a_milestone_plan_renders_in_text_and_json() -> Result<(), String> {
+    let r = milestone_fixture()?;
+    assert_eq!(plan_cmd(r.path(), Some("M1"), false), ExitCode::SUCCESS);
+    assert_eq!(plan_cmd(r.path(), Some("M1"), true), ExitCode::SUCCESS);
+    assert_eq!(plan_cmd(r.path(), None, true), ExitCode::SUCCESS);
+    Ok(())
+}

@@ -342,3 +342,7 @@ mod routes;
 #[cfg(test)]
 #[path = "tests/unread.rs"]
 pub(crate) mod unread;
+
+#[cfg(test)]
+#[path = "tests/verdicts.rs"]
+mod verdicts;
