@@ -299,6 +299,10 @@ mod tests;
 #[path = "tests/git.rs"]
 mod git_tests;
 
+#[cfg(test)]
+#[path = "tests/gate.rs"]
+mod gate_tests;
+
 /// Step 3 of the loop, and the gate `sherd land` runs before it's allowed to
 /// fast-forward. Local, deterministic, zero tokens. Reports what RAN, not
 /// only what failed (`.:V48`).
@@ -382,13 +386,21 @@ pub fn gate_with(root: &Path, cargo: &str) -> Result<(bool, String), String> {
         if viol == 0 { "PASS" } else { "FAIL" },
         nodes.len()
     ));
-    // Slice drift, by the same function `sherd slice --check` calls.
-    let drift = crate::slice::drifted(root)?;
-    report.push_str(&format!(
-        "=== slice: {} === {} drifted\n",
-        if drift.is_empty() { "PASS" } else { "FAIL" },
-        drift.len()
-    ));
+    // Slice drift, by the same function `sherd slice --check` calls, and
+    // with its reading of ABSENCE: no registry is no slices, not an error
+    // (V12, B6). A registry that exists and cannot be read still is one.
+    let drift = if root.join(".sherd-slices").is_file() {
+        let drift = crate::slice::drifted(root)?;
+        report.push_str(&format!(
+            "=== slice: {} === {} drifted\n",
+            if drift.is_empty() { "PASS" } else { "FAIL" },
+            drift.len()
+        ));
+        drift
+    } else {
+        report.push_str("=== slice: none required === no registry\n");
+        Vec::new()
+    };
     // The loop's gate and the commit's gate are ONE rule, which is what the
     // header claims and what B30 measured as false: MERGEABLE was declared
     // for code `hk` refuses on fmt and on the lint ratchet.
