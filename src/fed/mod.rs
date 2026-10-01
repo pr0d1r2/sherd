@@ -3,6 +3,7 @@
 //! This is what sherd adds on top of microlith. `§F` rows are
 //! `dir|owns|⊥owns|tokens` and an edge is **exactly one dir deeper** (V2).
 
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 /// One `§F` row: an edge to a child node.
@@ -108,17 +109,52 @@ pub fn chain(root: &Path, dir: &Path) -> Vec<PathBuf> {
     nodes
 }
 
-/// Every dir under `root` that carries a `SPEC.md`, ignoring build output.
+/// Every dir under `root` that carries a `SPEC.md`, ignoring build output
+/// and, inside a git work tree, whatever git ignores (V22).
 #[must_use]
 pub fn discover(root: &Path) -> Vec<PathBuf> {
+    let ignored = git_ignored(root);
     let mut out = Vec::new();
-    walk(root, &mut out);
+    walk(root, &ignored, &mut out);
     out.sort();
     out
 }
 
-fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
-    if dir.join("SPEC.md").is_file() {
+/// What git ignores under `dir`, as paths joined onto `dir` (V22).
+///
+/// One `ls-files` per walk. `--directory` names a wholly ignored directory
+/// once instead of every file in it, so a scratch dir holding whole
+/// checkouts costs one line. Outside a work tree, or with no git at all,
+/// the answer is empty and the fixed list is the only rule -- the walk as it
+/// was before `.:B15`.
+fn git_ignored(dir: &Path) -> HashSet<PathBuf> {
+    let args = [
+        "ls-files",
+        "-z",
+        "--others",
+        "--ignored",
+        "--exclude-standard",
+        "--directory",
+    ];
+    let Ok(out) = crate::git::at(dir, &args).output() else {
+        return HashSet::new();
+    };
+    if !out.status.success() {
+        return HashSet::new();
+    }
+    out.stdout
+        .split(|b| *b == 0)
+        .filter(|p| !p.is_empty())
+        .map(|p| {
+            let rel = String::from_utf8_lossy(p);
+            dir.join(rel.trim_end_matches('/'))
+        })
+        .collect()
+}
+
+fn walk(dir: &Path, ignored: &HashSet<PathBuf>, out: &mut Vec<PathBuf>) {
+    let spec = dir.join("SPEC.md");
+    if spec.is_file() && !ignored.contains(&spec) {
         out.push(dir.to_path_buf());
     }
     let Ok(entries) = std::fs::read_dir(dir) else {
@@ -134,10 +170,10 @@ fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
             .unwrap_or_default()
             .to_string_lossy()
             .to_string();
-        if is_ignored_dir(&name) {
+        if is_ignored_dir(&name) || ignored.contains(&p) {
             continue;
         }
-        walk(&p, out);
+        walk(&p, ignored, out);
     }
 }
 /// Return all edges that violate the V2 depth invariant.
@@ -347,6 +383,7 @@ pub fn find_exhaustive_violations<'a>(
 
     // Scan the filesystem under `root` and report any directories that are
     // missing from the edge table.
+    let ignored = git_ignored(root);
     let mut missing = Vec::new();
     if let Ok(entries) = std::fs::read_dir(root) {
         for entry in entries.flatten() {
@@ -355,6 +392,7 @@ pub fn find_exhaustive_violations<'a>(
                 && let Some(name) = path.file_name().and_then(|s| s.to_str())
                 && !edge_dirs.contains_key(name)
                 && !is_ignored_dir(name)
+                && !ignored.contains(&path)
             {
                 missing.push(path);
             }
@@ -367,25 +405,34 @@ pub fn find_exhaustive_violations<'a>(
 /// Every `.rs` file under a directory, sorted, so a report is stable.
 ///
 /// `target` and hidden directories are skipped: a build product is not source
-/// and a ceiling over it measures the compiler.
+/// and a ceiling over it measures the compiler. So is whatever git ignores
+/// (V19, V22): a scratch checkout is another repository's source.
 #[must_use]
 pub fn rust_files(dir: &Path) -> Vec<PathBuf> {
+    let ignored = git_ignored(dir);
     let mut out = Vec::new();
-    collect_rust(dir, &mut out);
+    collect_rust(dir, &ignored, &mut out);
     out.sort();
     out
 }
 
-fn collect_rust(dir: &Path, out: &mut Vec<PathBuf>) {
+fn collect_rust(
+    dir: &Path,
+    ignored: &HashSet<PathBuf>,
+    out: &mut Vec<PathBuf>,
+) {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return;
     };
     for e in entries.filter_map(Result::ok) {
         let p = e.path();
         let name = e.file_name().to_string_lossy().to_string();
+        if ignored.contains(&p) {
+            continue;
+        }
         if p.is_dir() {
             if name != "target" && !name.starts_with('.') {
-                collect_rust(&p, out);
+                collect_rust(&p, ignored, out);
             }
         } else if p.extension().is_some_and(|x| x == "rs") {
             out.push(p);
@@ -667,3 +714,7 @@ fn join_rel(parent: &Path, child: &str) -> String {
 #[cfg(test)]
 #[path = "tests/declared.rs"]
 mod declared_tests;
+
+#[cfg(test)]
+#[path = "tests/ignored.rs"]
+mod ignored_tests;
