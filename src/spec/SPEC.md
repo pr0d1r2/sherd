@@ -46,6 +46,7 @@ V7: a CITATION is a LINK & `check` resolves it. canonical owner is the node PATH
 V8: a BULLET declares the id it opens with — `- C1:` in `§C`, `- I2:` in `§I` — exactly as a row line does, ∵ FORMAT.md writes both sections as bullet lists & `citation_at` already ACCEPTS `C` & `I` ∴ a citation the parser takes ! be one `check` can resolve. prose mentioning an id mid-line ⊥ declares it (B4)
 V9: a line an id does ⊥ OPEN but that CARRIES one in a bracketed table cell (`| T1 | . | task | - |`) is UNREADABLE, ⊥ absent — `unreadable_rows()` names it & the LINE it sits on. the id shape is `row_id()`'s, handed the terminator it would have had, ⊥ a 2nd reading of it (V1) ∴ `M` stays out: `microlith::milestones` reads that table & flagging it would refuse every spec keeping one (`src/adopt:B4`)
 V10: a milestone row has 2 readings & BOTH are needed — what it CLAIMS (`milestones()`, ranges EXPANDED, microlith's) & what it SAYS (`milestone_cells()`, the cell AS WRITTEN). they differ exactly when a RANGE is in play ∴ the gap IS the detector, & a message quotes the cell a reader would search for (`src/adopt:B5`)
+V11: `rule_depth` keeps only REMAINING work in `§T`: a row `x` (done) & an `ARCHIVED` stub ⊥ ship in a pack ∵ `src/fed:V9` already reads §T as remaining work & a done row bills every worker for history. the FILE keeps them ∴ `check` still resolves a citation to a finished row; only the pack drops them.
 
 ## §T TASKS
 
