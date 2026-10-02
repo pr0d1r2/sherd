@@ -74,22 +74,37 @@ pub fn milestone_cells(text: &str) -> Vec<(String, String)> {
 /// -- shipped whole files including both archive sections (`.:B8`).
 ///
 /// MEASURED share dropped: 33% of root, 59% of `src/tdd`, 58% of `src/plan`.
+///
+/// Within `§T`, only REMAINING work survives (V11): a row marked `x` is done,
+/// and an `ARCHIVED to SPEC-ARCHIVE.md` stub is done with its text already
+/// gone. Both are history by `src/fed:V9`'s own reading -- "§T states
+/// remaining work" -- and a pack that ships them bills every worker for the
+/// project's past. The file keeps them: `check` reads the file, not the pack,
+/// so citations to a finished row still resolve.
 #[must_use]
 pub fn rule_depth(spec: &str) -> String {
     const KEEP: [&str; 5] =
         ["\u{a7}G", "\u{a7}C", "\u{a7}I", "\u{a7}V", "\u{a7}T"];
     let mut out = String::new();
-    let mut keeping = true;
+    let (mut keeping, mut tasks) = (true, false);
     for line in spec.lines() {
         if line.starts_with("## \u{a7}") {
             keeping = KEEP.iter().any(|k| line.contains(k));
+            tasks = line.contains("\u{a7}T");
         }
-        if keeping {
+        if keeping && !(tasks && finished_row(line)) {
             out.push_str(line);
             out.push('\n');
         }
     }
     out
+}
+
+/// A `§T` row whose status cell is `x`: `T12|x|...`, suffixed ids included.
+fn finished_row(line: &str) -> bool {
+    let mut cells = line.split('|');
+    let id = cells.next().unwrap_or_default();
+    id.starts_with('T') && cells.next() == Some("x")
 }
 
 /// Split a spec into `(header, body)` pairs, one per `## §X` section.

@@ -109,6 +109,25 @@ fn an_archive_stub_is_not_history() {
     assert_eq!(done.first().map(|d| d.0.as_str()), Some("T89"));
 }
 
+/// V11: a pack carries the PLAN. Open and started rows survive rule depth;
+/// a finished row and an archive stub do not, and nothing else in `§T`, nor
+/// a `§V` line that merely looks like a done row, is touched.
+#[test]
+fn rule_depth_keeps_only_remaining_work() {
+    let s = "## \u{a7}V INVARIANTS\nV1: T9|x|is prose here\n\n\
+             ## \u{a7}T TASKS\nid|status|task|cites\n\
+             T1|x|the thing landed|V1\nT2|.|the other thing|V1\n\
+             T3|~|half of it|V1\nT4|x|ARCHIVED to SPEC-ARCHIVE.md|V1\n\
+             T5a|x|a suffixed row|V1\n";
+    let r = crate::spec::rule_depth(s);
+    for kept in ["id|status|task|cites", "T2|.|", "T3|~|", "V1: T9|x|"] {
+        assert!(r.contains(kept), "`{kept}` must survive: {r}");
+    }
+    for gone in ["T1|x|", "T4|x|", "T5a|x|"] {
+        assert!(!r.contains(gone), "`{gone}` is history: {r}");
+    }
+}
+
 use std::path::Path;
 
 /// The defect `B2` names, on the tree that measured it: every citation in
