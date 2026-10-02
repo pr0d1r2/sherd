@@ -40,6 +40,7 @@ sib|src/git|one git invocation shape — the repo a command acts on, & the env i
 - lib: `modules(&Path) -> Vec<Proposed>` — the Rust reading alone
 - lib: `scripts_of(&Path, &Proposed, &[PathBuf]) -> Vec<PathBuf>` — the scripts a candidate would own
 - lib: `rank_in(&Path, &[Proposed], &str) -> Vec<Ranked>` — `rank` w/ V7's weight: a module's name ∪ rows citing a script it owns, each row once
+- lib: `cited_scripts(&str, &[PathBuf]) -> Vec<PathBuf>` — the scripts a text cites, each resolving to exactly 1 file (V7). `adopt` places rows by it (`src/adopt:V10`)
 - lib: `ambiguous_scripts(&str, &[PathBuf]) -> Vec<String>` — cited basenames naming ≥2 scripts, counted nowhere
 - lib: `row_weight(&str, &str) -> (usize, u64)` — rows & tokens a spec spends naming one module
 - lib: `rank(&[Proposed], &str) -> Vec<Ranked>` · `uniform_evidence(&[Proposed]) -> bool`
