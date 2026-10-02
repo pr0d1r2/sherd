@@ -16,7 +16,7 @@ pub(super) fn split_cmd(root: &Path, dir: &Path, apply: bool) -> ExitCode {
         );
         return ExitCode::from(2);
     }
-    if !dir.join("SPEC.md").is_file() {
+    if !crate::fed::is_node(dir) {
         eprintln!("sherd: {} carries no SPEC.md", dir.display());
         return ExitCode::from(2);
     }

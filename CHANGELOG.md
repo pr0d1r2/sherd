@@ -71,6 +71,26 @@ publish run surfaced two warnings that eleven gate steps had read past
 
 ### Fixed
 
+- **A lowercase `spec.md` is no longer a node on macOS** (`src/fed:V23`,
+  `src/fed:B16`). Node checks asked `dir.join("SPEC.md").is_file()`, which a
+  case-insensitive filesystem (APFS, NTFS) answers for `spec.md` too, so the
+  same tree had more nodes on macOS than on Linux. A node is now a dir with
+  an entry named exactly `SPEC.md`. Discovery, chains, `lens`, `split`,
+  frozen nodes and the repository-root walk all ask the same predicate.
+  Library: `fed::is_node`.
+
+- **Discovery skips what git ignores** (`src/fed:V22`, `src/fed:B15`, #80).
+  Inside a git work tree, `discover`, the `§F` exhaustiveness scan and
+  `rust_files` now skip every path `git ls-files --others --ignored
+  --exclude-standard --directory` names, so a `SPEC.md` in a gitignored
+  scratch checkout is no longer a federation node. Every verb reads the
+  same walk, so `wave`, `validate`, `check`, `budget`, `plan` and the rest
+  change together. On a consumer with one tracked `SPEC.md` and gitignored
+  checkouts of other repositories, `wave` went from 884 nodes to the real
+  ones. The fixed name list (`target`, `vendor`, `.claude`, ...) still
+  applies, tracked or not. Outside a work tree, or without git, discovery
+  is unchanged.
+
 - **`sherd land` no longer refuses a repository with no `.sherd-slices`**
   (`src/land:V12`, `src/land:B6`). Its gate treated the missing slice
   registry as an error, so `land` refused with `.sherd-slices: No such file

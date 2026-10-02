@@ -84,7 +84,7 @@ pub(super) fn repo_root() -> PathBuf {
 pub(super) fn repo_root_from(start: &Path) -> PathBuf {
     let mut d = start;
     loop {
-        if d.join(".git").exists() && d.join("SPEC.md").is_file() {
+        if d.join(".git").exists() && crate::fed::is_node(d) {
             return d.to_path_buf();
         }
         match d.parent() {

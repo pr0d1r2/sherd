@@ -94,7 +94,7 @@ pub fn frozen_nodes(root: &Path) -> Vec<PathBuf> {
         .filter(|l| l.contains("FROZEN"))
         .flat_map(|l| l.split('`').skip(1).step_by(2))
         .map(|p| root.join(p))
-        .filter(|p| p.join("SPEC.md").is_file())
+        .filter(|p| fed::is_node(p))
         .collect()
 }
 
