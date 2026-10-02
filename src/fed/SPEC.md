@@ -52,7 +52,7 @@ V18: a node is findable by the NAME a reader typed — `spelled()` matches a tra
 V19: ignore globs (`target/`, `.git/`, & git's ignore rules per V22) ⊥ walked, ⊥ ceiling-checked. per-FILE ignores too (generated, vendored)
 V20: root `§N` — `up` = `-`, `self` = `.`, ⊥ sib
 V21: `§N`.lens = verbatim copy of that dir's `§F`-row lens. single source
-V22: a node is a `SPEC.md` git does ⊥ ignore. inside a work tree every walk here — `discover`, the V11 child scan, `rust_files` — skips what `git ls-files --others --ignored --exclude-standard --directory` names, asked ONCE per walk through `src/git` (`src/git:V3`). ⊥ a work tree, or ⊥ git ⇒ the fixed list alone, i.e. the behaviour before. the fixed list is a FLOOR, ⊥ replaced: a tracked `vendor/` stays out (B15)
+V22: a node is a `SPEC.md` git does ⊥ ignore. inside a work tree every walk here — `discover`, the V11 child scan, `rust_files`, `script_files` — skips what `git ls-files --others --ignored --exclude-standard --directory` names, asked ONCE per walk through `src/git` (`src/git:V3`). ⊥ a work tree, or ⊥ git ⇒ the fixed list alone, i.e. the behaviour before. the fixed list is a FLOOR, ⊥ replaced: a tracked `vendor/` stays out (B15)
 V23: a node's spec is the file named EXACTLY `SPEC.md`, compared by NAME from `read_dir`, ⊥ by `is_file()` on a joined path — a case-insensitive filesystem (macOS, Windows) answers `is_file()` for `spec.md` too ∴ the same tree federates differently per OS. ONE predicate (`is_node`) for every 'is this dir a node' question (B16)
 
 ## §T TASKS

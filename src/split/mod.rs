@@ -7,7 +7,9 @@
 //! judgement over prose, and a tool moving it on its own rewrites law it
 //! cannot read.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
+
+mod shell;
 
 /// One proposal with the spec weight that ranks it.
 #[derive(Debug, Clone)]
@@ -30,13 +32,46 @@ pub struct Ranked<'a> {
 /// Grade breaks ties, then name, so the order is stable between runs.
 #[must_use]
 pub fn rank<'a>(proposed: &'a [Proposed], spec: &str) -> Vec<Ranked<'a>> {
-    let mut out: Vec<Ranked<'a>> = proposed
+    let ranked = proposed
         .iter()
         .map(|node| {
             let (rows, tokens) = row_weight(spec, &node.name);
             Ranked { node, rows, tokens }
         })
         .collect();
+    heaviest_first(ranked)
+}
+
+/// [`rank`] for a tree that may hold scripts (`src/split:V7`): a Rust
+/// module is weighed by its name, as `rank` does, and any candidate also by
+/// the rows citing a script it would own -- each row once.
+///
+/// Every script under `dir` is read, not only the candidates', because a
+/// basename is ambiguous against a script no candidate owns as much as
+/// against one it does.
+#[must_use]
+pub fn rank_in<'a>(
+    dir: &Path,
+    proposed: &'a [Proposed],
+    spec: &str,
+) -> Vec<Ranked<'a>> {
+    let all = crate::fed::script_files(dir);
+    let modules: Vec<String> =
+        modules(dir).into_iter().map(|m| m.name).collect();
+    let ranked = proposed
+        .iter()
+        .map(|node| {
+            let owned = scripts_of(dir, node, &all);
+            let by_name = modules.contains(&node.name);
+            let (rows, tokens) = weight(spec, node, by_name, &owned, &all);
+            Ranked { node, rows, tokens }
+        })
+        .collect();
+    heaviest_first(ranked)
+}
+
+/// Heaviest first; grade breaks ties, then name, so the order is stable.
+fn heaviest_first(mut out: Vec<Ranked<'_>>) -> Vec<Ranked<'_>> {
     out.sort_by(|a, b| {
         b.rows
             .cmp(&a.rows)
@@ -131,18 +166,23 @@ pub fn propose(text: &str) -> Proposal {
 /// Counting them made this function read its own generator's output: split,
 /// `sync` writes more `§N`, the weights rise, split proposes more (`src/split:V3`).
 fn naming_rows(spec: &str, name: &str) -> Vec<String> {
-    let mut rows = Vec::new();
+    law_lines(spec)
+        .filter(|line| names_word(line, name))
+        .map(str::to_string)
+        .collect()
+}
+
+/// The spec's lines OUTSIDE the structural sections, `§F` and `§N` (V3), and
+/// without the section headers themselves.
+fn law_lines(spec: &str) -> impl Iterator<Item = &str> {
     let mut structural = false;
-    for line in spec.lines() {
+    spec.lines().filter(move |line| {
         if let Some(section) = line.strip_prefix("## \u{a7}") {
             structural = section.starts_with('F') || section.starts_with('N');
-            continue;
+            return false;
         }
-        if !structural && names_word(line, name) {
-            rows.push(line.to_string());
-        }
-    }
-    rows
+        !structural
+    })
 }
 
 /// Whole-word match, so `plan` does not match `planning` and `check` does not
@@ -221,8 +261,26 @@ pub struct Proposed {
 /// Families are reported, never auto-clustered beyond a shared suffix: a
 /// graph clustering is where a proposer starts guessing, and `src/split:V1` says this
 /// proposes.
+///
+/// Both readings: the Rust [`modules`], then what a shell codebase drew
+/// (`src/split:V7`). A dir both find is proposed once, as the module.
 #[must_use]
 pub fn structure(dir: &Path) -> Vec<Proposed> {
+    let mut out = modules(dir);
+    let flat = !dir.join("src").is_dir();
+    for c in shell::candidates(dir, &crate::fed::script_files(dir)) {
+        let same_dir = flat && c.evidence == Evidence::Drawn;
+        if !(same_dir && out.iter().any(|p| p.name == c.name)) {
+            out.push(c);
+        }
+    }
+    out
+}
+
+/// The RUST reading alone: modules declared in the crate's entry file,
+/// graded by `Evidence`, strongest first.
+#[must_use]
+pub fn modules(dir: &Path) -> Vec<Proposed> {
     let src = if dir.join("src").is_dir() {
         dir.join("src")
     } else {
@@ -343,6 +401,71 @@ pub fn row_weight(spec: &str, name: &str) -> (usize, u64) {
     (rows.len(), tokens)
 }
 
+/// What a candidate costs the spec: rows naming it, when it is a Rust
+/// module (`by_name`, V2), or citing a script it OWNS (V7) -- each row once.
+/// A shell dir's name is a word, and only its scripts are citations (V4).
+///
+/// `all` is every script under the node being split, so a basename two of
+/// them share resolves to neither; [`ambiguous_scripts`] names those.
+fn weight(
+    spec: &str,
+    p: &Proposed,
+    by_name: bool,
+    owned: &[PathBuf],
+    all: &[PathBuf],
+) -> (usize, u64) {
+    let rows: Vec<&str> = law_lines(spec)
+        .filter(|line| {
+            (by_name && names_word(line, &p.name))
+                || shell::script_tokens(line).any(|t| {
+                    matches!(shell::resolve(t, all).as_slice(), [one] if owned.contains(one))
+                })
+        })
+        .collect();
+    let tokens = crate::tokens::count(&rows.join("\n")).tokens;
+    (rows.len(), tokens)
+}
+
+/// The scripts a candidate under `dir` would own (`src/split:V7`): every
+/// script beneath its directory, or a family's member files. Empty for a
+/// Rust module with no scripts. `all` is [`crate::fed::script_files`] of
+/// `dir`, passed in so a caller weighing many candidates walks once.
+#[must_use]
+pub fn scripts_of(dir: &Path, p: &Proposed, all: &[PathBuf]) -> Vec<PathBuf> {
+    let home = dir.join(&p.name);
+    if home.is_dir() {
+        return all
+            .iter()
+            .filter(|s| s.starts_with(&home))
+            .cloned()
+            .collect();
+    }
+    let files: Vec<PathBuf> = p
+        .members
+        .iter()
+        .map(|m| dir.join(format!("{m}.sh")))
+        .collect();
+    all.iter().filter(|s| files.contains(s)).cloned().collect()
+}
+
+/// Cited script names that resolve to two or more scripts, sorted. They
+/// count for no candidate, and a reader is told which (`src/split:V7`).
+#[must_use]
+pub fn ambiguous_scripts(spec: &str, scripts: &[PathBuf]) -> Vec<String> {
+    let mut out: Vec<String> = law_lines(spec)
+        .flat_map(shell::script_tokens)
+        .filter(|t| shell::resolve(t, scripts).len() > 1)
+        .map(str::to_string)
+        .collect();
+    out.sort();
+    out.dedup();
+    out
+}
+
 #[cfg(test)]
 #[path = "tests/weight.rs"]
 mod weight_tests;
+
+#[cfg(test)]
+#[path = "tests/shell.rs"]
+mod shell_tests;

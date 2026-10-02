@@ -419,32 +419,65 @@ pub fn find_exhaustive_violations<'a>(
 /// (V19, V22): a scratch checkout is another repository's source.
 #[must_use]
 pub fn rust_files(dir: &Path) -> Vec<PathBuf> {
+    files_by_extension(dir, "rs", |name| name == "target")
+}
+
+/// Every `*.sh` file under a directory, sorted -- what `split` reads a shell
+/// codebase from (`src/split:V7`).
+///
+/// The same walk as [`rust_files`], one walker rather than two (`src/debt`'s
+/// rule), and the same exclusions as [`discover`]: hidden dirs, the fixed
+/// list and whatever git ignores (V22). A script under `vendor/` or a scratch
+/// checkout is another repository's, exactly as a `SPEC.md` there is.
+#[must_use]
+pub fn script_files(dir: &Path) -> Vec<PathBuf> {
+    files_by_extension(dir, "sh", is_ignored_dir)
+}
+
+/// The one file walk: every file ending in `.<ext>`, skipping hidden dirs,
+/// dirs `skip` names and what git ignores. Sorted, so a report is stable.
+fn files_by_extension(
+    dir: &Path,
+    ext: &str,
+    skip: fn(&str) -> bool,
+) -> Vec<PathBuf> {
     let ignored = git_ignored(dir);
     let mut out = Vec::new();
-    collect_rust(dir, &ignored, &mut out);
+    collect(
+        dir,
+        &Walk {
+            ext,
+            skip,
+            ignored: &ignored,
+        },
+        &mut out,
+    );
     out.sort();
     out
 }
 
-fn collect_rust(
-    dir: &Path,
-    ignored: &HashSet<PathBuf>,
-    out: &mut Vec<PathBuf>,
-) {
+/// What one file walk keeps and skips.
+struct Walk<'a> {
+    ext: &'a str,
+    skip: fn(&str) -> bool,
+    ignored: &'a HashSet<PathBuf>,
+}
+
+fn collect(dir: &Path, w: &Walk<'_>, out: &mut Vec<PathBuf>) {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return;
     };
     for e in entries.filter_map(Result::ok) {
         let p = e.path();
         let name = e.file_name().to_string_lossy().to_string();
-        if ignored.contains(&p) {
+        if w.ignored.contains(&p) {
             continue;
         }
         if p.is_dir() {
-            if name != "target" && !name.starts_with('.') {
-                collect_rust(&p, ignored, out);
+            if !(w.skip)(&name) && !name.starts_with('.') {
+                collect(&p, w, out);
             }
-        } else if p.extension().is_some_and(|x| x == "rs") {
+        } else if p.extension().is_some_and(|x| x == w.ext) {
             out.push(p);
         }
     }

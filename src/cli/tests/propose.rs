@@ -84,6 +84,56 @@ fn split_proposes_nodes_the_spec_never_mentions() {
     assert_eq!(split_cmd(root, root, false), ExitCode::SUCCESS);
 }
 
+/// `src/split:V7` through the verb: a shell tree is proposed, rather than
+/// answered with `nothing to propose`, including the ambiguous-name line.
+#[test]
+fn split_proposes_a_shell_tree() -> Result<(), String> {
+    let repo = crate::testrepo::TestRepo::new("cli-split-shell")?;
+    repo.write(
+        "SPEC.md",
+        "# SPEC\n\n## \u{a7}V INVARIANTS\n\nV1: `run.sh` and `a/x/one.sh`\n",
+    )?;
+    for s in [
+        "a/x/one.sh",
+        "a/run.sh",
+        "b/run.sh",
+        "pr-a.sh",
+        "pr-b.sh",
+        "pr-c.sh",
+    ] {
+        repo.write(s, "#!/bin/sh\n")?;
+    }
+    repo.commit("shell")?;
+    let root = repo.path();
+    assert_eq!(split_cmd(root, root, false), ExitCode::SUCCESS);
+    let names: Vec<String> =
+        split::structure(root).into_iter().map(|p| p.name).collect();
+    assert_eq!(names, vec!["a", "b", "pr"]);
+    Ok(())
+}
+
+/// Where a candidate's scripts sit beneath it, busiest first and at most
+/// five; nothing when they all sit in the candidate itself.
+#[test]
+fn script_dirs_names_the_busiest_dirs_beneath_a_node() {
+    let node = Path::new("/r/scripts");
+    let at = |p: &str| node.join(p);
+    let deep: Vec<std::path::PathBuf> =
+        ["just/t/1.sh", "just/t/2.sh", "lib/3.sh", "4.sh"]
+            .iter()
+            .map(|p| at(p))
+            .collect();
+    assert_eq!(script_dirs(&deep, node), " · in just/t 2, lib 1");
+    assert_eq!(script_dirs(&[at("4.sh")], node), "");
+    let many: Vec<std::path::PathBuf> =
+        (0..7).map(|i| at(&format!("d{i}/x.sh"))).collect();
+    assert_eq!(
+        script_dirs(&many, node).matches(',').count(),
+        4,
+        "five shown"
+    );
+}
+
 /// A node with no `SPEC.md` is a usage error, not an empty proposal.
 #[test]
 fn split_on_a_directory_with_no_spec_is_usage() {
