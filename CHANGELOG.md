@@ -53,6 +53,19 @@ publish run surfaced two warnings that eleven gate steps had read past
 
 ### Added
 
+- **`sherd budget`, `check` and `validate` take `--format text|json`**
+  (`src/cli:V19`). `text` is the default and its output is byte-identical
+  to before. `json` is one object per run with fixed keys, the same contract
+  `plan --format json` has: `version`, an `ok` that always matches the exit
+  code, and paths relative to the repository root (the root itself is `.`).
+  `budget` reports each node's `chain_tokens`, `own_tokens`, `chain_nodes`,
+  `ceiling` and `over_by`, plus the totals and the token-count `method`. A
+  node it could not measure is named in `unmeasured`. `check` and
+  `validate` report each finding with `file`, `line`, `rule`, `message` and
+  `fatal`. `rule` is `null` where the text form names no rule. Exit codes
+  do not change with the format, and an unknown format is a usage error
+  (exit 2). Library: `lens::own_cost`.
+
 - **`sherd check` enforces V44 for any node that keeps a `SPEC.why.md`.**
   Every `§V` id in `SPEC.md` must have a row in `SPEC.why.md` (a row of `-`
   counts), and no why row may name a rule that is gone. Each gap is a

@@ -9,7 +9,7 @@
 
 [![gate hk](https://img.shields.io/badge/gate-hk-6E4AFF)](hk.pkl)
 [![gate steps 34](https://img.shields.io/badge/gate_steps-34-6E4AFF)](hk.pkl)
-[![coverage floor 92.8%](https://img.shields.io/badge/coverage_floor-%E2%89%A592.8%25-brightgreen)](.coverage)
+[![coverage floor 93.0%](https://img.shields.io/badge/coverage_floor-%E2%89%A593.0%25-brightgreen)](.coverage)
 [![lint debt 14.7/KLoC](https://img.shields.io/badge/lint_debt-%E2%89%A414.7%2FKLoC-orange)](.lint-debt)
 [![federated nodes 22](https://img.shields.io/badge/federated_nodes-22-6E4AFF)](SPEC.md)
 
@@ -393,13 +393,13 @@ line fails the gate (`src/cli:V7`, after `src/cli:B2`).
 | command | what it does |
 |---|---|
 | `sherd init [dir] [--stdout]` | scaffold a SPEC.md, §F rows from child dirs |
-| `sherd budget [dir]` | token cost of every node, against the working budget |
+| `sherd budget [dir] [--format text\|json]` | token cost of every node, against the working budget |
 | `sherd lens <dir> [--depth rule\|why\|all]` | the context pack for one node |
 | `sherd fed [dir]` | the federation edges declared by a node |
-| `sherd check [dir]` | microlith structural check of every node |
+| `sherd check [dir] [--format text\|json]` | microlith structural check of every node |
 | `sherd debt [--check\|--record]` | lint ratchet: density & shape vs .lint-debt |
 | `sherd coverage [--check\|--record]` | coverage floor vs .coverage |
-| `sherd validate` | DAG + ids + ceilings + slice drift, one verdict |
+| `sherd validate [--format text\|json]` | DAG + ids + ceilings + slice drift, one verdict |
 | `sherd split [dir]` | propose a federation split. writes nothing |
 | `sherd seam [dir]` | the public types each node declares. writes nothing |
 | `sherd wave [dir]` | the rounds a parallel build would run. writes nothing |

@@ -18,8 +18,8 @@
 #   code 98.3 · lens 94.5 · spec 92.5 · tokens 88.9 · state 88.0 · fed 87.1
 #   ollama 70.9 · tdd 69.0 · plan 66.5 · slice 63.6 · review 63.0
 #   land 55.2 · assay 54.0 · cli 0.0
-lines 92.83
-lines-default 96.97
+lines 93.09
+lines-default 97.10
 #
 # MEASUREMENT VARIANCE, observed rather than assumed: two runs of the same
 # tree reported 71.27% and 71.17%. Three later runs all reported 71.17%. The
@@ -263,3 +263,9 @@ lines-default 96.97
 # `tests/binary.rs` runs the installed binary, so `src/main.rs` and `cli::run`
 # are covered. Clean clone of 9dc5a9d: all 8497 lines, 609 missed; default
 # 5669 lines, 172 missed.
+
+# RAISED lines 92.83 -> 93.09 and lines-default 96.97 -> 97.10 on 2026-10-02,
+# #83: `budget`, `check` and `validate --format json`. Clean clone of a2872d2:
+# all 8836 lines, 611 missed; default 6008 lines, 174 missed. Missed rose by
+# 2 in each build while 339 lines were added -- the rise is the new code
+# being covered, not the denominator.

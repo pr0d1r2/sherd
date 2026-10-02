@@ -143,97 +143,180 @@ pub(super) fn debt_cmd(
     }
 }
 
-pub(super) fn budget(root: &Path, dir: PathBuf) -> ExitCode {
-    let work = tokens::working(WINDOW);
-    println!(
-        "window {WINDOW} · entry {} · working {work}\n",
-        tokens::ENTRY_COST
-    );
-    let nodes = fed::discover(root);
-    let mut total = 0;
-    let mut examined = 0;
-    let mut over = 0;
-    for node in &nodes {
+/// One node's row in the `budget` table.
+pub(super) struct BudgetRow {
+    pub node: PathBuf,
+    pub chain_tokens: u64,
+    pub own_tokens: u64,
+    pub chain_nodes: usize,
+    pub ceiling: u64,
+    pub over_by: Option<u64>,
+}
+
+/// What `budget` measured, before either form renders it.
+///
+/// Measurement STOPS at the first node it cannot read, as the text form
+/// always has: `unmeasured` names that node, and `stderr` carries the line
+/// the text form reports it with.
+#[derive(Default)]
+pub(super) struct Budget {
+    pub rows: Vec<BudgetRow>,
+    pub total: u64,
+    pub over: usize,
+    pub method: Option<&'static str>,
+    pub unmeasured: Vec<(PathBuf, String)>,
+    pub stderr: Option<String>,
+    pub cold: bool,
+}
+
+impl Budget {
+    /// The exit code, decided ONCE so the json `ok` and the process cannot
+    /// disagree: 1 unmeasured · 2 no node matched · 1 over a WARM ceiling.
+    pub(super) fn code(&self) -> u8 {
+        if self.stderr.is_some() {
+            1
+        } else if self.rows.is_empty() {
+            2
+        } else if self.over > 0 && !self.cold {
+            1
+        } else {
+            0
+        }
+    }
+}
+
+pub(super) fn measure_budget(root: &Path, dir: &Path) -> Budget {
+    let mut b = Budget {
+        cold: tokens::Ceilings::load(root).is_ok_and(|c| c.is_cold()),
+        ..Budget::default()
+    };
+    for node in fed::discover(root) {
         // §I declares `sherd budget [dir]`. The argument was parsed by
         // `arg_dir` and then dropped, so every invocation reported the whole
         // repo -- an interface promised and unread, which is `.:V104`'s own
         // shape appearing in the command that enforces it.
-        if !node.starts_with(&dir) {
+        if !node.starts_with(dir) {
             continue;
         }
-        let p = match lens::pack(root, node, lens::Depth::Rule) {
-            Ok(p) => p,
+        let packed = lens::pack(root, &node, lens::Depth::Rule)
+            .and_then(|p| Ok((lens::own_cost(&node, lens::Depth::Rule)?, p)));
+        let (own, p) = match packed {
+            Ok(both) => both,
             Err(e) => {
-                eprintln!("sherd: {}: {e}", node.display());
-                return ExitCode::from(1);
+                b.stderr = Some(format!("sherd: {}: {e}", node.display()));
+                b.unmeasured.push((node, e.to_string()));
+                return b;
             }
         };
         // Re-read per node rather than hoisting the load: the key mapping
         // lives in `ceiling_for` and copying it here to save twelve reads of
         // a one-kilobyte file would be two readings of one rule.
-        let ceiling = match lens::ceiling_for(root, node) {
+        let ceiling = match lens::ceiling_for(root, &node) {
             Ok(c) => c,
             Err(e) => {
-                eprintln!("sherd: {e}");
-                return ExitCode::from(1);
+                b.stderr = Some(format!("sherd: {e}"));
+                b.unmeasured.push((node, e));
+                return b;
             }
         };
-        total += p.cost.tokens;
-        examined += 1;
-        let rel = node.strip_prefix(root).unwrap_or(node);
+        b.total += p.cost.tokens;
+        b.method = Some(p.cost.method);
+        // A verdict states direction and distance (`src/lens:V4`): "over"
+        // without "by how much" cannot tell a node that needs splitting from
+        // one that drifted eleven tokens past.
+        let over_by = match lens::verdict(p.cost.tokens, ceiling) {
+            lens::Verdict::Fits { .. } => None,
+            lens::Verdict::Over { by } => {
+                b.over += 1;
+                Some(by)
+            }
+        };
+        b.rows.push(BudgetRow {
+            node,
+            chain_tokens: p.cost.tokens,
+            own_tokens: own.tokens,
+            chain_nodes: p.chain.len(),
+            ceiling,
+            over_by,
+        });
+    }
+    b
+}
+
+/// The text form, exactly as `budget` printed it before it had a json one.
+pub(super) fn budget_text(root: &Path, b: &Budget) -> String {
+    let mut out = format!(
+        "window {WINDOW} · entry {} · working {}\n\n",
+        tokens::ENTRY_COST,
+        tokens::working(WINDOW)
+    );
+    for r in &b.rows {
+        let rel = r.node.strip_prefix(root).unwrap_or(&r.node);
         let name = if rel.as_os_str().is_empty() {
             Path::new(".")
         } else {
             rel
         };
-        // A verdict states direction and distance (`src/lens:V4`): "over"
-        // without "by how much" cannot tell a node that needs splitting from
-        // one that drifted eleven tokens past.
-        let mark = match lens::verdict(p.cost.tokens, ceiling) {
-            lens::Verdict::Fits { .. } => String::new(),
-            lens::Verdict::Over { by } => {
-                over += 1;
-                format!("  OVER by {by}")
-            }
-        };
-        println!(
-            "  {:<24} chain {:>6} tok  ({} nodes)  ceiling {ceiling:>6}{mark}",
+        let mark = r
+            .over_by
+            .map_or(String::new(), |by| format!("  OVER by {by}"));
+        out.push_str(&format!(
+            "  {:<24} chain {:>6} tok  ({} nodes)  ceiling {:>6}{mark}\n",
             name.display(),
-            p.cost.tokens,
-            p.chain.len()
-        );
+            r.chain_tokens,
+            r.chain_nodes,
+            r.ceiling
+        ));
+    }
+    if b.stderr.is_some() {
+        return out;
     }
     // V48: say what was examined, not only what failed.
-    println!(
-        "\n  {examined} nodes examined · {total} tok if all chains loaded \
-         · {over} over ceiling"
-    );
-    // Examining NOTHING is not passing. A dir naming no node printed an
-    // empty table and exited 0, which is indistinguishable from a clean
-    // repo -- the same vacuous-pass shape as `src/tdd:V26`.
-    if examined == 0 {
-        eprintln!("{}", no_node(root, &dir));
-        return ExitCode::from(2);
-    }
+    out.push_str(&format!(
+        "\n  {} nodes examined · {} tok if all chains loaded · {} over ceiling\n",
+        b.rows.len(),
+        b.total,
+        b.over
+    ));
     // A COLD START is not a breach. With no `.context-limits` at all the
     // default is a suggestion nobody wrote, and failing a stranger against
     // it is a claim about a rule that does not exist (`B8`). An unlisted
     // PATH inside an existing file still takes the default -- `.:V6`.
-    if tokens::Ceilings::load(root).is_ok_and(|c| c.is_cold()) {
-        println!(
+    if b.cold && !b.rows.is_empty() {
+        out.push_str(&format!(
             "  no .context-limits: ceilings are the {} tok default, and \
-             over is advisory until you set them",
+             over is advisory until you set them\n",
             tokens::DEFAULT_NODE
-        );
-        return ExitCode::SUCCESS;
+        ));
+    }
+    out
+}
+
+/// The text form, as dispatch called it before `--format` -- kept for the
+/// tests that drive it, and compiled as one (see `repo_root`).
+#[cfg(test)]
+pub(super) fn budget(root: &Path, dir: PathBuf) -> ExitCode {
+    budget_as(root, &dir, false)
+}
+
+pub(super) fn budget_as(root: &Path, dir: &Path, json: bool) -> ExitCode {
+    let b = measure_budget(root, dir);
+    if json {
+        println!("{}", budget_json(root, &b));
+    } else {
+        print!("{}", budget_text(root, &b));
+    }
+    if let Some(e) = &b.stderr {
+        eprintln!("{e}");
+    } else if b.rows.is_empty() {
+        // Examining NOTHING is not passing. A dir naming no node printed an
+        // empty table and exited 0, which is indistinguishable from a clean
+        // repo -- the same vacuous-pass shape as `src/tdd:V26`.
+        eprintln!("{}", no_node(root, dir));
     }
     // T10/V104: the number exists to be COMPARED. Printing it and exiting 0
     // is what let the chains drift over unseen (B7).
-    if over > 0 {
-        ExitCode::from(1)
-    } else {
-        ExitCode::SUCCESS
-    }
+    ExitCode::from(b.code())
 }
 
 pub(super) fn lens_cmd(
@@ -289,18 +372,6 @@ pub(super) fn fed_cmd(dir: &Path) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-/// One verdict over the whole federation, for CI and for a stranger who
-/// wants to know whether a repository is coherent before reading it.
-///
-/// COMPOSES what already has owners rather than re-deciding anything: the
-/// structural check (`spec`), the DAG's shape (`fed`), every chain against
-/// its ceiling (`lens`), and slice drift (`slice`). §C forbids a second
-/// reading of a rule that has an owner, and a validator that re-implemented
-/// any of these would be exactly that.
-///
-/// It REPORTS WHAT IT EXAMINED, not only what failed. "0 violations" and "I
-/// checked nothing" are the same output otherwise, which is `.:V48` and the
-/// vacuous pass every gate here is written against.
 /// `sherd route "<query>"` -- which node owns this question.
 ///
 /// Exit codes carry the answer, because a script asking "where does this

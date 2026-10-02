@@ -506,7 +506,7 @@ pub fn to_json(
 /// A node as a caller names it. The root is `""` in memory and `.` in every
 /// namespaced cite (`` `.:V83` ``), so the plumbing spells it `.` -- an empty
 /// string is the one path a consumer cannot join or cite.
-fn json_node(node: &Path) -> String {
+pub(crate) fn json_node(node: &Path) -> String {
     if node.as_os_str().is_empty() {
         json_str(".")
     } else {
@@ -516,7 +516,7 @@ fn json_node(node: &Path) -> String {
 
 /// A JSON string literal. `"`, `\` and every control char are escaped, which
 /// is all RFC 8259 requires; everything else passes through as UTF-8.
-fn json_str(s: &str) -> String {
+pub(crate) fn json_str(s: &str) -> String {
     let mut out = String::with_capacity(s.len().saturating_add(2));
     out.push('"');
     for c in s.chars() {

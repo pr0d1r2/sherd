@@ -111,6 +111,15 @@ pub(super) fn take_format(
     Ok((json, rest))
 }
 
+/// [`take_format`] over a whole argv: the verb stays at `[0]`, so the
+/// positional readers (`arg_dir`) see the same shape with or without the flag.
+pub(super) fn with_format(
+    args: &[String],
+) -> Result<(bool, Vec<String>), String> {
+    let (json, rest) = take_format(args.get(1..).unwrap_or_default())?;
+    Ok((json, args.iter().take(1).cloned().chain(rest).collect()))
+}
+
 pub(super) fn plan_cmd(
     root: &Path,
     milestone: Option<&str>,
