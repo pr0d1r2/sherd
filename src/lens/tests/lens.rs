@@ -135,3 +135,29 @@ fn a_dir_with_no_spec_is_an_error_not_its_ancestors_pack() -> Result<(), String>
     );
     Ok(())
 }
+
+/// `own_cost` is the node's OWN spec at the depth asked, never the chain. A
+/// split reads it to say which spec in a chain carries the tokens; were it
+/// the chain, every child would report its ancestors' rows as its own.
+#[test]
+fn own_is_the_node_spec_alone_not_its_chain() -> Result<(), String> {
+    let r = crate::testrepo::TestRepo::new("lens-own")?;
+    let child = "# SPEC\n\n## \u{a7}G GOAL\n\nthe child\n\n## \u{a7}V INVARIANTS\n\nV1: a child rule\n";
+    r.write("SPEC.md", "# SPEC\n\n## \u{a7}G GOAL\n\nthe root, long enough to cost a few tokens more than its child does\n")?;
+    r.write("a/SPEC.md", child)?;
+    let a = r.path().join("a");
+    let p = pack(r.path(), &a, Depth::Rule).map_err(|e| e.to_string())?;
+    let own = own_cost(&a, Depth::Rule).map_err(|e| e.to_string())?;
+    assert_eq!(p.chain.len(), 2, "root and child");
+    assert_eq!(
+        own.tokens,
+        tokens::count(&crate::spec::rule_depth(child)).tokens,
+        "own is the child's spec at rule depth"
+    );
+    assert!(own.tokens < p.cost.tokens, "the chain also pays the root");
+    assert!(
+        own_cost(&r.path().join("nowhere"), Depth::Rule).is_err(),
+        "no node is an error, never a zero cost"
+    );
+    Ok(())
+}

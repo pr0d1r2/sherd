@@ -57,10 +57,7 @@ pub fn pack(root: &Path, dir: &Path, depth: Depth) -> std::io::Result<Pack> {
         // §F leaves the TEXT here and stays reachable: `Pack::children` is
         // parsed from the node's own spec below and rendered separately, so
         // navigation survives without the table riding in every prompt.
-        text.push_str(&match depth {
-            Depth::All => raw,
-            Depth::Rule | Depth::Why => crate::spec::rule_depth(&raw),
-        });
+        text.push_str(&render(raw, depth));
         text.push('\n');
     }
     if depth == Depth::Why {
@@ -78,6 +75,27 @@ pub fn pack(root: &Path, dir: &Path, depth: Depth) -> std::io::Result<Pack> {
         cost: tokens::count(&text),
         text,
     })
+}
+
+/// One spec as a pack at `depth` carries it.
+fn render(raw: String, depth: Depth) -> String {
+    match depth {
+        Depth::All => raw,
+        Depth::Rule | Depth::Why => crate::spec::rule_depth(&raw),
+    }
+}
+
+/// What the node's OWN `SPEC.md` costs at `depth` -- its share of [`pack`]'s
+/// `cost`, the chain minus everything it inherits. A split moves rows
+/// between nodes; `cost` says what a worker loads, this says which spec in
+/// the chain carries it.
+///
+/// # Errors
+/// A read failure is propagated, never a zero (V5) -- `NotFound` included,
+/// when `dir` is no node.
+pub fn own_cost(dir: &Path, depth: Depth) -> std::io::Result<tokens::Count> {
+    let raw = std::fs::read_to_string(dir.join("SPEC.md"))?;
+    Ok(tokens::count(&render(raw, depth)))
 }
 
 /// The chain ceiling for a node, from `.context-limits`.
