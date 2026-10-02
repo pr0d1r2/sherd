@@ -51,16 +51,16 @@ self|.|-
 - cmd: `sherd route "<query>"` → dir + the words that matched. RANKED: the node matching MORE of the query wins, a tie is ambiguous, & ROOT is never an answer. 0 hit / 2 miss / 3 ambiguous
 - cmd: `sherd coverage [--check|--record]` → the coverage floor vs `.coverage`. 0 held / 1 fell / 2 unmeasurable
 - cmd: `sherd debt [--check|--record]` → the lint ratchet: density & shape vs `.lint-debt`. 0 held / 1 rose / 2 unmeasurable
-- cmd: `sherd check [dir]` → drift spec↔code + file ceilings. 0 clean / 1 violation / 2 usage
+- cmd: `sherd check [dir] [--format text|json]` → drift spec↔code + file ceilings. 0 clean / 1 violation / 2 usage
 - cmd: `sherd split [dir]` → PROPOSE a federation from the CODE'S structure: dirs · `pub mod` · naming families w/ their shared hub. spec rows attach as EVIDENCE about a node, ⊥ as the reason for it. writes ⊥ ever; `--apply` refuses, ∵ which module owns which rule is a JUDGEMENT
 - cmd: `sherd adopt <dir> [--map FILE] [--check]` → MIGRATE a foreign single-file `SPEC.md` onto a federation: PROPOSE which node owns each `§V`/`§T`/`§B`/`§R` row, REWRITE citations to the namespaced form, emit node files `check` ACCEPTS. writes ⊥ w/o `--map`; `--check` reports & writes ⊥. the proposal PRINTS the map file itself ∴ `adopt <dir> > map` → edit → `adopt <dir> --map map`. 0 ⊥ to move / 1 a migration PENDING or WRITTEN (`sync`'s rule 1 verb over) / 2 usage
 - cmd: `sherd sync [dir] [--check]` → regen `§N` from the `§F` above it. exit 1 IF IT WROTE, ∵ a generated section that had to change means the committed tree was STALE. `--check` reports & writes ⊥
 - cmd: `sherd graph [--dot|--json|--mermaid]` → federation DAG. `--mermaid` = the generated architecture diagram
 - cmd: `sherd lens <dir> [--facet set|setting|human|all]` → default `set`
-- cmd: `sherd budget [dir]` → node/chain/lens/file token table. exit 1 over
+- cmd: `sherd budget [dir] [--format text|json]` → node/chain/lens/file token table. exit 1 over
 - cmd: `sherd seam [dir]` → PROPOSE the SEAM a parallel build needs: per node, the public types its siblings ! name before any node is written. report-only, writes ⊥ — WHICH types are shared is a JUDGEMENT (R57)
 - cmd: `sherd wave [dir]` → the SCHEDULE a parallel build follows: ready set per round over the CODE dag (`use crate::`, ⊥ `§F`), DEPTH & WIDTH. EDGES & BLOCKING counted apart (`src/wave:V4`). report-only; a cycle is NAMED, exit 0
-- cmd: `sherd validate` → structural + edges + ceilings + slice drift, & REPORTS what it examined. exit 1 fail
+- cmd: `sherd validate [--format text|json]` → structural + edges + ceilings + slice drift, & REPORTS what it examined. exit 1 fail
 - cmd: `sherd fed [dir]` → the federation edges a node DECLARES, ⊥ the ones it has
 - cmd: `sherd review [rev]` → mechanical checks on what a commit ADDED (default `HEAD`). ADVISORY: a finding ⊥ fail the cmd, ∵ intent is the reader's call
 - cmd: `sherd slice [--check|--list]` → regen distilled slices from source. `--check` exit 1 on DRIFT, & a slice is never hand-edited
