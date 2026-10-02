@@ -71,6 +71,14 @@ publish run surfaced two warnings that eleven gate steps had read past
 
 ### Fixed
 
+- **A lowercase `spec.md` is no longer a node on macOS** (`src/fed:V23`,
+  `src/fed:B16`). Node checks asked `dir.join("SPEC.md").is_file()`, which a
+  case-insensitive filesystem (APFS, NTFS) answers for `spec.md` too, so the
+  same tree had more nodes on macOS than on Linux. A node is now a dir with
+  an entry named exactly `SPEC.md`. Discovery, chains, `lens`, `split`,
+  frozen nodes and the repository-root walk all ask the same predicate.
+  Library: `fed::is_node`.
+
 - **Discovery skips what git ignores** (`src/fed:V22`, `src/fed:B15`, #80).
   Inside a git work tree, `discover`, the `§F` exhaustiveness scan and
   `rust_files` now skip every path `git ls-files --others --ignored
