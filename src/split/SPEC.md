@@ -36,9 +36,11 @@ sib|src/git|one git invocation shape — the repo a command acts on, & the env i
 
 ## §I INTERFACES
 
-- lib: `structure(&Path) -> Vec<Proposed>` — candidates read off the code, graded by `Evidence`; Rust modules & shell dirs/families (V7), each w/ the `scripts` it would own
-- lib: `weight(&str, &Proposed) -> (usize, u64)` — rows & tokens naming a candidate: its name (Rust) ∪ rows citing its scripts (V7)
-- lib: `ambiguous_scripts(&str, &[Proposed]) -> Vec<String>` — cited basenames naming ≥2 scripts, counted nowhere
+- lib: `structure(&Path) -> Vec<Proposed>` — candidates read off the code, graded by `Evidence`: `modules` ∪ shell dirs & families (V7), a dir both find ONCE
+- lib: `modules(&Path) -> Vec<Proposed>` — the Rust reading alone
+- lib: `scripts_of(&Path, &Proposed, &[PathBuf]) -> Vec<PathBuf>` — the scripts a candidate would own
+- lib: `rank_in(&Path, &[Proposed], &str) -> Vec<Ranked>` — `rank` w/ V7's weight: a module's name ∪ rows citing a script it owns, each row once
+- lib: `ambiguous_scripts(&str, &[PathBuf]) -> Vec<String>` — cited basenames naming ≥2 scripts, counted nowhere
 - lib: `row_weight(&str, &str) -> (usize, u64)` — rows & tokens a spec spends naming one module
 - lib: `rank(&[Proposed], &str) -> Vec<Ranked>` · `uniform_evidence(&[Proposed]) -> bool`
 - lib: `propose(&str) -> Proposal` — `Move` · `Decompose` · `Keep`, for one unmanaged row

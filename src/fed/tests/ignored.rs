@@ -96,3 +96,15 @@ fn an_ignored_rust_file_is_not_measured() -> Result<(), String> {
     assert_eq!(rust_files(root), all);
     Ok(())
 }
+
+/// V22 for scripts: an ignored `*.sh` is not a script `split` reads.
+#[test]
+fn an_ignored_script_is_not_read() -> Result<(), String> {
+    let r = tree("fed-sh", "scratch/\n", &["scratch/x.sh", "bin/y.sh"])?;
+    let root = r.path();
+    assert_eq!(script_files(root), vec![root.join("bin/y.sh")]);
+    r.write(".gitignore", "")?;
+    let all = vec![root.join("bin/y.sh"), root.join("scratch/x.sh")];
+    assert_eq!(script_files(root), all);
+    Ok(())
+}

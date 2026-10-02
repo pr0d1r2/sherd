@@ -35,7 +35,7 @@ pub(super) fn split_cmd(root: &Path, dir: &Path, apply: bool) -> ExitCode {
         return ExitCode::SUCCESS;
     }
     let spec = std::fs::read_to_string(dir.join("SPEC.md")).unwrap_or_default();
-    print_structure(&proposed, &spec);
+    print_structure(&proposed, &spec, dir);
     ExitCode::SUCCESS
 }
 
@@ -222,44 +222,19 @@ pub(super) fn node_types(node: &Path, nodes: &[PathBuf]) -> Vec<code::PubType> {
 /// `rows` is EVIDENCE ABOUT a node rather than the reason for it -- a `0`
 /// there means the spec never mentions a module the author already split
 /// out, which is a gap in the spec and not a reason to skip the node.
-pub(super) fn print_structure(proposed: &[split::Proposed], spec: &str) {
-    // Heaviest FIRST. The evidence grade discriminates in ONE of six
-    // repositories measured -- `itok` -- and in the other five every module
-    // carries the same grade, which leaves the row weight as the only signal
-    // present. Alphabetical order threw it away: `metope` spans 0 to 58 rows
-    // and put its 58-row node first by luck of the letter b (`plan:B16`).
-    let mut ranked: Vec<(&split::Proposed, (usize, u64))> = proposed
-        .iter()
-        .map(|p| (p, split::row_weight(spec, &p.name)))
-        .collect();
-    ranked.sort_by(|a, b| {
-        b.1.0
-            .cmp(&a.1.0)
-            .then_with(|| a.0.evidence.cmp(&b.0.evidence))
-            .then_with(|| a.0.name.cmp(&b.0.name))
-    });
+pub(super) fn print_structure(
+    proposed: &[split::Proposed],
+    spec: &str,
+    dir: &Path,
+) {
+    let scripts = fed::script_files(dir);
+    // Heaviest FIRST, through `rank` -- the order `plan` reads too, so the
+    // two cannot disagree. The evidence grade discriminates in ONE of six
+    // repositories measured, and alphabetical order threw the only other
+    // signal away (`src/split:B5`).
     println!("\n  node           evidence    rows   tok  members");
-    for (p, (rows, tokens)) in ranked {
-        let members = if p.members.len() > 1 {
-            format!("{} ({})", p.members.len(), p.members.join(" "))
-        } else {
-            String::new()
-        };
-        let note = if p.split_layout {
-            " MERGE the .rs into mod.rs first"
-        } else {
-            ""
-        };
-        println!(
-            "  {:<14} {:<10} {:>4}  {:>4}  {members}{note}",
-            p.name,
-            p.evidence.label(),
-            rows,
-            tokens,
-        );
-        if !p.shared.is_empty() {
-            println!("  {:<14} shares: {}", "", p.shared.join(", "));
-        }
+    for r in split::rank_in(dir, proposed, spec) {
+        print_candidate(&r, &split::scripts_of(dir, r.node, &scripts), dir);
     }
     let named: usize = proposed.iter().map(|p| p.members.len()).sum();
     let tally = |e: split::Evidence| {
@@ -282,6 +257,15 @@ pub(super) fn print_structure(proposed: &[split::Proposed], spec: &str) {
     );
     // A grade every module shares ranks nothing. Say so, or a reader takes
     // the order for a verdict (`plan:B16`).
+    let ambiguous = split::ambiguous_scripts(spec, &scripts);
+    if !ambiguous.is_empty() {
+        println!(
+            "  {} cited script name(s) match more than one file and count for \
+             no node: {}",
+            ambiguous.len(),
+            ambiguous.join(" ")
+        );
+    }
     if split::uniform_evidence(proposed) {
         println!(
             "  Every module carries the SAME grade, so it ranks nothing here \
@@ -304,3 +288,72 @@ pub(super) fn split_budget(root: &Path, dir: &Path) -> (u64, u64) {
 #[cfg(test)]
 #[path = "tests/propose.rs"]
 mod tests;
+
+/// One ranked candidate, and -- for one that owns scripts -- how many, and
+/// the script dirs beneath it, so a reader sees where the next cut falls
+/// (`src/split:V7`).
+pub(super) fn print_candidate(
+    r: &split::Ranked<'_>,
+    scripts: &[std::path::PathBuf],
+    dir: &Path,
+) {
+    let p = r.node;
+    let members = if p.members.len() > 1 {
+        format!("{} ({})", p.members.len(), p.members.join(" "))
+    } else {
+        String::new()
+    };
+    let note = if p.split_layout {
+        " MERGE the .rs into mod.rs first"
+    } else {
+        ""
+    };
+    println!(
+        "  {:<14} {:<10} {:>4}  {:>4}  {members}{note}",
+        p.name,
+        p.evidence.label(),
+        r.rows,
+        r.tokens,
+    );
+    if !p.shared.is_empty() {
+        println!("  {:<14} shares: {}", "", p.shared.join(", "));
+    }
+    if !scripts.is_empty() {
+        println!(
+            "  {:<14} {} script(s){}",
+            "",
+            scripts.len(),
+            script_dirs(scripts, &dir.join(&p.name))
+        );
+    }
+}
+
+/// The dirs under `node` holding its scripts, busiest first, at most five:
+/// `` · in trips 171, build 39``. Empty when every script sits in `node`.
+pub(super) fn script_dirs(
+    scripts: &[std::path::PathBuf],
+    node: &Path,
+) -> String {
+    let mut counts: std::collections::BTreeMap<String, usize> =
+        std::collections::BTreeMap::new();
+    for s in scripts {
+        let rel = s.strip_prefix(node).unwrap_or(s);
+        if let Some(parent) = rel.parent().filter(|p| !p.as_os_str().is_empty())
+        {
+            let n = counts.entry(parent.display().to_string()).or_insert(0);
+            *n = n.saturating_add(1);
+        }
+    }
+    let mut busiest: Vec<(String, usize)> = counts.into_iter().collect();
+    busiest.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+    let shown: Vec<String> = busiest
+        .iter()
+        .take(5)
+        .map(|(d, n)| format!("{d} {n}"))
+        .collect();
+    if shown.is_empty() {
+        String::new()
+    } else {
+        format!(" · in {}", shown.join(", "))
+    }
+}
