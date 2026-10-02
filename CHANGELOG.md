@@ -66,6 +66,22 @@ publish run surfaced two warnings that eleven gate steps had read past
   do not change with the format, and an unknown format is a usage error
   (exit 2). Library: `lens::own_cost`.
 
+- **`sherd split` proposes a federation for a shell codebase**
+  (`src/split:V7`, `src/split:B6`, #81). A direct child directory holding
+  a tracked `*.sh` at any depth is a `directory` candidate, and three or
+  more flat scripts sharing the name before their first `-` are a
+  `family`. A candidate is weighed by the spec rows citing a script it
+  would own, by path or by a basename that names exactly one script; a
+  basename naming several is counted for none and listed. A bare directory
+  word is not a citation. Each candidate shows its script count and the
+  busiest script dirs beneath it, so a deep tree can be split one level per
+  run. A directory both the Rust and the shell reading find is proposed
+  once. A tree with neither keeps `no module declarations found -- nothing
+  to propose`. Library: `split::modules` (the Rust reading alone),
+  `split::scripts_of`, `split::rank_in`, `split::ambiguous_scripts`,
+  `fed::script_files`; `split::structure` now returns both readings, and
+  `split::rank` is unchanged.
+
 - **`sherd check` enforces V44 for any node that keeps a `SPEC.why.md`.**
   Every `§V` id in `SPEC.md` must have a row in `SPEC.why.md` (a row of `-`
   counts), and no why row may name a rule that is gone. Each gap is a
