@@ -53,6 +53,15 @@ publish run surfaced two warnings that eleven gate steps had read past
 
 ### Added
 
+- **`sherd adopt` places a row by the script it cites** (`src/adopt:V10`,
+  #94). A row citing one or more scripts goes to the deepest declared node
+  containing them, with the script paths as its reason, before any lens
+  word is read. Scripts are resolved the way `split` resolves them: by
+  path, or by a basename naming exactly one script. A row whose scripts
+  sit in two nodes, or at the root, stays at root and is named, as a tie
+  does. A row citing no resolvable script is placed by the lens as before.
+  Library: `split::cited_scripts`.
+
 - **`sherd budget`, `check` and `validate` take `--format text|json`**
   (`src/cli:V19`). `text` is the default and its output is byte-identical
   to before. `json` is one object per run with fixed keys, the same contract
