@@ -95,15 +95,13 @@ pub fn chain(root: &Path, dir: &Path) -> Vec<PathBuf> {
     let mut nodes = Vec::new();
     let rel = dir.strip_prefix(root).unwrap_or(dir);
     let mut cur = root.to_path_buf();
-    let root_spec = cur.join("SPEC.md");
-    if root_spec.is_file() {
-        nodes.push(root_spec);
+    if is_node(&cur) {
+        nodes.push(cur.join("SPEC.md"));
     }
     for part in rel.components() {
         cur = cur.join(part);
-        let spec = cur.join("SPEC.md");
-        if spec.is_file() {
-            nodes.push(spec);
+        if is_node(&cur) {
+            nodes.push(cur.join("SPEC.md"));
         }
     }
     nodes
@@ -152,9 +150,21 @@ fn git_ignored(dir: &Path) -> HashSet<PathBuf> {
         .collect()
 }
 
+/// `dir` carries a file named EXACTLY `SPEC.md` (V23).
+///
+/// `dir.join("SPEC.md").is_file()` is not that question on a
+/// case-insensitive filesystem: APFS answers it for `spec.md` too, so the
+/// same tree had a different federation on macOS than on Linux (`.:B16`).
+/// The entry's NAME is what the filesystem stores, whatever it matches.
+#[must_use]
+pub fn is_node(dir: &Path) -> bool {
+    dir.join("SPEC.md").is_file()
+        && std::fs::read_dir(dir)
+            .is_ok_and(|rd| rd.flatten().any(|e| e.file_name() == "SPEC.md"))
+}
+
 fn walk(dir: &Path, ignored: &HashSet<PathBuf>, out: &mut Vec<PathBuf>) {
-    let spec = dir.join("SPEC.md");
-    if spec.is_file() && !ignored.contains(&spec) {
+    if is_node(dir) && !ignored.contains(&dir.join("SPEC.md")) {
         out.push(dir.to_path_buf());
     }
     let Ok(entries) = std::fs::read_dir(dir) else {
@@ -718,3 +728,7 @@ mod declared_tests;
 #[cfg(test)]
 #[path = "tests/ignored.rs"]
 mod ignored_tests;
+
+#[cfg(test)]
+#[path = "tests/case.rs"]
+mod case_tests;

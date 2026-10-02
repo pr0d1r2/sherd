@@ -39,8 +39,7 @@ pub fn pack(root: &Path, dir: &Path, depth: Depth) -> std::io::Result<Pack> {
     // `V5`: a node that is not there is an error. `fed::chain` walks the
     // ANCESTORS that exist, so without this a missing node packed as its
     // parent under its own name (`B2`).
-    let own = dir.join("SPEC.md");
-    if !own.is_file() {
+    if !fed::is_node(dir) {
         return Err(std::io::Error::new(
             std::io::ErrorKind::NotFound,
             format!("{}: no SPEC.md -- not a node", dir.display()),
