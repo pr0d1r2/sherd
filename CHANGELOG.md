@@ -98,6 +98,16 @@ publish run surfaced two warnings that eleven gate steps had read past
   `coverage`, `recorded_floor` and `record_coverage` are unchanged and
   measure `--all-features`. `record_coverage`'s messages now name the row.
 
+### Changed
+
+- **`rule` depth carries only remaining work in `§T`** (`src/spec:V11`). A
+  task row marked `x`, and an `ARCHIVED to SPEC-ARCHIVE.md` stub, no longer
+  ship in a lens pack or count toward `budget`; open (`.`) and started (`~`)
+  rows do. The file is unchanged and `check` still resolves citations to
+  finished rows. On this repository: 227,822 -> 226,794 tokens across all
+  chains. On a 12-node consumer that keeps archive stubs: 35,680 -> 31,249
+  (-12.4%).
+
 ### Fixed
 
 - **A lowercase `spec.md` is no longer a node on macOS** (`src/fed:V23`,
