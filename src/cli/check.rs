@@ -1,126 +1,29 @@
-//! `check`, `validate` and `review` -- the verbs that JUDGE a tree and exit 1 on a finding.
+//! `check` and `review` -- the verbs that JUDGE a tree and exit 1 on a finding.
+//!
+//! Each check family COLLECTS [`Finding`]s; the text form prints their lines
+//! and the json form (`plumb`) serialises the same values, so the two forms
+//! cannot disagree about what was found (V19).
 
 use super::*;
 
-pub(super) fn validate(root: &Path) -> ExitCode {
-    let nodes = fed::discover(root);
-    let structural = validate_specs(&nodes);
-    let edges = validate_edges(root);
-    let over = validate_ceilings(root, &nodes);
-    let drift = validate_drift(root);
-    println!(
-        "\n  {} nodes · {structural} structural · {edges} edge · \
-         {over} over ceiling · {drift} drifted",
-        nodes.len()
-    );
-    if structural + edges + over + drift == 0 {
+pub(super) fn verdict(bad: usize) -> ExitCode {
+    if bad == 0 {
         ExitCode::SUCCESS
     } else {
         ExitCode::from(1)
     }
 }
 
-/// The structural check, on every node's spec.
-pub(super) fn validate_specs(nodes: &[PathBuf]) -> usize {
-    let mut bad: usize = 0;
-    for node in nodes {
-        let path = node.join("SPEC.md");
-        let text = match std::fs::read_to_string(&path) {
-            Ok(t) => t,
-            Err(e) => {
-                unread(&path, &e);
-                bad = bad.saturating_add(1);
-                continue;
-            }
-        };
-        for v in spec::check(&text) {
-            println!("{}:{}: {v}", path.display(), v.line);
-            bad = bad.saturating_add(1);
-        }
-    }
-    bad
-}
-
-/// Distilled slices against their sources. An unreadable tree counts as one
-/// failure rather than zero: "could not look" and "nothing wrong" are the
-/// same output otherwise, which is the vacuous pass `.:V48` forbids.
-pub(super) fn validate_drift(root: &Path) -> usize {
-    // A repository with NO slice registry has nothing to drift from, and
-    // absence is legal: `sherd init` then `sherd validate` has to be able to
-    // pass, or the two verbs contradict each other. Distinguished from a
-    // registry that cannot be READ, which stays a failure.
-    if !root.join(".sherd-slices").exists() {
-        println!("slice: no registry (none required)");
-        return 0;
-    }
-    match slice::drifted(root) {
-        Ok(drifted) => report_drift(&drifted),
-        Err(e) => {
-            println!("slice: {e}");
-            1
-        }
-    }
-}
-
-pub(super) fn report_drift(drifted: &[PathBuf]) -> usize {
-    for p in drifted {
-        println!("{}: slice drifted from its source", p.display());
-    }
-    drifted.len()
-}
-
-/// Depth and ownership rules over the `§F` edges of every node.
-pub(super) fn validate_edges(root: &Path) -> usize {
-    let mut bad: usize = 0;
-    for node in fed::discover(root) {
-        let Ok(text) = std::fs::read_to_string(node.join("SPEC.md")) else {
-            continue;
-        };
-        let edges = fed::edges(&text);
-        for e in fed::depth_violations(&edges) {
-            println!("{}: edge to `{}` skips a level", node.display(), e.dir);
-            bad = bad.saturating_add(1);
-        }
-    }
-    bad
-}
-
-/// Every chain against the ceiling it inherits.
-pub(super) fn validate_ceilings(root: &Path, nodes: &[PathBuf]) -> usize {
-    let over = nodes.iter().filter(|node| over_ceiling(root, node)).count();
-    // A COLD START is not a breach: with no `.context-limits` the default is
-    // a suggestion nobody wrote, and one verdict that fails on it is a claim
-    // about a rule that does not exist (`B8`). Still REPORTED -- `.:V48` --
-    // just not counted against the verdict.
-    if over > 0 && tokens::Ceilings::load(root).is_ok_and(|c| c.is_cold()) {
-        println!(
-            "  ({over} over the {} tok default; set .context-limits to gate it)",
-            tokens::DEFAULT_NODE
-        );
-        return 0;
-    }
-    over
-}
-
-/// One chain against the ceiling it inherits. A node whose pack or ceiling
-/// cannot be read is not over -- it is unmeasured, and `budget` is the verb
-/// that reports that.
-pub(super) fn over_ceiling(root: &Path, node: &Path) -> bool {
-    let (Ok(pack), Ok(ceiling)) = (
-        lens::pack(root, node, lens::Depth::Rule),
-        lens::ceiling_for(root, node),
-    ) else {
-        return false;
-    };
-    if pack.cost.tokens > ceiling {
-        println!(
-            "{}: chain {} tok over its ceiling of {ceiling}",
-            node.display(),
-            pack.cost.tokens
-        );
-        return true;
-    }
-    false
+pub(super) fn microlith_findings(path: &Path, text: &str) -> Vec<Finding> {
+    // `v` prints itself already namespaced -- the caller's coordinates are
+    // all sherd owns here.
+    spec::check(text)
+        .into_iter()
+        .map(|v| {
+            Finding::new(path, &format!("microlith/{}", v.rule), v.msg)
+                .at(v.line)
+        })
+        .collect()
 }
 
 /// Citations that point at no node or no row (`src/spec:V7`).
@@ -128,7 +31,7 @@ pub(super) fn over_ceiling(root: &Path, node: &Path) -> bool {
 /// A citation is a LINK, and a link nothing resolves is a comment. `.:V41` was
 /// cited from four files since the first commit and never written at root,
 /// which is what `src/spec:B2` found once anything looked.
-pub(super) fn dangling_citations(root: &Path, text: &str) -> Vec<String> {
+fn dangling(root: &Path, text: &str) -> Vec<(usize, String)> {
     let mut out = Vec::new();
     for c in spec::citations(text) {
         let target = if c.owner == "." {
@@ -137,17 +40,20 @@ pub(super) fn dangling_citations(root: &Path, text: &str) -> Vec<String> {
             root.join(&c.owner).join("SPEC.md")
         };
         let Ok(owner_spec) = std::fs::read_to_string(&target) else {
-            out.push(format!(
-                "{}: sherd/spec:V7: `{}:{}` names no node -- \
-                 a citation is a path from the root, `.` for root itself",
-                c.line, c.owner, c.id
+            out.push((
+                c.line,
+                format!(
+                    "`{}:{}` names no node -- \
+                     a citation is a path from the root, `.` for root itself",
+                    c.owner, c.id
+                ),
             ));
             continue;
         };
         if !spec::declares(&owner_spec, &c.id) {
-            out.push(format!(
-                "{}: sherd/spec:V7: `{}:{}` resolves to no row",
-                c.line, c.owner, c.id
+            out.push((
+                c.line,
+                format!("`{}:{}` resolves to no row", c.owner, c.id),
             ));
         }
     }
@@ -170,7 +76,7 @@ pub(super) fn dangling_citations(root: &Path, text: &str) -> Vec<String> {
 /// is what `.:B29` records. `code::split_regions` owns that reading -- the
 /// cut point `src/tdd` and `src/review` edit against is a different question
 /// and keeps its own function.
-pub(super) fn file_ceilings(root: &Path) -> Vec<String> {
+pub(super) fn file_findings(root: &Path) -> Vec<Finding> {
     let mut out = Vec::new();
     for f in fed::rust_files(root) {
         let Ok(src) = std::fs::read_to_string(&f) else {
@@ -178,17 +84,23 @@ pub(super) fn file_ceilings(root: &Path) -> Vec<String> {
         };
         let rel_path = f.strip_prefix(root).unwrap_or(&f);
         let (impl_r, tests_r) = halves(rel_path, src);
-        let rel = rel_path.display().to_string();
         for (half, text, ceiling) in [
             ("code", impl_r, crate::debt::CEILING_FILE),
             ("tests", tests_r, crate::debt::CEILING_TEST),
         ] {
             let n = tokens::count(&text).tokens;
             if n > ceiling {
-                out.push(format!(
-                    "{rel}: sherd/V50: {half} {n} tok over {ceiling} -- \
-                     the node carries more than one worker can hold (judgment)"
-                ));
+                out.push(
+                    Finding::new(
+                        rel_path,
+                        "sherd/V50",
+                        format!(
+                            "{half} {n} tok over {ceiling} -- the node \
+                             carries more than one worker can hold (judgment)"
+                        ),
+                    )
+                    .advisory(),
+                );
             }
         }
     }
@@ -207,150 +119,187 @@ fn halves(rel: &Path, src: String) -> (String, String) {
     }
 }
 
-/// Structural checks over ONE node's spec. Returns how many were FATAL.
+/// Structural checks over ONE node's spec, fatal and advisory, in the order
+/// the text form prints them.
 ///
 /// Split from [`check`], which had grown to five independent check families
 /// in one loop. Each is one question about one file, and the advisory ones
 /// say so in their own text rather than by where they sit.
-pub(super) fn check_node(
+pub(super) fn node_findings(
     root: &Path,
     node: &Path,
     path: &Path,
     text: &str,
-) -> usize {
-    let mut bad = 0usize;
-    for v in spec::check(text) {
-        // `v` prints itself already namespaced -- these are the caller's
-        // coordinates prefixed to it, which is all sherd owns here.
-        println!("{}:{}: {v}", path.display(), v.line);
-        bad = bad.saturating_add(1);
-    }
+) -> Vec<Finding> {
+    let mut out = microlith_findings(path, text);
     // A bug with no invariant will recur (spec V4). Advisory -- some bugs
     // genuinely warrant no new rule, and forcing one would manufacture
     // invariants to silence a gate.
     for (id, cause) in spec::unreflected_bugs(text) {
-        println!(
-            "{}: sherd/spec:V4: {id} names no invariant -- `{cause}` \
-             will recur (advisory)",
-            path.display()
+        out.push(
+            Finding::new(
+                path,
+                "sherd/spec:V4",
+                format!(
+                    "{id} names no invariant -- `{cause}` will recur (advisory)"
+                ),
+            )
+            .advisory(),
         );
     }
     // A citation is a LINK: it names a node path and a row that exists
     // there (`src/spec:V7`). Nothing resolved them until `src/spec:B2`.
-    for d in dangling_citations(root, text) {
-        println!("{}:{d}", path.display());
-        bad = bad.saturating_add(1);
+    for (line, msg) in dangling(root, text) {
+        out.push(Finding::new(path, "sherd/spec:V7", msg).at(line));
     }
     // A finished `§T` row is history and every chain pays for it on every
     // turn (`sherd/fed:V9`). Advisory -- some carry a MEASURED result that
     // belongs in `§R` before the row goes.
     for (id, task) in spec::completed_tasks(text) {
-        println!(
-            "{}: sherd/fed:V9: {id} is done -- `{task}` is history, and §T \
-             states remaining work (advisory)",
-            path.display()
+        out.push(
+            Finding::new(
+                path,
+                "sherd/fed:V9",
+                format!(
+                    "{id} is done -- `{task}` is history, and §T states \
+                     remaining work (advisory)"
+                ),
+            )
+            .advisory(),
         );
     }
-    bad.saturating_add(check_federation(node, path, text))
-        .saturating_add(check_why(node, text))
+    out.extend(federation_findings(node, path, text));
+    out.extend(why_findings(node, text));
+    out
 }
 
 /// `.:V44`: where a node keeps a `SPEC.why.md`, every `§V` id has a row in
 /// it -- `-` counts -- and no row names a rule that is gone. Absent file,
 /// nothing to check (`src/cli:V12`).
-fn check_why(node: &Path, text: &str) -> usize {
+fn why_findings(node: &Path, text: &str) -> Vec<Finding> {
     let path = node.join("SPEC.why.md");
     let Ok(why) = std::fs::read_to_string(&path) else {
-        return 0;
+        return Vec::new();
     };
     let (missing, orphan) = spec::why_gaps(text, &why);
-    for id in &missing {
-        println!(
-            "{}: sherd/V44: {id} has no row -- rationale is kept by \
-             reference, and `-` is an answer",
-            path.display()
-        );
-    }
-    for id in &orphan {
-        println!(
-            "{}: sherd/V44: {id} answers no rule in SPEC.md",
-            path.display()
-        );
-    }
-    missing.len().saturating_add(orphan.len())
+    let missing = missing.iter().map(|id| {
+        Finding::new(
+            &path,
+            "sherd/V44",
+            format!(
+                "{id} has no row -- rationale is kept by reference, and `-` \
+                 is an answer"
+            ),
+        )
+    });
+    let orphan = orphan.iter().map(|id| {
+        Finding::new(
+            &path,
+            "sherd/V44",
+            format!("{id} answers no rule in SPEC.md"),
+        )
+    });
+    missing.chain(orphan).collect()
 }
 
 /// `§F` structure: duplicate rows (fed V12) and child dirs with no row (fed
 /// V11). A missing row is often a dir that is simply not a node yet, so it
 /// reports rather than fails.
-pub(super) fn check_federation(node: &Path, path: &Path, text: &str) -> usize {
+fn federation_findings(node: &Path, path: &Path, text: &str) -> Vec<Finding> {
     let edges = fed::edges(text);
     let (dupes, missing) = fed::find_exhaustive_violations(&edges, node);
-    let mut bad = 0usize;
-    for e in dupes {
-        println!(
-            "{}: sherd/fed:V12: `{}` named twice in §F -- descent is ambiguous",
-            path.display(),
-            e.dir
-        );
-        bad = bad.saturating_add(1);
-    }
-    for m in missing {
+    let dupes = dupes.into_iter().map(|e| {
+        Finding::new(
+            path,
+            "sherd/fed:V12",
+            format!("`{}` named twice in §F -- descent is ambiguous", e.dir),
+        )
+    });
+    let missing = missing.into_iter().map(|m| {
         let name = m.file_name().unwrap_or_default().to_string_lossy();
-        println!(
-            "{}: sherd/fed:V11: `{name}/` exists on disk with no §F row -- \
-             unreachable by descent (advisory)",
-            path.display()
-        );
-    }
-    bad
+        Finding::new(
+            path,
+            "sherd/fed:V11",
+            format!(
+                "`{name}/` exists on disk with no §F row -- unreachable by \
+                 descent (advisory)"
+            ),
+        )
+        .advisory()
+    });
+    dupes.chain(missing).collect()
 }
 
 /// A discovered node whose `SPEC.md` could not be read. A FAIL, never a
 /// skip (`.:V48`): skipping it reported a clean tree that was never read
 /// (`.:B31`).
-pub(super) fn unread(path: &Path, e: &std::io::Error) {
-    println!(
-        "{}: sherd/V48: cannot read -- {e}. a node discovered & not read \
-         is a failure, not a node with nothing wrong",
-        path.display()
-    );
+pub(super) fn unread(path: &Path, e: &std::io::Error) -> Finding {
+    Finding::new(
+        path,
+        "sherd/V48",
+        format!(
+            "cannot read -- {e}. a node discovered & not read is a failure, \
+             not a node with nothing wrong"
+        ),
+    )
 }
 
-pub(super) fn check(root: &Path) -> ExitCode {
+/// What `check` collected: per-node findings, then the `.:V50` file
+/// ceilings, which are reported once for the whole tree.
+pub(super) struct CheckReport {
+    pub nodes: usize,
+    pub findings: Vec<Finding>,
+    pub files: Vec<Finding>,
+    pub rs_files: usize,
+}
+
+pub(super) fn check_report(root: &Path) -> CheckReport {
     let nodes = fed::discover(root);
-    let mut bad: usize = 0;
+    let mut findings = Vec::new();
     for node in &nodes {
         let path = node.join("SPEC.md");
-        let text = match std::fs::read_to_string(&path) {
-            Ok(t) => t,
-            Err(e) => {
-                unread(&path, &e);
-                bad = bad.saturating_add(1);
-                continue;
+        match std::fs::read_to_string(&path) {
+            Ok(text) => {
+                findings.extend(node_findings(root, node, &path, &text))
             }
-        };
-        bad = bad.saturating_add(check_node(root, node, &path, &text));
+            Err(e) => findings.push(unread(&path, &e)),
+        }
     }
     // `.:V50`, built at last. Reported once for the whole tree rather
     // than per node: the ceiling is per FILE (`.:V119`), and a file belongs
     // to exactly one node, so walking nodes would visit each twice.
-    let over = file_ceilings(root);
-    for v in &over {
-        println!("{v}");
+    CheckReport {
+        nodes: nodes.len(),
+        findings,
+        files: file_findings(root),
+        rs_files: fed::rust_files(root).len(),
     }
+}
+
+/// The text form, as dispatch called it before `--format` -- kept for the
+/// tests that drive it, and compiled as one (see `repo_root`).
+#[cfg(test)]
+pub(super) fn check(root: &Path) -> ExitCode {
+    check_as(root, false)
+}
+
+pub(super) fn check_as(root: &Path, json: bool) -> ExitCode {
+    let c = check_report(root);
+    let bad = fatal(&c.findings);
+    if json {
+        println!("{}", check_json(root, &c));
+        return verdict(bad);
+    }
+    print_findings(&c.findings);
+    print_findings(&c.files);
     // `.:V48`: state what was EXAMINED, not only what failed.
     println!(
         "\n  {} .rs files measured against V50 · {} over ceiling (advisory)",
-        fed::rust_files(root).len(),
-        over.len()
+        c.rs_files,
+        c.files.len()
     );
-    println!("\n  {} nodes examined · {bad} violations", nodes.len());
-    if bad > 0 {
-        ExitCode::from(1)
-    } else {
-        ExitCode::SUCCESS
-    }
+    println!("\n  {} nodes examined · {bad} violations", c.nodes);
+    verdict(bad)
 }
 
 pub(super) fn review_cmd(root: &Path, rev: &str) -> ExitCode {
@@ -380,6 +329,22 @@ pub(super) fn review_cmd(root: &Path, rev: &str) -> ExitCode {
             ExitCode::from(2)
         }
     }
+}
+
+/// [`dangling`] as the text form prints it after the path. Kept for the
+/// tests that read it, and compiled as one (see `repo_root`).
+#[cfg(test)]
+pub(super) fn dangling_citations(root: &Path, text: &str) -> Vec<String> {
+    dangling(root, text)
+        .into_iter()
+        .map(|(line, msg)| format!("{line}: sherd/spec:V7: {msg}"))
+        .collect()
+}
+
+/// [`file_findings`] as the text form prints them, for the same tests.
+#[cfg(test)]
+pub(super) fn file_ceilings(root: &Path) -> Vec<String> {
+    file_findings(root).iter().map(Finding::text).collect()
 }
 
 #[cfg(test)]

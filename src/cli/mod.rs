@@ -29,6 +29,12 @@ use measure::*;
 mod check;
 use check::*;
 
+mod validate;
+use validate::*;
+
+mod plumb;
+use plumb::*;
+
 /// The verb list, and the SOURCE the README's Commands section is generated
 /// from (`dev:T2`). Public so `sherd-dev` reads the text this binary actually
 /// prints rather than a second copy of it: two lists of one command set is
@@ -38,13 +44,13 @@ pub const USAGE: &str = "\
 sherd -- federated SPEC.md for small-context local models
 
   sherd init [dir] [--stdout]  scaffold a SPEC.md, §F rows from child dirs
-  sherd budget [dir]     token cost of every node, against the working budget
+  sherd budget [dir] [--format text|json]  token cost of every node, against the working budget
   sherd lens <dir> [--depth rule|why|all]  the context pack for one node
   sherd fed [dir]        the federation edges declared by a node
-  sherd check [dir]      microlith structural check of every node
+  sherd check [dir] [--format text|json]  microlith structural check of every node
   sherd debt [--check|--record]  lint ratchet: density & shape vs .lint-debt
   sherd coverage [--check|--record]  coverage floor vs .coverage
-  sherd validate         DAG + ids + ceilings + slice drift, one verdict
+  sherd validate [--format text|json]  DAG + ids + ceilings + slice drift, one verdict
   sherd split [dir]      propose a federation split. writes nothing
   sherd seam [dir]       the public types each node declares. writes nothing
   sherd wave [dir]       the rounds a parallel build would run. writes nothing
@@ -105,7 +111,10 @@ pub fn run_args(args: Vec<String>) -> ExitCode {
     #[cfg(feature = "ollama")]
     crate::ollama::load_pace();
     match args.first().map(String::as_str) {
-        Some("budget") => budget(&root, arg_dir(&args, &root)),
+        Some("budget") => match with_format(&args) {
+            Ok((json, a)) => budget_as(&root, &arg_dir(&a, &root), json),
+            Err(e) => usage(&e),
+        },
         Some("debt") => debt_cmd(
             &root,
             args.get(1).map(String::as_str),
@@ -138,8 +147,15 @@ pub fn run_args(args: Vec<String>) -> ExitCode {
             }
             ExitCode::SUCCESS
         }
-        Some("check") => check(&root),
-        Some("validate") => validate(&root),
+        Some("check") => match with_format(&args) {
+            Ok((json, _)) => check_as(&root, json),
+            Err(e) => usage(&e),
+        },
+        Some("validate") => match with_format(&args) {
+            Ok((true, _)) => validate_json_cmd(&root),
+            Ok((false, _)) => validate(&root),
+            Err(e) => usage(&e),
+        },
         Some("split") => {
             let apply = args.iter().any(|a| a == "--apply");
             let dir = args.get(1).filter(|a| !a.starts_with("--"));

@@ -393,13 +393,13 @@ line fails the gate (`src/cli:V7`, after `src/cli:B2`).
 | command | what it does |
 |---|---|
 | `sherd init [dir] [--stdout]` | scaffold a SPEC.md, §F rows from child dirs |
-| `sherd budget [dir]` | token cost of every node, against the working budget |
+| `sherd budget [dir] [--format text\|json]` | token cost of every node, against the working budget |
 | `sherd lens <dir> [--depth rule\|why\|all]` | the context pack for one node |
 | `sherd fed [dir]` | the federation edges declared by a node |
-| `sherd check [dir]` | microlith structural check of every node |
+| `sherd check [dir] [--format text\|json]` | microlith structural check of every node |
 | `sherd debt [--check\|--record]` | lint ratchet: density & shape vs .lint-debt |
 | `sherd coverage [--check\|--record]` | coverage floor vs .coverage |
-| `sherd validate` | DAG + ids + ceilings + slice drift, one verdict |
+| `sherd validate [--format text\|json]` | DAG + ids + ceilings + slice drift, one verdict |
 | `sherd split [dir]` | propose a federation split. writes nothing |
 | `sherd seam [dir]` | the public types each node declares. writes nothing |
 | `sherd wave [dir]` | the rounds a parallel build would run. writes nothing |
