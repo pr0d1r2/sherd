@@ -392,7 +392,11 @@ pub fn upsert_section(
             placed = true;
             continue;
         }
-        kept.push(format!("{heading}\n{}", sec_body.trim_end()));
+        // Heading and body trimmed AS ONE (V12): an empty body trims to
+        // nothing, and a heading keeping its own newline would put a second
+        // blank line under it once the join adds the separator.
+        let section = format!("{heading}\n{sec_body}");
+        kept.push(section.trim_end().to_string());
         if !exists && heading.starts_with(&anchor) {
             kept.push(body.trim_end().to_string());
             placed = true;

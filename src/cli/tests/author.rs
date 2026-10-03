@@ -151,6 +151,33 @@ fn a_node_sync_cannot_read_is_usage_not_stale() -> Result<(), String> {
     Ok(())
 }
 
+/// `src/spec:V12` through the verb (#106): a node whose `§V`, `§T` and `§B`
+/// are empty comes out of `sync` with one blank line under each heading,
+/// and `--check` then reads it as clean. Two blank lines is what
+/// markdownlint MD012 refuses.
+#[test]
+fn sync_leaves_one_blank_line_under_an_empty_section() -> Result<(), String> {
+    let r = crate::testrepo::TestRepo::new("cli-sync-empty")?;
+    r.write(
+        "SPEC.md",
+        "# SPEC\n\n## \u{a7}G GOAL\n\ng\n\n## \u{a7}F FEDERATION\n\n\
+         dir|owns|\u{22a5}owns|tokens\na|the a bit|-|-\n",
+    )?;
+    r.write(
+        "a/SPEC.md",
+        "# SPEC\n\n## \u{a7}G GOAL\n\na\n\n## \u{a7}V INVARIANTS\n\n\
+         ## \u{a7}T TASKS\n\n## \u{a7}B BUGS\n",
+    )?;
+    let node = r.path().join("a");
+    assert_eq!(sync_cmd(r.path(), Some(&node), false), ExitCode::from(1));
+    let out = std::fs::read_to_string(node.join("SPEC.md"))
+        .map_err(|e| e.to_string())?;
+    assert!(!out.contains("\n\n\n"), "a run of two blank lines:\n{out}");
+    assert!(out.ends_with("## \u{a7}B BUGS\n"), "{out}");
+    assert_eq!(sync_cmd(r.path(), Some(&node), true), ExitCode::SUCCESS);
+    Ok(())
+}
+
 /// A tree with one slice: `out.txt` is the lead paragraph of `doc.md`.
 fn slice_fixture(tag: &str) -> Result<crate::testrepo::TestRepo, String> {
     let r = crate::testrepo::TestRepo::new(tag)?;

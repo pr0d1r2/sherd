@@ -75,6 +75,11 @@ publish run surfaced two warnings that eleven gate steps had read past
   shared by every worktree of a repository, so a read-only verb in one
   worktree changed state another one reads. `plan` now only reads the
   store, for believability and the kept/tried record.
+- **`sherd sync` leaves one blank line under an empty section**
+  (`src/spec:B5`, #106). A node spec with an empty `§V`, `§T` or `§B` got
+  two blank lines under the heading, which markdownlint's MD012 refuses,
+  and collapsing them by hand made `sync --check` report the node stale.
+  `sync` now writes one, and reads the one-line form back unchanged.
 
 ## [0.5.3] - 2026-10-03
 
