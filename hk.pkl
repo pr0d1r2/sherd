@@ -54,6 +54,17 @@ local fast = new Mapping<String, Step> {
     depends = List("fmt")
     check = "cargo clippy --workspace --all-targets --all-features -- -D warnings -A clippy::too_many_lines -A clippy::cognitive_complexity -A clippy::excessive_nesting -A clippy::fn_params_excessive_bools -A clippy::struct_excessive_bools -A clippy::unwrap_used -A clippy::expect_used -A clippy::panic -A clippy::indexing_slicing -A clippy::arithmetic_side_effects -A clippy::todo -A clippy::unimplemented -A clippy::dbg_macro -A clippy::too_many_arguments -A clippy::type_complexity"
   }
+  // THE BINARY THE DOGFOOD STEPS RUN, proven built from THIS tree (`.:V125`).
+  // After a release, `target/debug/sherd.d` named `cargo package`'s unpacked
+  // copy, so cargo called the binary fresh forever and every step below that
+  // `cargo run`s it judged old code (`.:B34`, recorded three times). Every
+  // step running `sherd` or `sherd-dev` depends on this one; `check`,
+  // `budget` and `coverage` reach it through `slice`. `**/*` so it runs on
+  // any commit: it reads two small files and builds nothing.
+  ["fresh-binary"] {
+    glob = List("**/*")
+    check = "bash scripts/fresh-binary.sh"
+  }
   // THE RATCHET. The count may fall, never rise. `.lint-debt` carries the
   // number and the reasoning; `clippy.toml` carries the thresholds.
   // THE RATCHET. Neither ratio may rise. `.lint-debt` carries them with the
@@ -66,7 +77,7 @@ local fast = new Mapping<String, Step> {
   // cannot disagree with itself.
   ["lint-debt"] {
     glob = List("**/*.rs", "clippy.toml", ".lint-debt")
-    depends = List("clippy")
+    depends = List("clippy", "fresh-binary")
     check = "cargo run -q --bin sherd -- debt --check"
     // `fix` may only LOWER, and `sherd debt --record` refuses a raise for
     // the same reason: `pre-commit` runs the fast set in fix mode, so a fix
@@ -90,7 +101,7 @@ local fast = new Mapping<String, Step> {
   // the binary, so the path form gates a stale build (`src/tdd:B3`).
   ["slice"] {
     glob = List("**/*.rs", "**/SPEC.md", ".sherd-slices")
-    depends = List("test")
+    depends = List("test", "fresh-binary")
     check = "cargo run -q --bin sherd -- slice --check || { echo 'hk: a distilled slice has drifted from its source. Run `sherd slice` to regenerate, then `git add` the result. Never hand-edit a generated slice -- that IS the drift.' >&2; exit 1; }"
     fix = "cargo run -q --bin sherd -- slice"
   }
@@ -99,7 +110,7 @@ local fast = new Mapping<String, Step> {
   // mode reports; the fix half rewrites.
   ["nav"] {
     glob = List("**/SPEC.md")
-    depends = List("test")
+    depends = List("test", "fresh-binary")
     check = "cargo run -q --bin sherd -- sync --check || { echo 'hk: a §N table no longer matches the §F above it. Run `sherd sync` to regenerate, then `git add` the result -- §N is generated and never hand-edited (.:V36).' >&2; exit 1; }"
     fix = "cargo run -q --bin sherd -- sync"
   }
@@ -328,7 +339,7 @@ local fast = new Mapping<String, Step> {
   // existing; `dev/SPEC.md:V4` is one of them, kept as a test.
   ["readme-generated"] {
     glob = List("README.md", "dev/src/**", "Cargo.toml", "hk.pkl", ".coverage", ".lint-debt", "flake.lock", ".github/workflows/ci.yml", "**/SPEC.md")
-    depends = List("test")
+    depends = List("test", "fresh-binary")
     check = "cargo run -q -p sherd-dev -- --check {{files}}"
     fix = "cargo run -q -p sherd-dev -- readme {{files}}"
   }
