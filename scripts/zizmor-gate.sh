@@ -50,7 +50,10 @@ if [ "$rc" -eq 0 ]; then
 elif [ "$rc" -ge 10 ]; then
   echo 'hk: zizmor found a workflow security finding. Fix it, or -- if it is understood and deliberately accepted -- record it in .github/zizmor.yml with the reason AND the condition that would retire it. An ignore with no exit is a rule nobody revisits.' >&2
 else
-  reason=$(grep -iE 'fatal|error|fail' "$err" | tail -n 1)
+  # The cause is the last message before zizmor's backtrace, minus the
+  # "N: " numbering of its cause chain; the frames below it name code, not
+  # what failed.
+  reason=$(sed '/^Stack backtrace:/,$d' "$err" | sed -E 's/^[[:space:]]*[0-9]+:[[:space:]]*//' | grep -v '^[[:space:]]*$' | tail -n 1)
   echo "hk: zizmor could not run: ${reason:-exit $rc, no message}. This is a TOOL failure, not a finding -- no audit was performed." >&2
 fi
 exit 1
