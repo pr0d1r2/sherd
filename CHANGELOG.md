@@ -51,6 +51,21 @@ publish run surfaced two warnings that eleven gate steps had read past
 
 ## [Unreleased]
 
+### Added
+
+- **`sherd wave` schedules shell nodes by the scripts they call**
+  (`src/wave:V5`, #82). A script a node owns that invokes a script under a
+  sibling node (`source`, `.`, `bash`, `sh`, `exec`, `sh <x.sh`, or the path
+  at command position) is a blocking edge, so the caller is built in a later
+  round than the node it calls. Paths are resolved from what the file
+  itself states: a literal, `$(dirname "$0")` or `BASH_SOURCE`,
+  `$(cd X && pwd)`, `$(git rev-parse --show-toplevel)`, a variable the file
+  assigned one of those, or the default of `${VAR:-default}`. A call that
+  names no tracked script, such as an argument, an inherited variable, or a
+  name built at run time, is listed under `UNRESOLVED` rather than guessed.
+  A tree with no scripts gets the schedule it got before. Library:
+  `wave::unresolved_calls`, `wave::Unresolved`, `fed::owned_script_files`.
+
 ## [0.5.3] - 2026-10-03
 
 Still the `0.5` rung, and still a patch: the rung's promise -- every verb that
