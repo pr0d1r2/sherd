@@ -66,3 +66,24 @@ fn a_milestone_plan_renders_in_text_and_json() -> Result<(), String> {
     assert_eq!(plan_cmd(r.path(), None, true), ExitCode::SUCCESS);
     Ok(())
 }
+
+/// `src/cli:B12`: `plan` READS the store and writes nothing, in either form.
+/// The store already holds a `plan` key, so a plan that cleared or
+/// rewrote it would change these bytes even if the new keys matched.
+#[test]
+fn plan_leaves_the_state_store_untouched() -> Result<(), String> {
+    let r = milestone_fixture()?;
+    let store = r.path().join("store");
+    let before =
+        "# a store written by someone else\nplan 1 a T9 STALE\napplied x 1\n";
+    std::fs::write(&store, before).map_err(|e| e.to_string())?;
+    let st = crate::state::State::at(&store);
+    assert_eq!(plan_with(r.path(), None, false, &st), ExitCode::SUCCESS);
+    assert_eq!(
+        plan_with(r.path(), Some("M1"), true, &st),
+        ExitCode::SUCCESS
+    );
+    let after = std::fs::read_to_string(&store).map_err(|e| e.to_string())?;
+    assert_eq!(after, before);
+    Ok(())
+}
