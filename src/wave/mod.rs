@@ -10,6 +10,21 @@
 use crate::{code, fed};
 use std::path::{Path, PathBuf};
 
+mod shell;
+
+/// A script invocation that resolves to no tracked script (V5): reported,
+/// never guessed, because a missed edge schedules a node before the one it
+/// calls.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Unresolved {
+    /// The node owning the script, e.g. `scripts`.
+    pub node: String,
+    /// The script, relative to the root.
+    pub script: String,
+    /// The invoked path as written, e.g. `$TOOLS/x.sh`.
+    pub call: String,
+}
+
 /// One node of the CODE dag: what it is called, and what it waits for.
 ///
 /// The CODE dag is NOT the federation dag (`V1`). These edges come from
@@ -65,10 +80,14 @@ impl Schedule {
 #[must_use]
 pub fn code_deps(root: &Path) -> Vec<CodeDep> {
     let nodes = fed::discover(root);
+    let scripts = fed::script_files(root);
     nodes
         .iter()
         .map(|n| {
-            let (needs, seam) = edges_of(root, n, &nodes);
+            let (mut needs, mut seam) = edges_of(root, n, &nodes);
+            needs.extend(script_edges(root, n, &nodes, &scripts));
+            dedup(&mut needs);
+            seam.retain(|l| !needs.contains(l));
             CodeDep {
                 node: fed::node_label(root, n),
                 needs,
@@ -116,6 +135,80 @@ fn edges_of(
     dedup(&mut seam);
     seam.retain(|l| !needs.contains(l));
     (needs, seam)
+}
+
+/// The siblings a node's SCRIPTS invoke (V5) -- always blocking: shell has
+/// no type-only reach. A call inside the node, or to a script under no
+/// sibling, is no sibling edge.
+fn script_edges(
+    root: &Path,
+    node: &Path,
+    nodes: &[PathBuf],
+    all: &[PathBuf],
+) -> Vec<String> {
+    let sibs: Vec<PathBuf> = nodes
+        .iter()
+        .filter(|n| n.as_path() != node && n.parent() == node.parent())
+        .cloned()
+        .collect();
+    let mut out = Vec::new();
+    for (_, target) in script_calls(root, node, nodes, all) {
+        if let shell::Target::Script(p) = target
+            && let Some(s) = sibs.iter().find(|s| p.starts_with(s))
+        {
+            out.push(fed::node_label(root, s));
+        }
+    }
+    out
+}
+
+/// Every invocation in every script a node owns, with the script it is in.
+fn script_calls(
+    root: &Path,
+    node: &Path,
+    nodes: &[PathBuf],
+    all: &[PathBuf],
+) -> Vec<(PathBuf, shell::Target)> {
+    let mut out = Vec::new();
+    for script in fed::owned_script_files(node, nodes) {
+        let Ok(text) = std::fs::read_to_string(&script) else {
+            continue;
+        };
+        let cx = shell::Context {
+            script: &script,
+            root,
+            all,
+        };
+        for t in shell::calls(&text, &cx) {
+            out.push((script.clone(), t));
+        }
+    }
+    out
+}
+
+/// The script invocations under `dir` that resolve to no tracked script
+/// (V5), sorted by script then call so a report is stable.
+#[must_use]
+pub fn unresolved_calls(root: &Path, dir: &Path) -> Vec<Unresolved> {
+    let nodes = fed::discover(root);
+    let all = fed::script_files(root);
+    let mut out: Vec<Unresolved> = Vec::new();
+    for node in nodes.iter().filter(|n| n.starts_with(dir)) {
+        for (script, target) in script_calls(root, node, &nodes, &all) {
+            if let shell::Target::Unresolved(call) = target {
+                out.push(Unresolved {
+                    node: fed::node_label(root, node),
+                    script: fed::node_label(root, &script),
+                    call,
+                });
+            }
+        }
+    }
+    out.sort_by(|a, b| {
+        a.script.cmp(&b.script).then_with(|| a.call.cmp(&b.call))
+    });
+    out.dedup();
+    out
 }
 
 /// Does this import name ONLY types the target declares?
@@ -278,3 +371,7 @@ fn scoped(deps: &[CodeDep], keep: &[String]) -> Vec<CodeDep> {
 #[cfg(test)]
 #[path = "tests/wave.rs"]
 mod wave_tests;
+
+#[cfg(test)]
+#[path = "tests/shell.rs"]
+mod shell_tests;
