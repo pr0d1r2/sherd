@@ -16,31 +16,52 @@ use super::*;
 /// to move and exits 0 (`src/adopt:V6`).
 pub(super) fn adopt_cmd(root: &Path, args: &[String]) -> ExitCode {
     let dry = args.iter().any(|a| a == "--check");
+    // The NAMED node is the source (`src/adopt:V11`, `B6`): handing on the
+    // root here is what made `adopt a/b` read the root spec.
+    let node = adopt_node(root, &arg_dir(args, root));
     // BEFORE any count is printed (`src/adopt:V8`). A source this reader
     // cannot parse produces `0 rows read`, which in adopt's exit scheme means
     // "nothing to move" -- the opposite answer, in the same words, at the
     // same exit code (`src/adopt:B4`).
-    match crate::adopt::unreadable(root) {
+    match crate::adopt::unreadable_at(root, &node) {
         Ok(found) if !found.is_empty() => {
-            return adopt_unreadable(root, &found);
+            return adopt_unreadable_at(root, &node, &found);
         }
         Ok(_) => {}
         Err(e) => return adopt_unusable(&e),
     }
     match flag_value(args, "--map") {
-        None => adopt_propose(root),
-        Some(file) => adopt_with_map(root, file, dry),
+        None => adopt_propose_at(root, &node),
+        Some(file) => adopt_with_map((root, &node), file, dry),
     }
 }
 
 /// Rows this reader could not parse, named with the line each sits on, and
 /// exit 2 -- the USAGE code, because the file is in a form the verb does not
 /// accept. Exit 0 keeps meaning "I read this and there is nothing to move".
+/// As [`adopt_unreadable_at`], for the root spec. Dispatch always names a
+/// node, so this is a test convenience and compiled as one, like
+/// `args::repo_root`.
+#[cfg(test)]
 pub(super) fn adopt_unreadable(
     root: &Path,
     found: &[crate::spec::Unreadable],
 ) -> ExitCode {
-    let path = root.join("SPEC.md");
+    adopt_unreadable_at(root, ".", found)
+}
+
+/// The unreadable rows of `node`'s spec, named.
+pub(super) fn adopt_unreadable_at(
+    root: &Path,
+    node: &str,
+    found: &[crate::spec::Unreadable],
+) -> ExitCode {
+    let dir = if node == "." {
+        root.to_path_buf()
+    } else {
+        root.join(node)
+    };
+    let path = dir.join("SPEC.md");
     eprintln!(
         "adopt: {}: {} id-shaped row(s) in a form this does not read",
         path.display(),
@@ -70,8 +91,16 @@ pub(super) fn flag_value<'a>(
 }
 
 /// PROPOSE, and print the proposal in the map's own format.
+/// As [`adopt_propose_at`], for the root spec. A test convenience, as
+/// [`adopt_unreadable`] is.
+#[cfg(test)]
 pub(super) fn adopt_propose(root: &Path) -> ExitCode {
-    let proposal = match crate::adopt::propose(root) {
+    adopt_propose_at(root, ".")
+}
+
+/// The proposal splitting `node` (`src/adopt:V11`).
+pub(super) fn adopt_propose_at(root: &Path, node: &str) -> ExitCode {
+    let proposal = match crate::adopt::propose_at(root, node) {
         Ok(p) => p,
         Err(e) => return adopt_unusable(&e),
     };
@@ -103,15 +132,19 @@ pub(super) fn adopt_summary(p: &crate::adopt::Proposal) {
 }
 
 /// Apply a map, or report what applying it would refuse.
-pub(super) fn adopt_with_map(root: &Path, file: &str, dry: bool) -> ExitCode {
+pub(super) fn adopt_with_map(
+    (root, node): (&Path, &str),
+    file: &str,
+    dry: bool,
+) -> ExitCode {
     let map = match read_map_file(file) {
         Ok(m) => m,
         Err(e) => return adopt_unusable(&e),
     };
     if dry {
-        return adopt_dry(root, &map);
+        return adopt_dry((root, node), &map);
     }
-    match crate::adopt::apply(root, &map) {
+    match crate::adopt::apply_at(root, node, &map) {
         Ok(r) => adopt_wrote(&r),
         Err(e) => adopt_failed(&e),
     }
@@ -128,10 +161,10 @@ pub(super) fn read_map_file(
 
 /// `--check`: every refusal, and nothing written.
 pub(super) fn adopt_dry(
-    root: &Path,
+    (root, node): (&Path, &str),
     map: &std::collections::BTreeMap<String, String>,
 ) -> ExitCode {
-    let refused = crate::adopt::refusals(root, map);
+    let refused = crate::adopt::refusals_at(root, node, map);
     for r in &refused {
         eprintln!("{r}");
     }
@@ -179,3 +212,19 @@ pub(super) fn adopt_unusable(msg: &str) -> ExitCode {
 #[cfg(test)]
 #[path = "tests/adopt.rs"]
 mod tests;
+
+/// `<dir>` as a citation names its node: a path from the root, `.` for the
+/// root itself (`src/spec:V7`). `./a/` and `a` are one node.
+pub(super) fn adopt_node(root: &Path, dir: &Path) -> String {
+    let rel = dir.strip_prefix(root).unwrap_or(dir);
+    let parts: Vec<String> = rel
+        .components()
+        .filter(|c| !matches!(c, std::path::Component::CurDir))
+        .map(|c| c.as_os_str().to_string_lossy().into_owned())
+        .collect();
+    if parts.is_empty() {
+        ".".into()
+    } else {
+        parts.join("/")
+    }
+}

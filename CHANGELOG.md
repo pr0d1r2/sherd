@@ -80,6 +80,17 @@ publish run surfaced two warnings that eleven gate steps had read past
   two blank lines under the heading, which markdownlint's MD012 refuses,
   and collapsing them by hand made `sync --check` report the node stale.
   `sync` now writes one, and reads the one-line form back unchanged.
+- **`sherd adopt <dir>` splits the node it names** (`src/adopt:B6`, #104).
+  It read the root `SPEC.md` whatever directory it was given, so a node
+  could not be split into its children: every id living in `a/b/SPEC.md`
+  was refused with "the source declares no". The source is now
+  `<dir>/SPEC.md`, homes are the nodes declared below it, and citations
+  of a moved row are rewritten in every node of the tree, including ones
+  the move writes no row into: `` `a/b:V9` `` becomes `` `a/b/x:V9` ``,
+  and a bare `V9` inside `a/b/x`. `sherd adopt .` reads the root as
+  before, and now also rewrites other nodes' `` `.:V9` `` citations of a
+  row that moved. Library: `adopt::{propose_at, refusals_at, apply_at,
+  unreadable_at}`, `spec::rehome`.
 
 ## [0.5.3] - 2026-10-03
 

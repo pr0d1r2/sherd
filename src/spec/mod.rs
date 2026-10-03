@@ -598,6 +598,63 @@ pub fn requalify(
     out
 }
 
+/// Rewrite the NAMESPACED citations of rows that moved out of `from`.
+///
+/// [`requalify`] handles the bare form, which only the source file and the
+/// rows it hands over can carry. Every other node cites a source row as
+/// `from:V9`, and once V9 lives in `from/x` that citation names a node
+/// that no longer declares it (`src/adopt:V11`). So `from:V9` becomes
+/// `from/x:V9`, and inside `from/x` itself plain `V9` -- there it names the
+/// file's own row, and a backtick pair around exactly that citation goes
+/// with the owner.
+///
+/// Matched by [`citations`]' own reading of a link, so a token this does
+/// not rewrite is one `check` would not have resolved either.
+#[must_use]
+pub fn rehome(
+    line: &str,
+    here: &str,
+    from: &str,
+    moved: &std::collections::BTreeMap<String, String>,
+) -> String {
+    let mut out = String::new();
+    let mut done = 0;
+    for (at, _) in line.match_indices(':') {
+        let Some((owner, id)) = citation_at(line, at) else {
+            continue;
+        };
+        let Some(home) = moved.get(&id).filter(|_| owner == from) else {
+            continue;
+        };
+        let start = at.saturating_sub(owner.len());
+        let end = at.saturating_add(1).saturating_add(id.len());
+        let (span, with) = if home == here {
+            (unquoted(line, start, end), id)
+        } else {
+            ((start, end), format!("{home}:{id}"))
+        };
+        out.push_str(line.get(done..span.0).unwrap_or(""));
+        out.push_str(&with);
+        done = span.1;
+    }
+    out.push_str(line.get(done..).unwrap_or(""));
+    out
+}
+
+/// The span of a citation that is becoming bare, widened to the backtick
+/// pair when the pair holds exactly this citation and nothing else.
+fn unquoted(line: &str, start: usize, end: usize) -> (usize, usize) {
+    let before = start.checked_sub(1);
+    let quoted = before
+        .and_then(|b| line.get(b..start))
+        .is_some_and(|c| c == "`")
+        && line.get(end..).is_some_and(|r| r.starts_with('`'));
+    match before {
+        Some(b) if quoted => (b, end.saturating_add(1)),
+        _ => (start, end),
+    }
+}
+
 /// One token, rewritten if it is a citation that has to travel.
 ///
 /// `prev` is the character immediately before the token, and it carries the

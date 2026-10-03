@@ -44,6 +44,35 @@ fn adopt_proposes_then_reruns_clean() -> Result<(), String> {
     Ok(())
 }
 
+/// `src/adopt:B6`. The dir argument is the SOURCE: `adopt <root>/src` reads
+/// `src/SPEC.md` and moves its row into `src/deep`. Dispatch used to hand
+/// on the root, and the same map was refused as "the source declares no".
+#[test]
+fn adopt_reads_the_spec_of_the_dir_it_names() -> Result<(), String> {
+    let r = adopt_fixture()?;
+    r.write(
+        "src/SPEC.md",
+        "# SPEC\n\n## \u{a7}G GOAL\n\nsrc\n\n## \u{a7}F FEDERATION\n\n\
+             dir|owns|\u{22a5}owns|tokens\ndeep|deep things|-|-\n\n\
+             ## \u{a7}V INVARIANTS\n\nV4: deep things stay deep\n",
+    )?;
+    r.write("src/deep/SPEC.md", &spec::scaffold("src/deep", &[]))?;
+    let map = r.path().join("map");
+    std::fs::write(&map, "V4 src/deep\n").map_err(|e| e.to_string())?;
+    let dir = r.path().join("src").display().to_string();
+    let with = vec![
+        "adopt".into(),
+        dir,
+        "--map".into(),
+        map.display().to_string(),
+    ];
+    assert_eq!(run_args(with), ExitCode::from(1), "it wrote");
+    let deep = std::fs::read_to_string(r.path().join("src/deep/SPEC.md"))
+        .map_err(|e| e.to_string())?;
+    assert!(deep.contains("V4: deep things stay deep"), "{deep}");
+    Ok(())
+}
+
 /// `src/adopt:B4`. Exit 0 from `adopt` means "I read this and there is
 /// nothing to move", and a source written in the bracketed table dialect
 /// produced exactly that while carrying rows. The two answers now differ,
