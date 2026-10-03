@@ -292,7 +292,7 @@ T104|.|lint ratchet ! also count `--no-default-features` — 131 warnings on the
 T106|.|`wave` EXECUTION @ rung 0.7 — fan the scheduled rounds out to N workers, 1 worktree each, gate & merge in topological order; executor NAMED ⊥ assumed|V123,V117,R57,`src/wave:T1`,`src/ollama:T13`
 T107|x|V50 splits a file @ the 1st `#[cfg(test)]` ∴ code BELOW a test module counts as tests (B29). sum every non-test region, re-measure|V50
 T108|.|move each node's inline `mod tests { }` into its `tests/` tree per V124, 1 PR per node — none left outside the freeze; `src/assay`·`src/ollama`·`src/tdd` @ `0.7` (V117)|V124,V50
-T109|.|flake inputs `nixpkgs-lock` & `nix-hk` fetched over GIT — `git+https://github.com/pr0d1r2/<repo>?ref=main&shallow=1`, ⊥ `github:`. a Claude Code cloud session's proxy 403s the ARCHIVE tarball `github:` downloads, even for a public repo, & passes plain git reads ∴ `nix develop` dies before eval. `flake.lock` still pins rev + `narHash`; both `follows` unchanged. done = `nix develop -c cargo test` in a cloud session w/ ⊥ `--override-input` (#96)|C
+T109|x|flake inputs `nixpkgs-lock` & `nix-hk` fetched over GIT — `git+https://github.com/pr0d1r2/<repo>?ref=main&shallow=1`, ⊥ `github:`. a Claude Code cloud session's proxy 403s the ARCHIVE tarball `github:` downloads, even for a public repo, & passes plain git reads ∴ `nix develop` dies before eval. `flake.lock` still pins rev + `narHash`; both `follows` unchanged. done = `nix develop -c cargo test` in a cloud session w/ ⊥ `--override-input` (#96)|C
 
 ## §B BUGS
 
