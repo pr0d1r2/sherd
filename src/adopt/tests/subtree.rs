@@ -118,3 +118,18 @@ fn adopt_at_the_root_reads_the_root_spec() -> Result<(), String> {
     );
     Ok(())
 }
+
+/// The root's own namespaced form travels too: a row leaving `.` is cited
+/// elsewhere as `.:V1`, and that citation follows it (V11).
+#[test]
+fn a_root_citation_follows_a_row_out_of_the_root() {
+    let moved = BTreeMap::from([("V1".to_string(), "a/x".to_string())]);
+    assert_eq!(
+        spec::rehome("T2|.|y|`.:V1`,`.:V3`", "a/y", ".", &moved),
+        "T2|.|y|`a/x:V1`,`.:V3`"
+    );
+    assert_eq!(
+        spec::rehome("T2|.|y|`.:V1`", "a/x", ".", &moved),
+        "T2|.|y|V1"
+    );
+}
