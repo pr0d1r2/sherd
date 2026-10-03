@@ -108,6 +108,13 @@ publish run surfaced two warnings that eleven gate steps had read past
   node goes to that node. A row citing scripts in two nodes, or in none,
   stays at the root and is named there. A test now fails the build when
   any `tests/` file is not compiled. Library: `split::cited_scripts`.
+- **The local gate refuses a `sherd` binary built from `target/package`**
+  (`.:B34`, #78). After a release, `target/debug/sherd` could be the
+  binary `cargo package` built from its unpacked copy, which cargo then
+  calls fresh forever, so every gate step that runs `sherd` judged old
+  code. A new `fresh-binary` step reads the binaries' dep-info first and
+  names the fix, `cargo clean -p sherd -p sherd-dev`. CI was never
+  affected: it builds from an empty target directory.
 
 ## [0.5.3] - 2026-10-03
 

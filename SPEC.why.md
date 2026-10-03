@@ -100,3 +100,4 @@ V122| MEASURED: 9 pedantic findings across 2 files `actionlint` had passed on EV
 V73| — 30 files → 60 is ceremony
 V123| hardcoding the writer ships 2 decisions as 1 ∴ neither measures alone.
 V124| a FACET is a property of the FILE (`src/lens:V8`) ∴ a file mixing code & tests has none & V50 must GUESS the cut (B29).
+V125| the 3 recordings in B34 were each found by an OLD OUTPUT FORMAT, ⊥ by a check ∴ the case nothing caught is the one whose format had ⊥ changed. the dep-info is the evidence cargo itself trusts, ∴ it is the 1 place the question can be answered before the binary runs
