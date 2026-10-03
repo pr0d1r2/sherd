@@ -10,6 +10,8 @@
 //! confidence and what would invalidate it. Beyond that is fiction.
 
 use crate::fed;
+
+mod shell;
 /// Moved to [`crate::split`] (`src/plan:T14`) and re-exported here, because
 /// every one of them was public at `0.5.1` and crates.io is immutable: a
 /// caller of `sherd::plan::structure` must still compile. New code should
@@ -396,16 +398,26 @@ pub fn plan_in(root: &Path, milestone: Option<&str>) -> (Plan, usize) {
     let mut unmanaged = Vec::new();
     let st = crate::state::State::load();
     let frozen = frozen_nodes(root);
+    let scripts = shell::Scripts::read(root);
     let mut candidates = Vec::new();
-    for t in all {
+    for mut t in all {
+        // V26: a shell row is homed by its node and the scripts it cites,
+        // never by `classify`, which asks a `mod.rs` question. A root row
+        // MOVES to the node owning its scripts before anything else is read.
+        let shell = shell::home(root, &t, &scripts);
+        if let shell::Home::At(node) = &shell {
+            t.node.clone_from(node);
+        }
         let dir = root.join(&t.node);
         // A frozen node is unmanaged whatever the row says: the freeze is
         // root POLICY, not a property of the text, so no amount of reading
         // the row can reach it (B16).
-        let k = if frozen.contains(&dir) {
-            Kind::Frozen
-        } else {
-            classify(&dir, &t.text)
+        let k = match shell {
+            _ if frozen.contains(&dir) => Kind::Frozen,
+            shell::Home::At(_) => Kind::NodeFn,
+            // Scripts in two nodes: its footprint crosses a node boundary.
+            shell::Home::Span => Kind::MultiFile,
+            shell::Home::NotShell => classify(&dir, &t.text),
         };
         if k.actionable() && already_applied(&st, &t) {
             continue; // idempotent: same row, same text, already done
@@ -454,17 +466,35 @@ pub fn to_json(
     (milestone, outside): (Option<&str>, usize),
     context_tokens: &[u64],
 ) -> String {
+    to_json_with(st, p, (milestone, outside), context_tokens, &[])
+}
+
+/// [`to_json`], with each step's [`footprint`] (V26). A shell step gains
+/// `touches` -- its scripts, or `null` when the row cites none -- and its
+/// `invalidated_by` comes from [`invalidators_of`]. A Rust step, or a step
+/// with no entry in `touches`, is the object [`to_json`] always wrote.
+#[must_use]
+pub fn to_json_with(
+    st: &crate::state::State,
+    p: &Plan,
+    (milestone, outside): (Option<&str>, usize),
+    context_tokens: &[u64],
+    touches: &[Option<Vec<String>>],
+) -> String {
     let steps: Vec<String> = (1usize..)
         .zip(&p.steps)
         .map(|(rank, t)| {
             let c = Confidence::of(rank.saturating_sub(1));
             let (tried, kept) = record_in(st, &t.node);
-            let why: Vec<String> =
-                c.invalidators().iter().map(|w| json_str(w)).collect();
+            let foot = touches.get(rank.saturating_sub(1)).and_then(Option::as_deref);
+            let why: Vec<String> = invalidators_of(c, t, foot)
+                .iter()
+                .map(|w| json_str(w))
+                .collect();
             format!(
                 "{{\"rank\":{rank},\"kind\":{},\"node\":{},\"id\":{},\"text\":{},\
                  \"believability\":{},\"tried\":{tried},\"kept\":{kept},\
-                 \"context_tokens\":{},\"invalidated_by\":[{}]}}",
+                 \"context_tokens\":{},\"invalidated_by\":[{}]{}}}",
                 json_str(c.label().trim()),
                 json_node(&t.node),
                 json_str(&t.id),
@@ -474,7 +504,8 @@ pub fn to_json(
                     .get(rank.saturating_sub(1))
                     .copied()
                     .unwrap_or(0),
-                why.join(",")
+                why.join(","),
+                foot.map_or_else(String::new, touches_key)
             )
         })
         .collect();
@@ -501,6 +532,59 @@ pub fn to_json(
         steps.join(","),
         unmanaged.join(",")
     )
+}
+
+/// The `touches` key of a shell step: its scripts, or `null` when unknown.
+fn touches_key(scripts: &[String]) -> String {
+    if scripts.is_empty() {
+        return ",\"touches\":null".into();
+    }
+    let list: Vec<String> = scripts.iter().map(|s| json_str(s)).collect();
+    format!(",\"touches\":[{}]", list.join(","))
+}
+
+/// A step's FOOTPRINT (V26): `None` for a Rust step, which the tdd loop
+/// bounds by its `mod.rs`; for a shell step the scripts it cites, relative
+/// to the root, and an EMPTY list when it cites none -- unknown, never
+/// "touches nothing".
+#[must_use]
+pub fn footprint(root: &Path, t: &Task) -> Option<Vec<String>> {
+    if root.join(&t.node).join("mod.rs").is_file() {
+        return None;
+    }
+    Some(shell::touches(root, t, &shell::Scripts::read(root)))
+}
+
+/// What would make step `t` wrong, one entry per condition (V1).
+///
+/// A Rust step (`touches` is `None`) gets [`Confidence::invalidators`]. A
+/// shell step is not driven by the tdd loop, so the loop's conditions do not
+/// apply: it is invalidated by a change to a script it touches or a row it
+/// cites (V26), and a `Tentative` one still by the ordering. An unknown
+/// footprint is stated as the whole node, the honest bound.
+#[must_use]
+pub fn invalidators_of(
+    c: Confidence,
+    t: &Task,
+    touches: Option<&[String]>,
+) -> Vec<String> {
+    let Some(touches) = touches else {
+        return c.invalidators().iter().map(|w| (*w).to_string()).collect();
+    };
+    let mut out: Vec<String> =
+        touches.iter().map(|s| format!("a change to {s}")).collect();
+    if touches.is_empty() {
+        out.push(format!("a change to any script under {}", t.node.display()));
+    }
+    out.extend(
+        shell::cited_rows(t)
+            .iter()
+            .map(|r| format!("a change to {r}")),
+    );
+    if c == Confidence::Tentative {
+        out.extend(c.invalidators().iter().map(|w| (*w).to_string()));
+    }
+    out
 }
 
 /// A node as a caller names it. The root is `""` in memory and `.` in every
@@ -726,7 +810,13 @@ fn preflight(root: &Path) -> Result<String, String> {
 pub fn apply(root: &Path, max_repair: usize) -> Result<String, String> {
     let branch = preflight(root)?;
     let p = plan(root);
-    let step = p.steps.first().ok_or("nothing actionable to apply")?;
+    // V26: a shell step is PLANNED, not driven -- the tdd loop adds a
+    // function to a `mod.rs`, and a shell node has none.
+    let step = p
+        .steps
+        .iter()
+        .find(|t| footprint(root, t).is_none())
+        .ok_or("nothing actionable to apply -- shell steps are planned, not applied")?;
     let (owner, inv) = cited_invariant(step).ok_or_else(|| {
         format!(
             "{} {} cites no §V id ({}) -- apply drives an INVARIANT, not prose",
