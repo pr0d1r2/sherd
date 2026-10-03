@@ -115,6 +115,12 @@ publish run surfaced two warnings that eleven gate steps had read past
   code. A new `fresh-binary` step reads the binaries' dep-info first and
   names the fix, `cargo clean -p sherd -p sherd-dev`. CI was never
   affected: it builds from an empty target directory.
+- **`sherd plan` refuses a tree holding a node it cannot read**
+  (`src/plan:B17`, part of #77). An unreadable `SPEC.md` used to be
+  skipped: its open rows vanished from the plan, and an unreadable root
+  made every frozen node plannable, while the output looked clean. `plan`
+  now names each unreadable node and exits 2, in both output forms, and
+  `apply` refuses the same way. Library: `plan::unreadable`.
 
 ## [0.5.3] - 2026-10-03
 
