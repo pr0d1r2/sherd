@@ -51,6 +51,34 @@ publish run surfaced two warnings that eleven gate steps had read past
 
 ## [Unreleased]
 
+## [0.5.3] - 2026-10-03
+
+Still the `0.5` rung, and still a patch: the rung's promise -- every verb that
+never calls a model, correct and reusable as a library -- has not moved, and
+most of this release is that promise being kept where it was not. `0.6` is
+where the surface settles. New here: `--format json` on `budget`, `check` and
+`validate`, `split` for shell codebases, `adopt` placing a row by the script
+it cites, V44 enforced for `SPEC.why.md`, and a default-build coverage floor.
+
+`cargo semver-checks check-release --baseline-rev v0.5.2` requires no semver
+update; every new library item is additive. Unlike `0.5.2`, some exit codes
+**do** change, each because the old one reported success or the wrong failure:
+
+- `check` and `validate` exit 1 on a node whose `SPEC.md` cannot be read,
+  where they passed it silently. A tree that was green only for that reason
+  now fails.
+- `budget` exits 1 on a `.context-limits` that exists and cannot be read,
+  where it fell back to the default ceilings.
+- `lens <dir>` exits 2 on a directory that is not a node, where it printed
+  an ancestor's pack and exited 0.
+- `adopt` and `sync` exit 2, not 1, when they cannot read their input.
+- `land` no longer refuses a repository with no `.sherd-slices`.
+
+Node discovery also changes what it counts: gitignored paths are skipped
+inside a git work tree, and a lowercase `spec.md` is no longer a node on a
+case-insensitive filesystem. `rule` depth drops finished `§T` rows, so
+`budget` totals and lens packs shrink on any node that keeps them.
+
 ### Added
 
 - **`sherd adopt` places a row by the script it cites** (`src/adopt:V10`,
@@ -116,6 +144,12 @@ publish run surfaced two warnings that eleven gate steps had read past
   finished rows. On this repository: 227,822 -> 226,794 tokens across all
   chains. On a 12-node consumer that keeps archive stubs: 35,680 -> 31,249
   (-12.4%).
+
+- **Contributor-facing: the dev shell fetches its flake inputs over git**
+  (`.:T109`, #97). `nixpkgs-lock` and `nix-hk` are `git+https://` inputs
+  rather than `github:`, because some sandboxed environments refuse the
+  archive tarball `github:` downloads while allowing plain git reads.
+  `flake.lock` pins the same revisions and hashes as before.
 
 ### Fixed
 
