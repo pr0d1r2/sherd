@@ -91,6 +91,13 @@ publish run surfaced two warnings that eleven gate steps had read past
   before, and now also rewrites other nodes' `` `.:V9` `` citations of a
   row that moved. Library: `adopt::{propose_at, refusals_at, apply_at,
   unreadable_at}`, `spec::rehome`.
+- **`sherd adopt` places a row by the script it cites** (`.:B33`, #94).
+  The 0.5.3 entry for this was wrong: the feature shipped as a spec row
+  and a test file that nothing compiled, with no code behind it. It is
+  now implemented. A row citing scripts that all sit under one declared
+  node goes to that node. A row citing scripts in two nodes, or in none,
+  stays at the root and is named there. A test now fails the build when
+  any `tests/` file is not compiled. Library: `split::cited_scripts`.
 
 ## [0.5.3] - 2026-10-03
 
