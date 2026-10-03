@@ -40,3 +40,15 @@ fn a_document_without_the_anchor_is_returned_unchanged() {
     let doc = "# SPEC\n\n## \u{a7}G GOAL\n\ng\n";
     assert_eq!(upsert_section(doc, "N NAV", "x", "F"), doc);
 }
+
+/// V12 / B5 (#106): an EMPTY section is its heading and nothing else. Two
+/// blank lines under it is what markdownlint's MD012 refuses, and the
+/// one-blank-line form a linted repo commits must read back unchanged.
+#[test]
+fn an_empty_section_keeps_one_blank_line_and_reads_back_unchanged() {
+    let doc = "# SPEC\n\n## \u{a7}G GOAL\n\ng\n\n## \u{a7}N NAV\n\nn\n\n\
+               ## \u{a7}V INVARIANTS\n\n## \u{a7}T TASKS\n\n## \u{a7}B BUGS\n";
+    let out = upsert_section(doc, "N NAV", "## \u{a7}N NAV\n\nn\n", "G");
+    assert_eq!(out, doc, "a linted, already-synced doc is unchanged");
+    assert!(!out.contains("\n\n\n"), "no run of two blank lines:\n{out}");
+}
