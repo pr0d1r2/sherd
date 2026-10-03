@@ -125,9 +125,23 @@ pub(super) fn plan_cmd(
     milestone: Option<&str>,
     json: bool,
 ) -> ExitCode {
+    plan_with(root, milestone, json, &state::State::load())
+}
+
+/// `plan` over a store it READS -- believability and the kept/tried record --
+/// and never writes (`src/plan:V7`, `B12`).
+///
+/// It used to clear every `plan` key, record one per step and save, on both
+/// output forms. Nothing read those keys -- `apply` re-derives the plan -- so
+/// a read-only verb rewrote a store every worktree shares. Taking the store
+/// as a value is also what lets a test hand it a file of its own.
+pub(super) fn plan_with(
+    root: &Path,
+    milestone: Option<&str>,
+    json: bool,
+    st: &state::State,
+) -> ExitCode {
     let (p, outside) = plan::plan_in(root, milestone);
-    let mut st = state::State::load();
-    st.clear_kind("plan"); // a superseded step must not outlive its plan
     let est: Vec<u64> = p
         .steps
         .iter()
@@ -136,18 +150,8 @@ pub(super) fn plan_cmd(
                 .map_or(0, |k| k.cost.tokens)
         })
         .collect();
-    // `apply` reads these keys, so both forms record the same plan.
-    for (rank, t) in (1usize..).zip(&p.steps) {
-        let c = plan::Confidence::of(rank.saturating_sub(1));
-        st.set(
-            "plan",
-            &rank.to_string(),
-            format!("{} {} {}", t.node.display(), t.id, c.label().trim()),
-        );
-    }
     if json {
-        println!("{}", plan::to_json(&st, &p, (milestone, outside), &est));
-        st.save();
+        println!("{}", plan::to_json(st, &p, (milestone, outside), &est));
         return ExitCode::SUCCESS;
     }
 
@@ -205,7 +209,6 @@ pub(super) fn plan_cmd(
     println!(
         "\nRun `sherd plan` again after each apply -- applying a task edits\nthe spec that plans the next one, so this list goes stale."
     );
-    st.save();
     ExitCode::SUCCESS
 }
 

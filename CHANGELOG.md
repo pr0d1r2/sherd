@@ -66,6 +66,16 @@ publish run surfaced two warnings that eleven gate steps had read past
   A tree with no scripts gets the schedule it got before. Library:
   `wave::unresolved_calls`, `wave::Unresolved`, `fed::owned_script_files`.
 
+### Fixed
+
+- **`sherd plan` no longer writes the state store** (`src/cli:B12`, #79).
+  Both the text and the `--format json` form cleared and rewrote the
+  `plan` keys in `<git-common-dir>/sherd-state` on every run, although
+  nothing read them: `apply` works the plan out again itself. The store is
+  shared by every worktree of a repository, so a read-only verb in one
+  worktree changed state another one reads. `plan` now only reads the
+  store, for believability and the kept/tried record.
+
 ## [0.5.3] - 2026-10-03
 
 Still the `0.5` rung, and still a patch: the rung's promise -- every verb that
