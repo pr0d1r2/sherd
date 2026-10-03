@@ -264,6 +264,12 @@ local fast = new Mapping<String, Step> {
   // when it landed: nine findings across `ci.yml` and `links.yml`, on two
   // files actionlint had passed on every commit of their lives.
   //
+  // The verdict lives in `scripts/zizmor-gate.sh`, not inline: it reads
+  // zizmor's EXIT CODE to tell a finding (10-14) from a run that never
+  // audited (1), and in a Claude Code cloud session it drops the placeholder
+  // `GH_TOKEN` that GitHub 401s, then falls back to `--offline`. It is a
+  // script because that logic is tested (`tests/zizmor_gate.rs`, `.:T110`).
+  //
   // `-c` is passed explicitly rather than left to zizmor's own discovery, so
   // the ledger's PATH is visible in the step that depends on it. What
   // pedantic reports and this repo declines to fix is written down there,
@@ -271,7 +277,7 @@ local fast = new Mapping<String, Step> {
   // empty today; the mechanism is what the flag installs.
   ["zizmor"] {
     glob = List(".github/workflows/*.yml", ".github/workflows/*.yaml")
-    check = "command -v zizmor >/dev/null 2>&1 || { echo 'hk: zizmor is not on PATH -- re-enter the dev shell (`nix develop`, or `direnv reload`). This is a MISSING TOOL, not a finding.' >&2; exit 1; }; zizmor --no-progress --persona=pedantic -c .github/zizmor.yml {{files}} || { echo 'hk: zizmor found a workflow security finding. Fix it, or -- if it is understood and deliberately accepted -- record it in .github/zizmor.yml with the reason AND the condition that would retire it. An ignore with no exit is a rule nobody revisits.' >&2; exit 1; }"
+    check = "command -v zizmor >/dev/null 2>&1 || { echo 'hk: zizmor is not on PATH -- re-enter the dev shell (`nix develop`, or `direnv reload`). This is a MISSING TOOL, not a finding.' >&2; exit 1; }; bash scripts/zizmor-gate.sh {{files}}"
   }
   // `.envrc` is shell without a `.sh` name, and it runs on every shell
   // entry -- exactly where a silent mistake costs most.
