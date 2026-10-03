@@ -14,15 +14,17 @@
       "locked": {
         "lastModified": 1789817970,
         "narHash": "sha256-q/pSSRnGdouzdH8dtQUV2ZhMeNB/B9dNXlwS7U8HEts=",
-        "owner": "pr0d1r2",
-        "repo": "nix-hk",
+        "ref": "main",
         "rev": "a063d34d951e733086a63b6704dad12ac9934d3f",
-        "type": "github"
+        "shallow": true,
+        "type": "git",
+        "url": "https://github.com/pr0d1r2/nix-hk"
       },
       "original": {
-        "owner": "pr0d1r2",
-        "repo": "nix-hk",
-        "type": "github"
+        "ref": "main",
+        "shallow": true,
+        "type": "git",
+        "url": "https://github.com/pr0d1r2/nix-hk"
       }
     },
     "nixpkgs": {
@@ -48,15 +50,17 @@
       "locked": {
         "lastModified": 1789744630,
         "narHash": "sha256-JEOEROsdhnIz7goieuquPx2ab0ydMCwT15tZgCJsR4k=",
-        "owner": "pr0d1r2",
-        "repo": "nixpkgs-lock",
+        "ref": "main",
         "rev": "8d83dfecdaf6eb703e5ff81639d2365b5f735cf0",
-        "type": "github"
+        "shallow": true,
+        "type": "git",
+        "url": "https://github.com/pr0d1r2/nixpkgs-lock"
       },
       "original": {
-        "owner": "pr0d1r2",
-        "repo": "nixpkgs-lock",
-        "type": "github"
+        "ref": "main",
+        "shallow": true,
+        "type": "git",
+        "url": "https://github.com/pr0d1r2/nixpkgs-lock"
       }
     },
     "root": {

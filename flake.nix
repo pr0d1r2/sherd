@@ -28,10 +28,16 @@
   # than its own copy: a second nixpkgs edge would fork the rev, the cached hk
   # would be built against a nixpkgs this shell does not have, and every
   # substitution would miss while looking exactly like success.
+  #
+  # Fetched over GIT, not `github:` (T109). A Claude Code cloud session's
+  # proxy refuses the archive tarball `github:` downloads -- HTTP 403, even
+  # for a public repo -- while plain git reads pass, so the shell died before
+  # evaluating anything. `ref=main` spells the default branch the `github:`
+  # form implied; `flake.lock` still pins the exact rev and narHash.
   inputs = {
-    nixpkgs-lock.url = "github:pr0d1r2/nixpkgs-lock";
+    nixpkgs-lock.url = "git+https://github.com/pr0d1r2/nixpkgs-lock?ref=main&shallow=1";
     nixpkgs.follows = "nixpkgs-lock/nixpkgs";
-    nix-hk.url = "github:pr0d1r2/nix-hk";
+    nix-hk.url = "git+https://github.com/pr0d1r2/nix-hk?ref=main&shallow=1";
     nix-hk.inputs.nixpkgs-lock.follows = "nixpkgs-lock";
   };
 
