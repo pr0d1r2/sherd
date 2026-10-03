@@ -119,6 +119,7 @@ pub(super) fn wave_cmd(root: &Path, dir: &Path) -> ExitCode {
         print_round(i.saturating_add(1), round);
     }
     print_blocked(&s.blocked);
+    print_unresolved(&wave::unresolved_calls(root, dir));
     let examined = s
         .rounds
         .iter()
@@ -155,6 +156,23 @@ pub(super) fn print_blocked(blocked: &[String]) {
         "      these import each other, so they are ONE unit of work -- a \
          wave cannot split them across workers."
     );
+}
+
+/// Script calls that resolve to no tracked script (`src/wave:V5`). Listed
+/// rather than guessed: a call that IS a sibling edge and is missed lets a
+/// wave build a node before the one it calls.
+pub(super) fn print_unresolved(calls: &[wave::Unresolved]) {
+    if calls.is_empty() {
+        return;
+    }
+    println!(
+        "\n  UNRESOLVED -- {} script call(s) name no tracked script, so they are \
+         not edges. Check each:",
+        calls.len()
+    );
+    for c in calls {
+        println!("      {}: {}", c.script, c.call);
+    }
 }
 
 /// The two numbers that make the case, then what this did NOT do (`.:V48`).

@@ -134,6 +134,27 @@ fn script_dirs_names_the_busiest_dirs_beneath_a_node() {
     );
 }
 
+/// `src/wave:V5` through the verb: a script call between sibling nodes
+/// schedules the caller after the callee, and an unresolvable call is
+/// listed rather than dropped.
+#[test]
+fn wave_waits_for_a_called_script_and_lists_what_it_cannot_resolve()
+-> Result<(), String> {
+    let repo = crate::testrepo::TestRepo::new("cli-wave-shell")?;
+    for n in ["a", "b"] {
+        repo.write(&format!("{n}/SPEC.md"), "# SPEC\n")?;
+    }
+    repo.write("b/lib.sh", "#!/bin/sh\n")?;
+    repo.write("a/run.sh", "bash b/lib.sh\nbash \"$NOWHERE/x.sh\"\n")?;
+    repo.commit("shell")?;
+    let root = repo.path();
+    assert_eq!(wave_cmd(root, root), ExitCode::SUCCESS);
+    assert_eq!(wave::wave(root, root).depth(), 2);
+    assert_eq!(wave::unresolved_calls(root, root).len(), 1);
+    print_unresolved(&[]);
+    Ok(())
+}
+
 /// A node with no `SPEC.md` is a usage error, not an empty proposal.
 #[test]
 fn split_on_a_directory_with_no_spec_is_usage() {

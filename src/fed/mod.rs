@@ -545,7 +545,19 @@ pub fn spelled(root: &Path, rel: &Path) -> Vec<PathBuf> {
 /// `wave` both ask it.
 #[must_use]
 pub fn owned_rust_files(node: &Path, nodes: &[PathBuf]) -> Vec<PathBuf> {
-    rust_files(node)
+    owned(rust_files(node), node, nodes)
+}
+
+/// The `*.sh` files a node OWNS, by the same nearest-node rule (V15):
+/// what `wave` reads a node's script calls from (`src/wave:V5`).
+#[must_use]
+pub fn owned_script_files(node: &Path, nodes: &[PathBuf]) -> Vec<PathBuf> {
+    owned(script_files(node), node, nodes)
+}
+
+/// The files no DEEPER node claims.
+fn owned(files: Vec<PathBuf>, node: &Path, nodes: &[PathBuf]) -> Vec<PathBuf> {
+    files
         .into_iter()
         .filter(|f| {
             !nodes

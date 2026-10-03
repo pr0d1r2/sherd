@@ -37,7 +37,8 @@ sib|src/git|one git invocation shape — the repo a command acts on, & the env i
 
 ## §I INTERFACES
 
-- lib: `code_deps(&Path) -> Vec<CodeDep>` — per node, the SIBLING nodes its `use crate::` lines name
+- lib: `code_deps(&Path) -> Vec<CodeDep>` — per node, the SIBLING nodes its `use crate::` lines name, & those its scripts invoke (V5)
+- lib: `unresolved_calls(&Path, &Path) -> Vec<Unresolved>` — script invocations in scope that resolve to no tracked script (V5): node, script, the call as written
 - lib: `schedule(&[CodeDep]) -> Schedule` — ready set per round, pure
 - lib: `CodeDep.needs` (BLOCKING) · `CodeDep.seam` (type-only) · `Schedule.edges`/`.blocking` — both numbers, ⊥ one (V4)
 - lib: `wave(&Path, &Path) -> Schedule` — the schedule a wave over one dir would follow
@@ -49,6 +50,7 @@ V1: the CODE dag is ⊥ the FEDERATION dag. code edge = `use crate::` between SI
 V2: a dependency LEAVING the scope is DROPPED, ⊥ left unsatisfiable. keeping it reports every scoped node blocked — a cycle report for a tree w/ no cycle
 V3: a schedule is STABLE between runs ∴ labels sort. a report whose rounds reorder cannot be diffed, & the 2 numbers are what a reader compares
 V4: a TYPE-ONLY import is an EDGE & ⊥ a WAIT. `use crate::lint::Level` names a type a SEAM commit already declared ∴ the importer waits for ⊥ lint's LOGIC, & counting it as blocking UNDERSTATES width exactly when the seam has done its job (B1). an import of the MODULE (`use crate::lint;`) names no item ∴ never type-only, & 1 behavioural reach makes the whole edge blocking — a sibling you ! wait for is ⊥ made safe by also naming its type. BOTH numbers are reported (edges · blocking): 1 of them decided the rounds & a reader cannot see which from `depth` alone
+V5: for SHELL code a code edge = a script a node OWNS (`src/fed:V15`) INVOKING a script that lies under a SIBLING node: `source X` · `. X` · `bash X` · `sh X` · `exec X` · `X` @ command position. ⊥ a mention — `echo "run b/x.sh"` names a file & runs nothing. X resolves LEXICALLY: a literal path against the script's dir, then the repo root; `$(dirname "$0")`/`BASH_SOURCE` = the script's dir; `$(git rev-parse --show-toplevel)` = the root; `$VAR/…` = what VAR was ASSIGNED in the same file, when that is 1 of those. what does ⊥ resolve to a tracked script is REPORTED as unresolved, ⊥ guessed & ⊥ dropped silently — a missed edge is a schedule that runs a node before the one it calls, the unsafe direction. a shell edge is always BLOCKING: shell has no type-only reach (V4). a node w/ ⊥ scripts gets the schedule it got before, byte for byte
 
 ## §T TASKS
 
