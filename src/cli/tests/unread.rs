@@ -33,3 +33,24 @@ fn a_node_that_cannot_be_read_fails_check_and_validate() -> Result<(), String> {
     assert_eq!(validate(r.path()), ExitCode::SUCCESS);
     Ok(())
 }
+
+/// `src/plan:V27`: `plan` refuses a tree holding a node it cannot read,
+/// in both forms, with exit 2 -- it used to skip the node and print a
+/// clean horizon without its rows (`src/plan:B17`).
+#[test]
+fn a_node_that_cannot_be_read_refuses_plan() -> Result<(), String> {
+    let r = unreadable_node("cli-unread-plan")?;
+    let st = crate::state::State::at(r.path().join("store"));
+    assert_eq!(plan_with(r.path(), None, false, &st), ExitCode::from(2));
+    assert_eq!(plan_with(r.path(), None, true, &st), ExitCode::from(2));
+    let found = crate::plan::unreadable(r.path());
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert!(
+        found.iter().all(|(p, _)| p.ends_with("a/SPEC.md")),
+        "{found:?}"
+    );
+
+    r.write("a/SPEC.md", "# SPEC\n\n## \u{a7}G GOAL\n\nalpha\n")?;
+    assert_eq!(plan_with(r.path(), None, false, &st), ExitCode::SUCCESS);
+    Ok(())
+}

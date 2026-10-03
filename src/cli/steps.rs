@@ -141,6 +141,19 @@ pub(super) fn plan_with(
     json: bool,
     st: &state::State,
 ) -> ExitCode {
+    // V27: every node is read BEFORE anything is planned, and one that
+    // cannot be read is a refusal -- skipping it dropped its rows (B17).
+    let unread = plan::unreadable(root);
+    for (path, e) in &unread {
+        eprintln!(
+            "plan: {}: cannot read -- {e}. a node discovered and not read is a failure, \
+             not a node with no open rows (src/plan:V27)",
+            path.display()
+        );
+    }
+    if !unread.is_empty() {
+        return ExitCode::from(2);
+    }
     let (p, outside) = plan::plan_in(root, milestone);
     let est: Vec<u64> = p
         .steps
