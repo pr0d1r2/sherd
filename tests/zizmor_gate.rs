@@ -68,7 +68,7 @@ fn run(tag: &str, cloud: bool, online: i32, offline: i32, err: &str) -> Ran {
         "#!/bin/sh\n\
          [ \"$1\" = --sherd-probe ] && exit 0\n\
          echo \"args=$* GH_TOKEN=${{GH_TOKEN-unset}} GITHUB_TOKEN=${{GITHUB_TOKEN-unset}}\" >> '{}'\n\
-         echo '{err}' >&2\n\
+         printf '%b\\n' '{err}' >&2\n\
          case \" $* \" in *' --offline '*) exit {offline};; esac\n\
          exit {online}\n",
         log.display()
@@ -180,6 +180,19 @@ fn in_the_cloud_an_offline_failure_still_fails_as_could_not_run() {
     assert_eq!(r.out.status.code(), Some(1));
     assert!(
         r.stderr().contains("zizmor could not run:"),
+        "{}",
+        r.stderr()
+    );
+}
+
+#[test]
+fn the_reason_is_the_root_cause_and_not_a_backtrace_frame() {
+    let err = "fatal: no audit was performed\\n    1: could not list tags\\n    2: HTTP status client error (401 Unauthorized)\\n\\nStack backtrace:\\n   0: anyhow::error::from\\n   1: zizmor::main";
+    let r = run("reason", false, 1, 1, err);
+    assert!(
+        r.stderr().contains(
+            "zizmor could not run: HTTP status client error (401 Unauthorized)."
+        ),
         "{}",
         r.stderr()
     );
