@@ -172,6 +172,23 @@ pub fn classify(node: &Path, text: &str) -> Kind {
     }
 }
 
+/// Every discovered node whose `SPEC.md` cannot be read, with the error
+/// (V27). `plan` and `apply` refuse when this is not empty: the readers
+/// below skip such a node, and a plan built around it drops its open rows
+/// -- or, for the root, every freeze -- and looks clean (B17).
+#[must_use]
+pub fn unreadable(root: &Path) -> Vec<(PathBuf, String)> {
+    fed::discover(root)
+        .into_iter()
+        .filter_map(|n| {
+            let p = n.join("SPEC.md");
+            std::fs::read_to_string(&p)
+                .err()
+                .map(|e| (p, e.to_string()))
+        })
+        .collect()
+}
+
 /// Every open §T row across the federation, in DAG order (shallow first).
 #[must_use]
 pub fn open_tasks(root: &Path) -> Vec<Task> {
@@ -809,6 +826,12 @@ fn preflight(root: &Path) -> Result<String, String> {
 #[cfg(feature = "ollama")]
 pub fn apply(root: &Path, max_repair: usize) -> Result<String, String> {
     let branch = preflight(root)?;
+    if let Some((p, e)) = unreadable(root).first() {
+        return Err(format!(
+            "{}: cannot read -- {e}. apply refuses to plan around a node it could not read (V27)",
+            p.display()
+        ));
+    }
     let p = plan(root);
     // V26: a shell step is PLANNED, not driven -- the tdd loop adds a
     // function to a `mod.rs`, and a shell node has none.
