@@ -138,8 +138,10 @@ pub fn propose_at(root: &Path, node: &str) -> Result<Proposal, String> {
         placements: vec![],
         unplaced: vec![],
     };
+    // Every script under the root, read ONCE for all rows (V10).
+    let scripts = fed::script_files(root);
     for row in rows {
-        place(&mut out, row, &homes);
+        place(&mut out, row, &homes, (root, &scripts));
     }
     Ok(out)
 }
@@ -149,8 +151,15 @@ pub fn propose_at(root: &Path, node: &str) -> Result<Proposal, String> {
 /// Both arms record the row, and that is V1 in one function -- a row read and
 /// then silently dropped is the conservation failure that costs the memory of
 /// a defect.
-fn place(out: &mut Proposal, row: spec::Row, homes: &[fed::Home]) {
-    match best(&row, homes) {
+fn place(
+    out: &mut Proposal,
+    row: spec::Row,
+    homes: &[fed::Home],
+    tree: (&Path, &[PathBuf]),
+) {
+    let decided =
+        by_script(&row, homes, tree).unwrap_or_else(|| best(&row, homes));
+    match decided {
         Some((home, why)) => out.placements.push(Placement {
             id: row.id,
             home,
@@ -158,6 +167,55 @@ fn place(out: &mut Proposal, row: spec::Row, homes: &[fed::Home]) {
         }),
         None => out.unplaced.push(row.id),
     }
+}
+
+/// V10: the node owning EVERY script this row cites, decided before any
+/// lens word is read -- a cited script is where the code the row governs
+/// lives, and the lens only matches words.
+///
+/// `None` when the row cites no script that resolves, so the lens decides
+/// as before. `Some(None)` when its scripts sit in two nodes, or in one no
+/// declared node contains: no single home, the answer a lens tie gives (V2).
+/// The citation is `split::cited_scripts`, the reading `split` weighs by.
+fn by_script(
+    row: &spec::Row,
+    homes: &[fed::Home],
+    (root, scripts): (&Path, &[PathBuf]),
+) -> Option<Option<(String, Vec<String>)>> {
+    let cited = crate::split::cited_scripts(&row.text, scripts);
+    if cited.is_empty() {
+        return None;
+    }
+    let owners: BTreeSet<Option<&str>> =
+        cited.iter().map(|s| owner(s, homes, root)).collect();
+    let why: Vec<String> = cited
+        .iter()
+        .map(|s| {
+            s.strip_prefix(root)
+                .unwrap_or(s)
+                .to_string_lossy()
+                .into_owned()
+        })
+        .collect();
+    let only: Vec<Option<&str>> = owners.into_iter().collect();
+    Some(match only.as_slice() {
+        [Some(home)] => Some(((*home).to_string(), why)),
+        _ => None,
+    })
+}
+
+/// The DEEPEST declared node whose directory holds the script -- `src/fed:V15`'s
+/// rule for `.rs` files, applied to scripts. `None` for one no node holds.
+fn owner<'h>(
+    script: &Path,
+    homes: &'h [fed::Home],
+    root: &Path,
+) -> Option<&'h str> {
+    homes
+        .iter()
+        .filter(|h| script.starts_with(root.join(&h.node)))
+        .max_by_key(|h| Path::new(&h.node).components().count())
+        .map(|h| h.node.as_str())
 }
 
 /// The single node whose lens matches this row best, or none.
@@ -783,3 +841,7 @@ mod tests;
 #[cfg(test)]
 #[path = "tests/subtree.rs"]
 mod subtree_tests;
+
+#[cfg(test)]
+#[path = "tests/script.rs"]
+mod script_tests;
