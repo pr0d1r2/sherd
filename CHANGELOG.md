@@ -65,6 +65,16 @@ publish run surfaced two warnings that eleven gate steps had read past
   name built at run time, is listed under `UNRESOLVED` rather than guessed.
   A tree with no scripts gets the schedule it got before. Library:
   `wave::unresolved_calls`, `wave::Unresolved`, `fed::owned_script_files`.
+- **`sherd plan` plans shell-script federations** (`src/plan:V26`, #105).
+  A node without `mod.rs` is a row's home when the node owns scripts or
+  the row cites one, so its rows are steps instead of all reading as
+  "root row -- no mod.rs". A root row citing scripts goes to the one node
+  that owns them all. A shell step prints the scripts it `touches`, or
+  says the footprint is unknown, and it is invalidated by a change to
+  those scripts or to the rows it cites. `apply` still drives Rust steps
+  only. A repository without shell nodes plans exactly as before.
+  Library: `plan::footprint`, `plan::invalidators_of`,
+  `plan::to_json_with`, whose shell steps gain a `touches` key.
 
 ### Fixed
 

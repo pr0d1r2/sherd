@@ -40,7 +40,7 @@ V1: ∀ step carries its CONFIDENCE & what INVALIDATES it. a plan that ⊥ say h
 V2: confidence DEGRADES w/ distance — next · likely · tentative
 V3: unmanaged rows LISTED, ⊥ hidden. 58 of 72 open rows are ⊥ machine-actionable & silence would read as coverage (`.:V48`)
 V4: ordering signal is node DEPTH only. `§T`.cites points at `§V`, ⊥ at another `§T` ∴ stated as weak, ⊥ dressed up
-V5: root row ⊥ actionable — no `mod.rs` to add to
+V5: root row ⊥ actionable — no `mod.rs` to add to. EXCEPT a root row citing scripts 1 node owns (V26)
 V6: plan ⊥ mutate source. it reads & reports; `apply` is the only writer
 V12: `apply` runs `review` on what it just committed & surfaces any disagreement w/ the gate. a check nobody invokes is a check that ⊥ run — `review` existed for hours & caught nothing because it was typed by hand
 V8: steps ordered by BELIEVABILITY — a node's measured keep-rate — then depth. `src/fed` failed 3x & kept supplying step 1 because depth was the only signal
@@ -55,6 +55,7 @@ V22: a row is unmanageable for reasons OUTSIDE it. `classify` reads TEXT & answe
 
 V24: `plan --milestone M<n>` keeps a row ⟺ its OWN node's milestone table claims it — ids are node-scoped ∴ ⊥ a root table naming other nodes' rows. the partition is microlith's (`spec::milestones` → `microlith::milestones`), ⊥ a 2nd reading of the grammar; a suffixed id rides its base (`T7a` ∈ whatever claims 7, `microlith/V14`). open rows in nodes declaring NO milestones are COUNTED & PRINTED, ⊥ dropped (V3: silence reads as coverage); a milestone NO node declares = usage error (exit 2), ⊥ an empty horizon that reads as all-done
 V25: `plan --format json` is PLUMBING, the text form PORCELAIN. 1 object, fixed keys, every step AND every unmanaged row w/ node·id·reason (V3 holds for a machine too); `invalidated_by` a LIST (V1); the root spelled `.` as in a cite. text may change, json only GROWS — pinned whole by a test ∵ a caller parsing a layout breaks silently on a cosmetic edit. an unknown `--format` = usage (exit 2), ⊥ a fall back to text
+V26: a SHELL row is planned at its NODE, ⊥ by `mod.rs`. a node w/o `mod.rs` whose row cites a script (`src/split:V7`, via `split::cited_scripts`) or that OWNS scripts (`src/fed:V15`) is its home; the row's FOOTPRINT = the scripts it cites, & a row citing none is planned w/ footprint UNKNOWN, said w/ the step. a ROOT row citing scripts is planned at the 1 non-root node owning ALL of them; scripts in 2+ nodes → unmanaged, w/ that reason; in none → V5 as before. its INVALIDATORS = a change to a script it touches or a row it cites (+ `Tentative`'s ordering one; `Next`'s & `Likely`'s are the tdd loop's & ⊥ apply). json: a shell step adds `touches` (null = unknown); a Rust step's object is unchanged. `apply` drives Rust steps only & skips a shell one. a tree w/o shell nodes plans BYTE-IDENTICALLY (#105)
 
 ## §T TASKS
 

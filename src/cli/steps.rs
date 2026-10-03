@@ -150,8 +150,14 @@ pub(super) fn plan_with(
                 .map_or(0, |k| k.cost.tokens)
         })
         .collect();
+    // V26: a shell step's scripts, `None` for a Rust step.
+    let touches: Vec<Option<Vec<String>>> =
+        p.steps.iter().map(|t| plan::footprint(root, t)).collect();
     if json {
-        println!("{}", plan::to_json(st, &p, (milestone, outside), &est));
+        println!(
+            "{}",
+            plan::to_json_with(st, &p, (milestone, outside), &est, &touches)
+        );
         return ExitCode::SUCCESS;
     }
 
@@ -168,7 +174,9 @@ pub(super) fn plan_with(
             "  {outside} open rows sit in nodes that declare no milestones -- not in any\n  milestone, so not in this plan.\n"
         );
     }
-    for ((i, t), est) in p.steps.iter().enumerate().zip(&est) {
+    for (((i, t), est), foot) in
+        p.steps.iter().enumerate().zip(&est).zip(&touches)
+    {
         let c = plan::Confidence::of(i);
         let (tried, kept) = plan::record(&t.node);
         let score = if tried == 0 {
@@ -188,10 +196,20 @@ pub(super) fn plan_with(
             "      believability {:.2} ({score})",
             plan::believability(&t.node)
         );
-        println!(
-            "      ~{est} tok context · invalidated by: {}\n",
-            c.invalidated_by()
-        );
+        let why = plan::invalidators_of(c, t, foot.as_deref()).join(" · ");
+        match foot {
+            None => {
+                println!("      ~{est} tok context · invalidated by: {why}\n")
+            }
+            Some(scripts) => println!(
+                "      ~{est} tok context · touches {}\n      invalidated by: {why}\n",
+                if scripts.is_empty() {
+                    "unknown -- the row cites no script".to_string()
+                } else {
+                    scripts.join(", ")
+                }
+            ),
+        }
     }
     if p.steps.is_empty() {
         println!("  nothing actionable.\n");
