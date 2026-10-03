@@ -417,9 +417,7 @@ fn weight(
     let rows: Vec<&str> = law_lines(spec)
         .filter(|line| {
             (by_name && names_word(line, &p.name))
-                || shell::script_tokens(line).any(|t| {
-                    matches!(shell::resolve(t, all).as_slice(), [one] if owned.contains(one))
-                })
+                || cited_scripts(line, all).iter().any(|s| owned.contains(s))
         })
         .collect();
     let tokens = crate::tokens::count(&rows.join("\n")).tokens;
@@ -446,6 +444,24 @@ pub fn scripts_of(dir: &Path, p: &Proposed, all: &[PathBuf]) -> Vec<PathBuf> {
         .map(|m| dir.join(format!("{m}.sh")))
         .collect();
     all.iter().filter(|s| files.contains(s)).cloned().collect()
+}
+
+/// The scripts a text cites (V7), sorted: each by path suffix, or by a
+/// basename that resolves to exactly one of `scripts`. A name two scripts
+/// share cites neither, and [`ambiguous_scripts`] names it. ONE reading,
+/// shared by `split`'s weight and `adopt`'s placement (`src/adopt:V10`), so
+/// the two verbs cannot disagree about what a row cites.
+#[must_use]
+pub fn cited_scripts(text: &str, scripts: &[PathBuf]) -> Vec<PathBuf> {
+    let mut out: Vec<PathBuf> = shell::script_tokens(text)
+        .filter_map(|t| match shell::resolve(t, scripts).as_slice() {
+            [one] => Some((*one).clone()),
+            _ => None,
+        })
+        .collect();
+    out.sort();
+    out.dedup();
+    out
 }
 
 /// Cited script names that resolve to two or more scripts, sorted. They
