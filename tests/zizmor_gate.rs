@@ -80,13 +80,15 @@ fn run(tag: &str, cloud: bool, online: i32, offline: i32, err: &str) -> Ran {
         std::env::var("PATH").unwrap_or_default()
     );
     let mut cmd = Command::new("bash");
-    cmd.arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("scripts/zizmor-gate.sh"))
-        .arg("wf.yml")
-        .current_dir(&dir)
-        .env("PATH", path)
-        .env("GH_TOKEN", "proxy-injected")
-        .env("GITHUB_TOKEN", "proxy-injected")
-        .env_remove("CLAUDE_CODE_REMOTE");
+    cmd.arg(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("scripts/zizmor-gate.sh"),
+    )
+    .arg("wf.yml")
+    .current_dir(&dir)
+    .env("PATH", path)
+    .env("GH_TOKEN", "proxy-injected")
+    .env("GITHUB_TOKEN", "proxy-injected")
+    .env_remove("CLAUDE_CODE_REMOTE");
     if cloud {
         cmd.env("CLAUDE_CODE_REMOTE", "true");
     }
@@ -107,7 +109,8 @@ fn a_finding_keeps_the_finding_message_and_fails() {
     let r = run("finding", false, 14, 14, "error[template-injection]");
     assert_eq!(r.out.status.code(), Some(1));
     assert!(
-        r.stderr().contains("zizmor found a workflow security finding"),
+        r.stderr()
+            .contains("zizmor found a workflow security finding"),
         "{}",
         r.stderr()
     );
@@ -175,5 +178,9 @@ fn in_the_cloud_a_finding_is_not_retried_offline() {
 fn in_the_cloud_an_offline_failure_still_fails_as_could_not_run() {
     let r = run("cloud-dead", true, 1, 1, "fatal: no audit was performed");
     assert_eq!(r.out.status.code(), Some(1));
-    assert!(r.stderr().contains("zizmor could not run:"), "{}", r.stderr());
+    assert!(
+        r.stderr().contains("zizmor could not run:"),
+        "{}",
+        r.stderr()
+    );
 }
