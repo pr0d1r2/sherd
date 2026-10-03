@@ -105,7 +105,7 @@
       packages = forAll (pkgs: {
         default = pkgs.rustPlatform.buildRustPackage {
           pname = "sherd";
-          version = "0.5.2";
+          version = "0.5.3";
           src = ./.;
           cargoLock.lockFile = ./Cargo.lock;
           # `git` is a test dependency, not a runtime one: `testrepo` builds a
