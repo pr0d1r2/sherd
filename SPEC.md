@@ -293,6 +293,7 @@ T106|.|`wave` EXECUTION @ rung 0.7 — fan the scheduled rounds out to N workers
 T107|x|V50 splits a file @ the 1st `#[cfg(test)]` ∴ code BELOW a test module counts as tests (B29). sum every non-test region, re-measure|V50
 T108|.|move each node's inline `mod tests { }` into its `tests/` tree per V124, 1 PR per node — none left outside the freeze; `src/assay`·`src/ollama`·`src/tdd` @ `0.7` (V117)|V124,V50
 T109|x|flake inputs `nixpkgs-lock` & `nix-hk` fetched over GIT — `git+https://github.com/pr0d1r2/<repo>?ref=main&shallow=1`, ⊥ `github:`. a Claude Code cloud session's proxy 403s the ARCHIVE tarball `github:` downloads, even for a public repo, & passes plain git reads ∴ `nix develop` dies before eval. `flake.lock` still pins rev + `narHash`; both `follows` unchanged. done = `nix develop -c cargo test` in a cloud session w/ ⊥ `--override-input` (#96)|C
+T110|.|`zizmor` hk step in a Claude Code cloud session (`CLAUDE_CODE_REMOTE=true`): run w/ `GH_TOKEN` & `GITHUB_TOKEN` UNSET — the cloud sets both to the placeholder `proxy-injected`, zizmor sends it & GitHub 401s — ∴ git reads go out anonymously; still unreachable → `--offline`, cloud ONLY. split by exit code: a FINDING keeps today's message, a run that never audited prints `zizmor could not run: <reason>` & still exits non-zero ⊥ a finding it never made. local & GitHub CI unchanged. done = `hk check --all` green in a cloud session (#100)|C
 
 ## §B BUGS
 
