@@ -48,11 +48,45 @@ pub struct Report {
     pub carried: Vec<String>,
 }
 
-/// The source spec: the root `SPEC.md` of the tree being adopted.
-fn read_source(root: &Path) -> Result<String, String> {
-    let path = root.join("SPEC.md");
+/// The node being split, as a path from the root -- `.` for the root.
+///
+/// `adopt <dir>` names it (V11). The root is the case every entry point
+/// without `_at` means, so the verb on `.` behaves exactly as it did.
+const ROOT: &str = ".";
+
+/// A node's directory: the root itself for `.`, so a message names
+/// `/repo/SPEC.md` rather than `/repo/./SPEC.md`.
+fn dir_of(root: &Path, node: &str) -> PathBuf {
+    if node == ROOT {
+        root.to_path_buf()
+    } else {
+        root.join(node)
+    }
+}
+
+/// The source spec: the `SPEC.md` of the node being split (V11).
+fn read_source(root: &Path, node: &str) -> Result<String, String> {
+    let path = dir_of(root, node).join("SPEC.md");
     std::fs::read_to_string(&path)
         .map_err(|e| format!("adopt: {}: {e}", path.display()))
+}
+
+/// Is `home` a node strictly BELOW `node`? Rows move down the tree, into
+/// the source's own descendants (V11) -- the root's are every other node.
+fn below(home: &str, node: &str) -> bool {
+    if node == ROOT {
+        return home != ROOT;
+    }
+    home.strip_prefix(node).is_some_and(|r| r.starts_with('/'))
+}
+
+/// The spec a citation path names, as a message spells it.
+fn spec_of(node: &str) -> String {
+    if node == ROOT {
+        "SPEC.md".into()
+    } else {
+        format!("{node}/SPEC.md")
+    }
 }
 
 /// Rows the source carries in a form this reader does not accept (V8).
@@ -66,7 +100,18 @@ fn read_source(root: &Path) -> Result<String, String> {
 /// # Errors
 /// When the root carries no readable `SPEC.md` -- there is nothing to adopt.
 pub fn unreadable(root: &Path) -> Result<Vec<spec::Unreadable>, String> {
-    Ok(spec::unreadable_rows(&read_source(root)?))
+    unreadable_at(root, ROOT)
+}
+
+/// As [`unreadable`], for the spec of `node` (V11).
+///
+/// # Errors
+/// When `node` carries no readable `SPEC.md`.
+pub fn unreadable_at(
+    root: &Path,
+    node: &str,
+) -> Result<Vec<spec::Unreadable>, String> {
+    Ok(spec::unreadable_rows(&read_source(root, node)?))
 }
 
 /// PROPOSE a row-to-node map. Writes nothing, ever.
@@ -74,10 +119,18 @@ pub fn unreadable(root: &Path) -> Result<Vec<spec::Unreadable>, String> {
 /// # Errors
 /// When the root carries no readable `SPEC.md` -- there is nothing to adopt.
 pub fn propose(root: &Path) -> Result<Proposal, String> {
-    let source = read_source(root)?;
+    propose_at(root, ROOT)
+}
+
+/// As [`propose`], splitting `node` among the nodes declared below it (V11).
+///
+/// # Errors
+/// When `node` carries no readable `SPEC.md`.
+pub fn propose_at(root: &Path, node: &str) -> Result<Proposal, String> {
+    let source = read_source(root, node)?;
     let homes: Vec<fed::Home> = fed::declared(root)
         .into_iter()
-        .filter(|h| h.node != ".")
+        .filter(|h| below(&h.node, node))
         .collect();
     let rows = spec::rows(&source);
     let mut out = Proposal {
@@ -208,12 +261,22 @@ pub fn read_map(text: &str) -> Result<BTreeMap<String, String>, String> {
 /// whole thing again to learn about the third.
 #[must_use]
 pub fn refusals(root: &Path, map: &BTreeMap<String, String>) -> Vec<String> {
+    refusals_at(root, ROOT, map)
+}
+
+/// As [`refusals`], for a map splitting `node` (V11).
+#[must_use]
+pub fn refusals_at(
+    root: &Path,
+    node: &str,
+    map: &BTreeMap<String, String>,
+) -> Vec<String> {
     let declared: BTreeSet<String> =
         fed::declared(root).into_iter().map(|h| h.node).collect();
-    let source = read_source(root).unwrap_or_default();
+    let source = read_source(root, node).unwrap_or_default();
     let mut out: Vec<String> = map
         .iter()
-        .filter_map(|(id, node)| refusal(root, &declared, &source, (id, node)))
+        .filter_map(|entry| refusal(root, &declared, (node, &source), entry))
         .collect();
     out.extend(ranges_that_would_break(&source, map));
     out
@@ -279,7 +342,7 @@ fn claims_of(source: &str, id: &str) -> Option<Vec<u32>> {
 fn refusal(
     root: &Path,
     declared: &BTreeSet<String>,
-    source: &str,
+    (from, source): (&str, &str),
     entry: (&String, &String),
 ) -> Option<String> {
     let (id, node) = entry;
@@ -288,8 +351,17 @@ fn refusal(
             "adopt: no `\u{a7}F` row declares `{node}` -- adoption places rows onto structure that exists ({id})"
         ));
     }
+    // Mapping a row onto its own source is how a map says "stays".
+    if node != from && !below(node, from) {
+        return Some(format!(
+            "adopt: `{node}` is not below `{from}` -- a row moves down the tree, into a node the source declares ({id})"
+        ));
+    }
     if !spec::declares(source, id) {
-        return Some(format!("adopt: the source declares no `{id}`"));
+        return Some(format!(
+            "adopt: the source, {}, declares no `{id}`",
+            spec_of(from)
+        ));
     }
     let held = std::fs::read_to_string(root.join(node).join("SPEC.md"))
         .is_ok_and(|t| spec::declares(&t, id));
@@ -298,18 +370,49 @@ fn refusal(
     })
 }
 
-/// Where each row of the source ends up: the map, or root for the rest.
+/// Where each row of the source ends up: the map, or the source for the rest.
 fn homes_of(
     rows: &[spec::Row],
     map: &BTreeMap<String, String>,
+    from: &str,
 ) -> BTreeMap<String, String> {
     rows.iter()
         .map(|r| {
             let home =
-                map.get(&r.id).cloned().unwrap_or_else(|| ".".to_string());
+                map.get(&r.id).cloned().unwrap_or_else(|| from.to_string());
             (r.id.clone(), home)
         })
         .collect()
+}
+
+/// One migration: the node split, and where each of its rows goes.
+struct Move<'a> {
+    /// The source node, `.` for the root (V11).
+    from: &'a str,
+    /// Every source row's home, the source itself for a row that stays.
+    homes: BTreeMap<String, String>,
+}
+
+impl Move<'_> {
+    /// Only the rows that LEAVE, each with its new home.
+    fn moved(&self) -> BTreeMap<String, String> {
+        self.homes
+            .iter()
+            .filter(|(_, h)| *h != self.from)
+            .map(|(id, h)| (id.clone(), h.clone()))
+            .collect()
+    }
+
+    /// One line of `here`'s file with every citation of a moved row
+    /// pointing at the row's new home (V11).
+    fn rehome(&self, text: &str, here: &str) -> String {
+        let moved = self.moved();
+        let lines: Vec<String> = text
+            .split_inclusive('\n')
+            .map(|l| spec::rehome(l, here, self.from, &moved))
+            .collect();
+        lines.concat()
+    }
 }
 
 /// MIGRATE the source onto the federation the map names.
@@ -325,84 +428,127 @@ pub fn apply(
     root: &Path,
     map: &BTreeMap<String, String>,
 ) -> Result<Report, String> {
-    let refused = refusals(root, map);
+    apply_at(root, ROOT, map)
+}
+
+/// As [`apply`], splitting `node` onto the nodes below it (V11).
+///
+/// # Errors
+/// As [`apply`].
+pub fn apply_at(
+    root: &Path,
+    node: &str,
+    map: &BTreeMap<String, String>,
+) -> Result<Report, String> {
+    let refused = refusals_at(root, node, map);
     if !refused.is_empty() {
         return Err(refused.join("\n"));
     }
-    let source = read_source(root)?;
+    let source = read_source(root, node)?;
     let rows = spec::rows(&source);
-    let homes = homes_of(&rows, map);
-    let writes = writes_for(root, &source, &rows, &homes);
+    let mv = Move {
+        from: node,
+        homes: homes_of(&rows, map, node),
+    };
+    let writes = writes_for(root, &source, &rows, &mv);
     checked(&writes)?;
     // BEFORE the write, or it reads back what the migration just produced
     // and calls the tree's own violations its own.
     let carried = carried(&writes);
     commit(&writes)?;
-    let mut out = report(&rows, &homes, &writes);
+    let mut out = report(&rows, &mv, &writes);
     out.carried = carried;
     Ok(out)
 }
 
 /// Every file this migration would write, and its whole new text.
+///
+/// The source, each receiver, and then EVERY other node whose citations of
+/// a moved row would otherwise dangle (V11) -- a node the move does not
+/// write rows into still names those rows by their old owner.
 fn writes_for(
     root: &Path,
     source: &str,
     rows: &[spec::Row],
-    homes: &BTreeMap<String, String>,
+    mv: &Move,
 ) -> Vec<(PathBuf, String)> {
-    let moved: BTreeSet<String> = homes
-        .iter()
-        .filter(|(_, h)| *h != ".")
-        .map(|(id, _)| id.clone())
-        .collect();
-    let mut out =
-        vec![(root.join("SPEC.md"), root_after(source, &moved, homes))];
+    let moved: BTreeSet<String> = mv.moved().into_keys().collect();
+    let mut out = vec![(
+        dir_of(root, mv.from).join("SPEC.md"),
+        mv.rehome(&source_after(source, &moved, mv), mv.from),
+    )];
     out.extend(
-        destinations(homes)
+        destinations(mv)
             .into_iter()
-            .map(|node| write_for(root, rows, homes, node)),
+            .map(|node| write_for(root, rows, mv, node)),
     );
+    out.extend(bystanders(root, mv, &out));
     out
+}
+
+/// Nodes neither giving nor receiving rows whose citations still move.
+fn bystanders(
+    root: &Path,
+    mv: &Move,
+    written: &[(PathBuf, String)],
+) -> Vec<(PathBuf, String)> {
+    fed::discover(root)
+        .into_iter()
+        .map(|dir| dir.join("SPEC.md"))
+        .filter(|p| written.iter().all(|(w, _)| w != p))
+        .filter_map(|path| {
+            let text = std::fs::read_to_string(&path).ok()?;
+            let here = node_name(root, path.parent()?);
+            let new = mv.rehome(&text, &here);
+            (new != text).then_some((path, new))
+        })
+        .collect()
+}
+
+/// A directory as a citation names its node: `.` for the root.
+fn node_name(root: &Path, dir: &Path) -> String {
+    let rel = dir.strip_prefix(root).unwrap_or(dir);
+    if rel.as_os_str().is_empty() {
+        ROOT.into()
+    } else {
+        rel.to_string_lossy().into_owned()
+    }
 }
 
 /// One receiving node's file and its whole new text.
 fn write_for(
     root: &Path,
     rows: &[spec::Row],
-    homes: &BTreeMap<String, String>,
+    mv: &Move,
     node: String,
 ) -> (PathBuf, String) {
     let batch: Vec<&spec::Row> = rows
         .iter()
-        .filter(|r| homes.get(&r.id).is_some_and(|h| *h == node))
+        .filter(|r| mv.homes.get(&r.id).is_some_and(|h| *h == node))
         .collect();
     let path = root.join(&node).join("SPEC.md");
     let text = std::fs::read_to_string(&path).unwrap_or_default();
-    let new = receive(&text, &node, &batch, homes);
+    let new = mv.rehome(&receive(&text, &node, &batch, &mv.homes), &node);
     (path, new)
 }
 
-/// The nodes receiving rows, root excluded and each named once.
-fn destinations(homes: &BTreeMap<String, String>) -> BTreeSet<String> {
-    homes.values().filter(|h| *h != ".").cloned().collect()
+/// The nodes receiving rows, the source excluded and each named once.
+fn destinations(mv: &Move) -> BTreeSet<String> {
+    mv.moved().into_values().collect()
 }
 
-/// The root file after the move: moved rows gone, everything that stays
+/// The source file after the move: moved rows gone, everything that stays
 /// requalified so its citations still resolve.
 ///
 /// EVERY line is requalified, not only the row lines. `§G`, `§C` and `§I` are
 /// prose that cites rules too, and a migration that fixed the tables while
 /// leaving the prose pointing at rows that left would break exactly the links
 /// a reader follows first.
-fn root_after(
-    source: &str,
-    moved: &BTreeSet<String>,
-    homes: &BTreeMap<String, String>,
-) -> String {
+fn source_after(source: &str, moved: &BTreeSet<String>, mv: &Move) -> String {
     let kept: Vec<String> = source
         .lines()
         .filter(|l| !opens_a_moved_row(l, moved))
-        .map(|l| spec::requalify(l, ".", homes))
+        .map(|l| spec::requalify(l, mv.from, &mv.homes))
         .collect();
     format!("{}\n", kept.join("\n").trim_end())
 }
@@ -611,12 +757,12 @@ fn commit(writes: &[(PathBuf, String)]) -> Result<(), String> {
 /// Count in and out, which is what makes V1 a measurement.
 fn report(
     rows: &[spec::Row],
-    homes: &BTreeMap<String, String>,
+    mv: &Move,
     writes: &[(PathBuf, String)],
 ) -> Report {
     let moved = rows
         .iter()
-        .filter(|r| homes.get(&r.id).is_some_and(|h| h != "."))
+        .filter(|r| mv.homes.get(&r.id).is_some_and(|h| h != mv.from))
         .count();
     Report {
         rows_in: rows.len(),
@@ -633,3 +779,7 @@ fn report(
 #[cfg(test)]
 #[path = "tests/adopt.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "tests/subtree.rs"]
+mod subtree_tests;
