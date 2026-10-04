@@ -51,6 +51,33 @@ publish run surfaced two warnings that eleven gate steps had read past
 
 ## [Unreleased]
 
+## [0.5.4] - 2026-10-04
+
+Still the `0.5` rung, and a patch. Its subject is shell federations, found
+by running sherd on one: `plan` now plans them, `adopt` can split a node
+that is not the root, and `sync` writes output a Markdown linter accepts.
+It also ships the code that `0.5.3`'s entry for `adopt` claimed. That entry
+said rows are placed by the script they cite, but `0.5.3` shipped only the
+spec row and a test file nothing compiled. The entry below corrects it, and
+a test now fails the build on any test file that is not compiled.
+
+`cargo semver-checks check-release --baseline-rev v0.5.3` requires no semver
+update; every new library item is additive. What a caller can observe
+changing:
+
+- `plan` exits 2, naming the node, when a discovered `SPEC.md` cannot be
+  read. It used to skip that node and print a plan without it.
+- `plan` on a repository with shell nodes now lists steps where it listed
+  every row as unmanaged. On a repository without shell nodes its output,
+  text and `--format json`, is byte-identical to `0.5.3`'s.
+- `adopt <dir>` reads `<dir>/SPEC.md`. It used to read the root spec
+  whatever directory it was given. `adopt .` reads the root as before, and
+  now also rewrites other nodes' citations of a row it moves.
+- `sync` writes one blank line under an empty section, and copies a `§F`
+  cell holding a backslash as written. Either can make `sync --check`
+  report a node stale once, until one `sync` rewrites it.
+- The dependency floor is `microlith 0.7.4`.
+
 ### Added
 
 - **`sherd wave` schedules shell nodes by the scripts they call**
@@ -127,6 +154,12 @@ publish run surfaced two warnings that eleven gate steps had read past
   its parent. The fix is upstream, in microlith 0.7.4's `escape`, and
   sherd now requires that version. A `§N` written by an older `sync`
   keeps its doubled spelling until the next `sync` rewrites it once.
+- **Contributor-facing: the `zizmor` gate step tells "could not run" from
+  a finding** (`.:T110`, #101). It reads zizmor's exit codes, so a run that
+  never audited (for example, a Claude Code cloud session whose placeholder
+  token GitHub refuses) is no longer reported as a workflow security
+  finding. In those sessions it drops the placeholder token and falls back
+  to an offline audit.
 
 ## [0.5.3] - 2026-10-03
 
