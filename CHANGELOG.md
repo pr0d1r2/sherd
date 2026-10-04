@@ -121,6 +121,12 @@ publish run surfaced two warnings that eleven gate steps had read past
   made every frozen node plannable, while the output looked clean. `plan`
   now names each unreadable node and exits 2, in both output forms, and
   `apply` refuses the same way. Library: `plan::unreadable`.
+- **`sherd sync` copies a backslash in a `§F` cell into `§N` as written**
+  (`src/fed:B17`, #98). A cell such as `x \& y` reached each child's `§N`
+  as `x \\& y`, which decodes the same but is spelled differently from
+  its parent. The fix is upstream, in microlith 0.7.4's `escape`, and
+  sherd now requires that version. A `§N` written by an older `sync`
+  keeps its doubled spelling until the next `sync` rewrites it once.
 
 ## [0.5.3] - 2026-10-03
 
