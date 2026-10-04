@@ -65,19 +65,24 @@ fn a_lens_holding_a_pipe_stays_one_cell() {
     }
 }
 
-/// The one thing the switch to `microlith::escape` CHANGES, pinned so it
-/// is a decision rather than a surprise: upstream doubles every
-/// backslash, the local version doubled only the ones V4 would have read
-/// as an escape. Both decode to the same cell, and the decode is what a
-/// reader sees -- but a `§N` row holding a Windows path is written
-/// differently than it was, and `sync` rewrites it once.
+/// V16 / B17 (#98): a cell authored in the shortest form is written back
+/// BYTE FOR BYTE, so `§N` spells a lens exactly as its `§F` does (V21).
+/// This replaces a test that pinned the opposite -- microlith before
+/// 0.7.4 doubled every backslash, `x \& y` became `x \\& y`, and the pin
+/// called that a decision. A backslash `split_row` would spend (before
+/// `\`, before `|`, at the end) is still doubled, and every case
+/// decodes back to itself.
 #[test]
-fn upstream_doubles_every_backslash_and_the_decode_is_unchanged() {
-    assert_eq!(escape_cell(r"C:\path"), r"C:\\path");
-    assert_eq!(
-        split_row(&escape_cell(r"C:\path")),
-        vec![r"C:\path".to_string()]
-    );
+fn a_shortest_form_cell_is_copied_byte_for_byte() {
+    for (cell, written) in [
+        (r"x \& y", r"x \& y"),
+        (r"C:\path", r"C:\path"),
+        (r"tail\", r"tail\\"),
+        (r"a|b", r"a\|b"),
+    ] {
+        assert_eq!(escape_cell(cell), written, "{cell}");
+        assert_eq!(split_row(&escape_cell(cell)), vec![cell.to_string()]);
+    }
 }
 
 #[test]

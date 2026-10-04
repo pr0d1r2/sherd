@@ -151,6 +151,27 @@ fn a_node_sync_cannot_read_is_usage_not_stale() -> Result<(), String> {
     Ok(())
 }
 
+/// `src/fed:B17`, #98's repro through the verb: a `§F` cell written
+/// `x \& y` reaches the child's `§N` as `x \& y`, not `x \\& y`, and a
+/// second `sync --check` agrees.
+#[test]
+fn sync_copies_a_backslash_cell_verbatim() -> Result<(), String> {
+    let r = crate::testrepo::TestRepo::new("cli-sync-backslash")?;
+    r.write(
+        "SPEC.md",
+        "# SPEC\n\n## \u{a7}G GOAL\n\ng\n\n## \u{a7}F FEDERATION\n\n\
+         dir|owns|\u{22a5}owns|tokens\na|x \\& y|-|-\n",
+    )?;
+    r.write("a/SPEC.md", "# SPEC\n\n## \u{a7}G GOAL\n\na\n")?;
+    let node = r.path().join("a");
+    assert_eq!(sync_cmd(r.path(), Some(&node), false), ExitCode::from(1));
+    let out = std::fs::read_to_string(node.join("SPEC.md"))
+        .map_err(|e| e.to_string())?;
+    assert!(out.contains("\nself|a|x \\& y\n"), "{out}");
+    assert_eq!(sync_cmd(r.path(), Some(&node), true), ExitCode::SUCCESS);
+    Ok(())
+}
+
 /// `src/spec:V12` through the verb (#106): a node whose `§V`, `§T` and `§B`
 /// are empty comes out of `sync` with one blank line under each heading,
 /// and `--check` then reads it as clean. Two blank lines is what

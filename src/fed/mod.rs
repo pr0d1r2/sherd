@@ -691,13 +691,13 @@ pub fn nav_section(rows: &[Nav]) -> String {
 /// A cell as `split_row` reads it back (V16): `microlith::escape`, the
 /// inverse of the decode above and the same one microlith's own writers use.
 ///
-/// The local version doubled a backslash only where V4 would otherwise read
-/// it as an escape -- before `\`, before `|`, or ending the cell -- and left
-/// `C:\path` single. Upstream doubles every backslash, so the ENCODED form of
-/// such a cell changes; the DECODED form does not, which is the only thing a
-/// reader sees and the only thing V16 asserts. One codec used in both
-/// directions is what `B13` asks for: a reader and a writer that are two
-/// readings of one sentence will drift again.
+/// Since microlith 0.7.4 (its B44) it writes the SHORTEST form: a backslash
+/// is doubled only where V4 would otherwise read it as an escape -- before
+/// `\`, before `|`, or ending the cell -- so `C:\path` and `x \& y` come
+/// back as their author wrote them and `§N` copies `§F` byte for byte (V21,
+/// `B17`). The fix went upstream rather than into a local writer: one codec
+/// used in both directions is what `B13` asks for, and a reader and a writer
+/// that are two readings of one sentence will drift again.
 fn escape_cell(cell: &str) -> String {
     microlith::escape(cell)
 }
