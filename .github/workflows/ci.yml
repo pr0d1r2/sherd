@@ -158,7 +158,7 @@ jobs:
       # the cache; it just cannot populate it. Without this guard the step
       # fails on an outside contributor's PR, turning a caching optimisation
       # into a gate that only members can pass.
-      - uses: cachix/cachix-action@5f2d7c5294214f71b873db4b969586b980625e71 # v17
+      - uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
         with:
           name: pr0d1r2
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
@@ -284,7 +284,7 @@ jobs:
       # upstream cache, and x86_64-linux had no source for it. This job builds
       # the package rather than entering the shell, so what it contributes is
       # the `sherd` derivation itself. Same fork guard, same reason.
-      - uses: cachix/cachix-action@5f2d7c5294214f71b873db4b969586b980625e71 # v17
+      - uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
         with:
           name: pr0d1r2
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
