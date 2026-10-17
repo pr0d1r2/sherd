@@ -548,14 +548,14 @@ local all = (fast) {
 }
 
 hooks {
-  /// `stash = "git"` is correctness, not speed -- without it a partially staged
-  /// file (`git add -p`) is checked as it looks in the WORKTREE, giving a
-  /// verdict about code you are not committing.
-  ///
-  /// The hooks in `.githooks/` are TRACKED FILES, not generated ones, and they
-  /// REFUSE when hk is missing rather than skipping. sherd's own V26 says a
-  /// gate that cannot run has not passed, and B17/B20/B24 are three recordings
-  /// of that exact failure shape.
+  // `stash = "git"` is correctness, not speed -- without it a partially staged
+  // file (`git add -p`) is checked as it looks in the WORKTREE, giving a
+  // verdict about code you are not committing.
+  //
+  // The hooks in `.githooks/` are TRACKED FILES, not generated ones, and they
+  // REFUSE when hk is missing rather than skipping. sherd's own V26 says a
+  // gate that cannot run has not passed, and B17/B20/B24 are three recordings
+  // of that exact failure shape.
   ["pre-commit"] {
     fix = true
     stash = "git"
@@ -564,7 +564,7 @@ hooks {
   ["pre-push"] {
     steps = all
   }
-  /// What `hk check` runs -- the entry point for CI and for a by-hand full run.
+  // What `hk check` runs -- the entry point for CI and for a by-hand full run.
   ["check"] {
     steps = all
   }
