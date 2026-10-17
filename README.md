@@ -31,8 +31,6 @@
 [![built with SDD](https://img.shields.io/badge/built_with-spec--driven_development-D97757)](SPEC.md)
 <!-- END badges -->
 
-Read [LLM-DISCLAIMER](docs/LLM-DISCLAIMER.md) first.
-
 Federated `SPEC.md` for spec-driven development on **local** models — a 20B
 running on your own hardware, not a frontier API.
 
