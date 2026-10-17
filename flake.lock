@@ -12,10 +12,10 @@
         ]
       },
       "locked": {
-        "lastModified": 1792235336,
-        "narHash": "sha256-qLSwbcmlJtW5QXVQV2dxwYji+D3vUjPdLwT5qQnA6Eo=",
+        "lastModified": 1792255455,
+        "narHash": "sha256-pTbXzExzqKJRhsfvtUm1RQGSZ0UxCSvCjlaTuvA6dMo=",
         "ref": "main",
-        "rev": "9c806785a2aca089d8e843d05a187167ab820d40",
+        "rev": "5cd2efeb3634e9a650133764e59f44e5e8d58707",
         "shallow": true,
         "type": "git",
         "url": "https://github.com/pr0d1r2/nix-hk"
