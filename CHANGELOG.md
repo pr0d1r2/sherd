@@ -65,12 +65,28 @@ publish run surfaced two warnings that eleven gate steps had read past
   (0 held, 1 fell, 2 unmeasurable) are the cargo ones. A package has one
   build, so only the `lines` row is read. A failed `swift test` run is
   exit 2 even when an earlier run's JSON is still on disk. `SHERD_SWIFT`
-  names the `swift` binary. Excluding a file or function that needs real
-  hardware is not yet supported (`src/debt:T5`). A tree with a
+  names the `swift` binary. A tree with a
   `Cargo.toml` is measured exactly as before. Library:
   `debt::toolchain_of`, `debt::Toolchain`, `debt::swift_coverage`,
   `debt::llvm_cov_lines` (the JSON and the package root),
   `debt::swift_bin`.
+- **SwiftPM coverage exclusions, by file or by function, under a cap**
+  (`src/debt:V10`, `src/debt:V11`, #138). `exclude <path> <reason>` in
+  `.coverage` drops a `Sources/` file; `exclude <path>:<function>
+  <reason>` drops one function, named as `swift demangle --simplified`
+  prints it without its qualifiers (`KitCrypto.make(_:)`, and `static
+  Keys.load(tag:)` is `Keys.load(tag:)`), closures inside it included. A
+  row without a reason excludes nothing; a row that matches nothing is
+  exit 2. A function leaves by exactly the lines llvm-cov counted for it,
+  recomputed from its regions, and sherd refuses when that recomputation
+  does not give back the file's own count. `excluded <n>` caps the
+  excluded `Sources/` lines (absent is 0): more fails `--check` and
+  `--record` writes nothing; `--record` lowers `<n>` to the measured
+  total and never raises it. On age-plugin-se, its four Secure Enclave
+  key functions are 22 lines. Cargo trees read neither row. Library:
+  `debt::exclusions`, `debt::Exclusion`, `debt::excluded_cap`,
+  `debt::measure_export`, `debt::swift_measure`, `debt::SwiftMeasure`,
+  `debt::excluded_verdict`, `debt::record_excluded`.
 
 ## [0.5.4] - 2026-10-04
 
