@@ -14,7 +14,8 @@ use std::process::Command;
 
 pub(crate) mod swift;
 pub use swift::{
-    Toolchain, llvm_cov_lines, swift_bin, swift_coverage, toolchain_of,
+    Toolchain, excluded_files, llvm_cov_lines, llvm_cov_lines_except,
+    swift_bin, swift_coverage, toolchain_of,
 };
 
 /// The gate's own clippy invocation. A different build is a different number
