@@ -12,10 +12,16 @@
 use std::path::Path;
 use std::process::Command;
 
+mod llvm_json;
 pub(crate) mod swift;
+pub(crate) mod swift_fn;
 pub use swift::{
     Toolchain, excluded_files, llvm_cov_lines, llvm_cov_lines_except,
     swift_bin, swift_coverage, toolchain_of,
+};
+pub use swift_fn::{
+    Exclusion, SwiftMeasure, excluded_cap, excluded_verdict, exclusions,
+    measure_export, record_excluded, swift_measure,
 };
 
 /// The gate's own clippy invocation. A different build is a different number

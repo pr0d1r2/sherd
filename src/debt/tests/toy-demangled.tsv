@@ -1,0 +1,9 @@
+$s3Toy9KitCryptoVACycfC	KitCrypto.init()
+$s3Toy9KitCryptoV4makeyS2iF	KitCrypto.make(_:)
+$s3Toy9KitCryptoV7coveredySiSSF	KitCrypto.covered(_:)
+$s3Toy6helperSiyF	helper()
+$s3Toy6helperSiyFS2icfU_	closure #1 in helper()
+$s3Toy7guardedSiyF	guarded()
+$s3Toy4KeysO4load3tagSiSS_tKFZ	static Keys.load(tag:)
+$s3Toy4KeysO6sharedSivgZ	static Keys.shared.getter
+$s3Toy9KitCryptoV5inExtSiyF	KitCrypto.inExt()
