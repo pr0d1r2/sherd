@@ -55,17 +55,22 @@ publish run surfaced two warnings that eleven gate steps had read past
 
 - **`sherd coverage` measures a SwiftPM package** (`src/debt:V10`, #138).
   A repository with `Package.swift` at its root and no `Cargo.toml` is
-  measured by `swift test --enable-code-coverage`, reading the line total
-  (`data[0].totals.lines`) from the llvm-cov JSON that `swift test
-  --show-codecov-path` names. The floor, the `.coverage` format and the
-  exit codes (0 held, 1 fell, 2 unmeasurable) are the cargo ones. A
-  package has one build, so only the `lines` row is read. A failed `swift
-  test` run is exit 2 even when an earlier run's JSON is still on disk.
-  `SHERD_SWIFT` names the `swift` binary. The total includes `Tests/`,
-  which `cargo llvm-cov` leaves out; per-file exclusions are not yet
-  supported. A tree with a `Cargo.toml` is measured exactly as before.
-  Library: `debt::toolchain_of`, `debt::Toolchain`, `debt::swift_coverage`,
-  `debt::llvm_cov_lines`, `debt::swift_bin`.
+  measured by `swift test --enable-code-coverage`, reading the llvm-cov
+  JSON that `swift test --show-codecov-path` names. The figure is the
+  line coverage of the files under the package's `Sources/` (summed from
+  `data[0].files[]`), not the export's `totals`, which also count
+  `Tests/` and a `.build/` derived test runner; on age-plugin-se that is
+  87.67% rather than 95.90%. A target whose `path:` is outside `Sources/`
+  is not measured. The floor, the `.coverage` format and the exit codes
+  (0 held, 1 fell, 2 unmeasurable) are the cargo ones. A package has one
+  build, so only the `lines` row is read. A failed `swift test` run is
+  exit 2 even when an earlier run's JSON is still on disk. `SHERD_SWIFT`
+  names the `swift` binary. Excluding a file or function that needs real
+  hardware is not yet supported (`src/debt:T5`). A tree with a
+  `Cargo.toml` is measured exactly as before. Library:
+  `debt::toolchain_of`, `debt::Toolchain`, `debt::swift_coverage`,
+  `debt::llvm_cov_lines` (the JSON and the package root),
+  `debt::swift_bin`.
 
 ## [0.5.4] - 2026-10-04
 
