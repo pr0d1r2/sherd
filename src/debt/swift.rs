@@ -36,12 +36,12 @@ pub fn swift_bin() -> String {
     std::env::var("SHERD_SWIFT").unwrap_or_else(|_| "swift".into())
 }
 
-/// SwiftPM's TOTAL line percentage for `root`, in hundredths.
+/// The line percentage of `root`'s `Sources/` under SwiftPM, in hundredths.
 ///
 /// `None` when either `swift test` run FAILED or the JSON has no line
-/// total. The status is checked before the file is read: a previous run's
-/// JSON is still on disk, and reading it would report an old tree's number
-/// for this one (`V3`, `.:V118`).
+/// under `Sources/` ([`llvm_cov_lines`]). The status is checked before
+/// the file is read: a previous run's JSON is still on disk, and reading it
+/// would report an old tree's number for this one (`V3`, `.:V118`).
 #[must_use]
 pub fn swift_coverage(root: &Path, swift: &str) -> Option<usize> {
     let run = |args: &[&str]| {
@@ -56,22 +56,81 @@ pub fn swift_coverage(root: &Path, swift: &str) -> Option<usize> {
     let shown = run(&["test", "--show-codecov-path"])?;
     let shown = String::from_utf8_lossy(&shown);
     let path = shown.lines().map(str::trim).rfind(|l| !l.is_empty())?;
-    llvm_cov_lines(&std::fs::read_to_string(root.join(path)).ok()?)
+    llvm_cov_lines(&std::fs::read_to_string(root.join(path)).ok()?, root)
 }
 
-/// `data[0].totals.lines` of an llvm-cov JSON export, in hundredths and
-/// rounded the way llvm-cov prints a percentage.
+/// The line percentage of the package's OWN sources in an llvm-cov JSON
+/// export, in hundredths and rounded the way llvm-cov prints a percentage.
+///
+/// Σ `covered` / Σ `count` of `summary.lines` over the `data[0].files[]`
+/// entries under `root`'s `Sources/` (`V10`). Not `data[0].totals`, which
+/// also counts `Tests/` and the `.build/` derived test runner. `None` when
+/// no line is under `Sources/`, or an entry's `summary` cannot be read.
 #[must_use]
-pub fn llvm_cov_lines(json: &str) -> Option<usize> {
-    let totals = after_key(json, "totals")?;
-    let lines = after_key(totals, "lines")?;
-    let lines = lines.get(..lines.find('}')?)?;
-    let count = number_of(lines, "count")?;
-    let covered = number_of(lines, "covered")?;
-    // Round half up: `covered / count` in hundredths, as `%.2f` prints it.
+pub fn llvm_cov_lines(json: &str, root: &Path) -> Option<usize> {
+    let roots = [Some(root.to_path_buf()), root.canonicalize().ok()];
+    let (mut count, mut covered) = (0_usize, 0_usize);
+    let mut rest = json;
+    while let Some(entry) = after_key(rest, "filename") {
+        let (name, lines, tail) = file_lines(entry)?;
+        rest = tail;
+        if is_source(Path::new(&name), &roots) {
+            count = count.checked_add(number_of(lines, "count")?)?;
+            covered = covered.checked_add(number_of(lines, "covered")?)?;
+        }
+    }
+    hundredths(covered, count)
+}
+
+/// One `files[]` entry from its `filename` value on: the name, its
+/// `summary.lines` object, and the text after the name. `None` when the
+/// next `summary` belongs to a LATER file -- this one has none.
+fn file_lines(entry: &str) -> Option<(String, &str, &str)> {
+    let (name, rest) = string_of(entry)?;
+    let summary = after_key(rest, "summary")?;
+    let next = rest.find("\"filename\"").unwrap_or(rest.len());
+    if rest.len().checked_sub(summary.len())? > next {
+        return None;
+    }
+    let lines = after_key(summary, "lines")?;
+    Some((name, lines.get(..lines.find('}')?)?, rest))
+}
+
+/// `covered / count` in hundredths, rounded half up as `%.2f` prints it.
+/// `None` for no lines: nothing was measured.
+fn hundredths(covered: usize, count: usize) -> Option<usize> {
     let scale = COVERAGE_SCALE.checked_mul(COVERAGE_SCALE)?;
     let twice = covered.checked_mul(scale)?.checked_mul(2)?;
     twice.checked_add(count)?.checked_div(count.checked_mul(2)?)
+}
+
+/// Is `file` under one of `roots`' `Sources/`? A relative `file` is read
+/// against the root; an absolute one outside every root is not a source.
+fn is_source(file: &Path, roots: &[Option<std::path::PathBuf>]) -> bool {
+    let sources = Path::new("Sources");
+    if file.is_relative() {
+        return file.starts_with(sources);
+    }
+    roots.iter().flatten().any(|r| {
+        file.strip_prefix(r)
+            .is_ok_and(|rel| rel.starts_with(sources))
+    })
+}
+
+/// A JSON string value and the text after it. `\"`, `\\` and `\/` are
+/// unescaped; a path needs no other escape.
+fn string_of(v: &str) -> Option<(String, &str)> {
+    let body = v.trim_start().strip_prefix('"')?;
+    let mut out = String::new();
+    let mut chars = body.char_indices();
+    while let Some((i, c)) = chars.next() {
+        match c {
+            '"' => return Some((out, body.get(i.checked_add(1)?..)?)),
+            '\\' => out.push(chars.next()?.1),
+            _ => out.push(c),
+        }
+    }
+    None
 }
 
 /// The text after `"key"` and its `:`, or `None` when the key is absent.
