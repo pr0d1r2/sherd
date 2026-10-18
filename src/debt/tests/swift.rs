@@ -172,3 +172,26 @@ fn a_failed_test_run_is_unmeasurable_despite_an_old_json() -> Result<(), String>
     assert_eq!(swift_coverage(r.path(), "definitely-not-a-swift"), None);
     Ok(())
 }
+
+/// `T5`: an `exclude <path> <reason>` row drops a file from numerator and
+/// denominator; a row with no reason excludes nothing.
+#[test]
+fn an_excluded_file_leaves_the_figure() -> Result<(), String> {
+    let r = TestRepo::new("swift-exclude")?;
+    let root = r.path();
+    let files = [
+        file_entry(&format!("{}/Sources/A.swift", root.display()), 10, 10),
+        file_entry("Sources/SecureEnclave.swift", 10, 0),
+    ];
+    let json = export(&files);
+    assert_eq!(llvm_cov_lines(&json, root), Some(5000));
+    r.write(
+        ".coverage",
+        "lines 50.00\nexclude Sources/SecureEnclave.swift needs a real SE\n\
+         exclude Sources/A.swift\n",
+    )?;
+    let ex = excluded_files(root);
+    assert_eq!(ex, ["Sources/SecureEnclave.swift"], "reasonless ignored");
+    assert_eq!(llvm_cov_lines_except(&json, root, &ex), Some(10_000));
+    Ok(())
+}

@@ -56,7 +56,25 @@ pub fn swift_coverage(root: &Path, swift: &str) -> Option<usize> {
     let shown = run(&["test", "--show-codecov-path"])?;
     let shown = String::from_utf8_lossy(&shown);
     let path = shown.lines().map(str::trim).rfind(|l| !l.is_empty())?;
-    llvm_cov_lines(&std::fs::read_to_string(root.join(path)).ok()?, root)
+    let json = std::fs::read_to_string(root.join(path)).ok()?;
+    llvm_cov_lines_except(&json, root, &excluded_files(root))
+}
+
+/// The `Sources/` files `.coverage` EXCLUDES, as root-relative paths: one
+/// `exclude <path> <reason>` row each (`V10`). A row with no reason is not an
+/// exclusion -- an unexplained one is how a floor gets quietly loosened.
+#[must_use]
+pub fn excluded_files(root: &Path) -> Vec<String> {
+    let text =
+        std::fs::read_to_string(root.join(".coverage")).unwrap_or_default();
+    text.lines()
+        .filter_map(|l| {
+            let mut w = l.strip_prefix("exclude ")?.split_whitespace();
+            let path = w.next()?;
+            w.next()?;
+            Some(path.trim_start_matches("./").to_string())
+        })
+        .collect()
 }
 
 /// The line percentage of the package's OWN sources in an llvm-cov JSON
@@ -68,13 +86,26 @@ pub fn swift_coverage(root: &Path, swift: &str) -> Option<usize> {
 /// no line is under `Sources/`, or an entry's `summary` cannot be read.
 #[must_use]
 pub fn llvm_cov_lines(json: &str, root: &Path) -> Option<usize> {
+    llvm_cov_lines_except(json, root, &[])
+}
+
+/// [`llvm_cov_lines`] without the root-relative `excluded` files, which
+/// leave the numerator AND the denominator. `None` when nothing is left.
+#[must_use]
+pub fn llvm_cov_lines_except(
+    json: &str,
+    root: &Path,
+    excluded: &[String],
+) -> Option<usize> {
     let roots = [Some(root.to_path_buf()), root.canonicalize().ok()];
     let (mut count, mut covered) = (0_usize, 0_usize);
     let mut rest = json;
     while let Some(entry) = after_key(rest, "filename") {
         let (name, lines, tail) = file_lines(entry)?;
         rest = tail;
-        if is_source(Path::new(&name), &roots) {
+        if is_source(Path::new(&name), &roots)
+            && !is_excluded(Path::new(&name), &roots, excluded)
+        {
             count = count.checked_add(number_of(lines, "count")?)?;
             covered = covered.checked_add(number_of(lines, "covered")?)?;
         }
@@ -115,6 +146,23 @@ fn is_source(file: &Path, roots: &[Option<std::path::PathBuf>]) -> bool {
         file.strip_prefix(r)
             .is_ok_and(|rel| rel.starts_with(sources))
     })
+}
+
+/// Is `file` one of the `excluded` root-relative paths?
+fn is_excluded(
+    file: &Path,
+    roots: &[Option<std::path::PathBuf>],
+    excluded: &[String],
+) -> bool {
+    let rel = if file.is_relative() {
+        Some(file)
+    } else {
+        roots
+            .iter()
+            .flatten()
+            .find_map(|r| file.strip_prefix(r).ok())
+    };
+    rel.is_some_and(|rel| excluded.iter().any(|e| rel == Path::new(e)))
 }
 
 /// A JSON string value and the text after it. `\"`, `\\` and `\/` are
