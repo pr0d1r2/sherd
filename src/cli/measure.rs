@@ -66,7 +66,11 @@ pub(super) fn coverage_cmd(
 }
 
 /// `--record` for one build: raise its row, refusing a drop.
-fn record_coverage(root: &Path, build: crate::debt::Build, now: usize) -> u8 {
+pub(super) fn record_coverage(
+    root: &Path,
+    build: crate::debt::Build,
+    now: usize,
+) -> u8 {
     match crate::debt::record_coverage_of(root, build, now) {
         Ok(msg) => {
             println!("{msg}");
@@ -80,7 +84,7 @@ fn record_coverage(root: &Path, build: crate::debt::Build, now: usize) -> u8 {
 }
 
 /// `--check` for one build, naming the row either way (`.:V48`).
-fn check_coverage(row: &str, now: usize, was: usize) -> u8 {
+pub(super) fn check_coverage(row: &str, now: usize, was: usize) -> u8 {
     let (ok, report) = crate::debt::coverage_verdict(now, was);
     if ok {
         println!("  {row}: {}", report.trim_start());
