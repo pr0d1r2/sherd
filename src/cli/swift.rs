@@ -20,41 +20,61 @@ pub(super) fn coverage_in(
 }
 
 /// A SwiftPM package has ONE build, so only `lines` is measured; a
-/// `lines-default` row is a cargo feature split and is left as it is.
+/// `lines-default` row is a cargo feature split and is left as it is. The
+/// `excluded` cap is checked beside the floor, and a breach of it records
+/// NOTHING: a floor raised by lines the cap refuses was not earned
+/// (`src/debt:V11`).
 fn swift_coverage_cmd(
     root: &Path,
     mode: Option<&str>,
     swift: &str,
 ) -> ExitCode {
     use crate::debt::Build;
-    let Some((was, now)) = swift_floor_and_now(root, swift) else {
-        return ExitCode::from(2);
-    };
-    ExitCode::from(if mode == Some("--record") {
-        record_coverage(root, Build::All, now)
-    } else {
-        check_coverage(Build::All.row(), now, was)
-    })
-}
-
-/// The `lines` floor and the SwiftPM measurement, or `None` once the
-/// missing one is named: either is an ERROR, never a breach (`.:V48`).
-fn swift_floor_and_now(root: &Path, swift: &str) -> Option<(usize, usize)> {
     let Some(was) = crate::debt::recorded_floor(root) else {
         let path = root.join(".coverage");
         eprintln!("sherd: {}: no `lines` row to read", path.display());
-        return None;
+        return ExitCode::from(2);
     };
-    let now = crate::debt::swift_coverage(root, swift);
-    if now.is_none() {
-        eprintln!(
-            "sherd: could not read a coverage total from `{swift} test` -- \
-             that is an ERROR, not a floor breach (sherd/debt:V10)"
-        );
+    let m = match crate::debt::swift_measure(root, swift) {
+        Ok(m) => m,
+        Err(e) => {
+            eprintln!("sherd: {e}");
+            return ExitCode::from(2);
+        }
+    };
+    let cap = crate::debt::excluded_cap(root).unwrap_or(0);
+    let (fits, report) = crate::debt::excluded_verdict(m.excluded, cap);
+    if !fits {
+        eprintln!("excluded: {report}");
+        return ExitCode::from(1);
     }
-    Some((was, now?))
+    println!("  excluded: {}", report.trim_start());
+    ExitCode::from(if mode == Some("--record") {
+        record_coverage(root, Build::All, m.lines)
+            .max(record_excluded(root, m.excluded))
+    } else {
+        check_coverage(Build::All.row(), m.lines, was)
+    })
+}
+
+/// `--record` for the cap: lower it, refusing a raise.
+fn record_excluded(root: &Path, now: usize) -> u8 {
+    match crate::debt::record_excluded(root, now) {
+        Ok(msg) => {
+            println!("{msg}");
+            0
+        }
+        Err(e) => {
+            eprintln!("sherd: {e}");
+            1
+        }
+    }
 }
 
 #[cfg(test)]
 #[path = "tests/swift.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "tests/swift_fn.rs"]
+mod fn_tests;
