@@ -12,6 +12,11 @@
 use std::path::Path;
 use std::process::Command;
 
+pub(crate) mod swift;
+pub use swift::{
+    Toolchain, llvm_cov_lines, swift_bin, swift_coverage, toolchain_of,
+};
+
 /// The gate's own clippy invocation. A different build is a different number
 /// (`V4`).
 pub const GATE_ARGS: [&str; 5] = [

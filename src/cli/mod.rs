@@ -26,6 +26,9 @@ use steps::*;
 mod measure;
 use measure::*;
 
+mod swift;
+use swift::*;
+
 mod check;
 use check::*;
 
@@ -120,10 +123,11 @@ pub fn run_args(args: Vec<String>) -> ExitCode {
             args.get(1).map(String::as_str),
             &crate::land::cargo_bin(),
         ),
-        Some("coverage") => coverage_cmd(
+        Some("coverage") => coverage_in(
             &root,
             args.get(1).map(String::as_str),
             &crate::land::cargo_bin(),
+            &crate::debt::swift_bin(),
         ),
         Some("lens") => match (args.get(1), depth_arg(&args)) {
             // `.:B9` (the ROOT's, not this node's): this passed
