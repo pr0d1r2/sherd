@@ -18,11 +18,8 @@ export SHERD_MODEL=gpt-oss:20b
 endpoint is not a machine you own, because what gets sent is slices of your
 spec and your source.
 
-Then install the gate:
-
-```bash
-git config core.hooksPath .githooks
-```
+Entering the dev shell installs the gate itself (`core.hooksPath` is set to
+`.githooks` when unset), so there is no manual step.
 
 The hooks in `.githooks` delegate to [`hk`](https://hk.jdx.dev); the ops they
 run are declared in `hk.pkl` and nowhere else. `hk` comes from the `nix-hk`
