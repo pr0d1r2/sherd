@@ -230,6 +230,11 @@
             # a LAN box. SHERD_MODEL defaults to gpt-oss:20b.
             : "''${SHERD_ENDPOINT:=http://localhost:11434}"
             export SHERD_ENDPOINT
+            # Gate every commit from the first one: sets core.hooksPath once,
+            # guarded, loud when hk is missing. See scripts/install-hooks.sh.
+            if [ -f "$PWD/scripts/install-hooks.sh" ]; then
+              bash "$PWD/scripts/install-hooks.sh" || true
+            fi
           '';
         };
       });
