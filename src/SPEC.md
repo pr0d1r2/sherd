@@ -32,7 +32,7 @@ git|one git invocation shape — the repo a command acts on, & the env it refuse
 rel|path|lens
 up|.|-
 self|src|code nodes — tokens, spec, fed, lens facades & logic
-sib|dev|repo-maintaining tooling, `publish = false` — README generation
+sib|dev|-
 
 ## §C CONSTRAINTS
 

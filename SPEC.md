@@ -175,7 +175,7 @@ V25: `ollama` tier unreachable → fall back `bpe` + warn stderr. ⊥ fall to `d
 V26: `§F`.tokens written & checked by same tier. tier switch → recompute all
 V27: this repo ! valid federation. `sherd validate` on self exit 0, CI gate
 V30: bootstrap — parse/DAG/budget land before self-spec written. ⊥ claim dogfood til self-validate green
-V34: ∀ non-root `SPEC.md` ! carry `§N` — `up` ≥1, `self` = 1, `sib` = ∀ co-child
+V34: ∀ non-root `SPEC.md` ! carry `§N` — `up` ≥1, `self` = 1, `sib` = ∀ co-child — lens `-`, read it in the parent `§F` (`src/fed:V24`)
 V36: `§F` authoritative, `§N` generated. mismatch → `§F` wins, `sync` rewrites. ⊥ hand-edit `§N`
 V39: multi-parent → `up` 2+ rows. `sib` = union ∀ parent, deduped
 V40: `§N` alone ! answer "where am I, what is beside me" ⊥ opening another file

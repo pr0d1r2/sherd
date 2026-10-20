@@ -10,24 +10,24 @@ rel|path|lens
 up|.|-
 up|src|code nodes — tokens, spec, fed, lens facades & logic
 self|src/fed|`§F` parse, edges, chain root→node, `SPEC.md` discovery
-sib|src/tokens|`itok` facade, counts w/ method label, entry cost, working budget
-sib|src/spec|`microlith` facade, §-section split, structural check, fmt
-sib|src/split|PROPOSE a federation — modules the code separated, the rows naming each, a home for an unmanaged row
-sib|src/adopt|foreign single-file spec → federation: row placement, citation rewrite, conservation
-sib|src/lens|pack assembly, depth `rule`\|`why`, budget verdict
-sib|src/ollama|local endpoint client, `num_ctx`, fence extraction
-sib|src/tdd|red→judge→green→gate→repair loop, source region edits
-sib|src/plan|open `§T` rows, horizon, confidence, `apply` one step
-sib|src/wave|the SCHEDULE a parallel build follows — code DAG, ready set per round, depth & width
-sib|src/review|mechanical checks on what `apply` committed
-sib|src/state|one idempotent cached store — pace, telemetry, applied rows
-sib|src/slice|distil a document to the part needed to ACT, generated
-sib|src/land|run branch → `main` when believability earns it
-sib|src/cli|arg dispatch, usage, exit codes
-sib|src/code|read Rust source as text — split, public fns, call detection, signatures
-sib|src/debt|a ratchet — measure, compare to a recorded floor, refuse the wrong way
-sib|src/assay|a corpus + a compiler grader — measure WHETHER the model can, ⊥ make it
-sib|src/git|one git invocation shape — the repo a command acts on, & the env it refuses
+sib|src/tokens|-
+sib|src/spec|-
+sib|src/split|-
+sib|src/adopt|-
+sib|src/lens|-
+sib|src/ollama|-
+sib|src/tdd|-
+sib|src/plan|-
+sib|src/wave|-
+sib|src/review|-
+sib|src/state|-
+sib|src/slice|-
+sib|src/land|-
+sib|src/cli|-
+sib|src/code|-
+sib|src/debt|-
+sib|src/assay|-
+sib|src/git|-
 
 ## §V INVARIANTS
 
@@ -51,9 +51,10 @@ V17: ONE codec, used in BOTH directions. a reader & a writer that are 2 readings
 V18: a node is findable by the NAME a reader typed — `spelled()` matches a trailing run of components over `discover()`, & reads ⊥ the CWD ∴ the answer is the same wherever it was typed. it answers a MISS & never CHOOSES: the exact spelling is excluded (it is the one that worked), & 2 nodes ending in 1 name are both returned (`src/cli:V17`)
 V19: ignore globs (`target/`, `.git/`, & git's ignore rules per V22) ⊥ walked, ⊥ ceiling-checked. per-FILE ignores too (generated, vendored)
 V20: root `§N` — `up` = `-`, `self` = `.`, ⊥ sib
-V21: `§N`.lens = verbatim copy of that dir's `§F`-row lens. single source
+V21: `§N`.lens of `up`|`self` = verbatim copy of that dir's `§F`-row lens. single source. `sib` → V24
 V22: a node is a `SPEC.md` git does ⊥ ignore. inside a work tree every walk here — `discover`, the V11 child scan, `rust_files`, `script_files` — skips what `git ls-files --others --ignored --exclude-standard --directory` names, asked ONCE per walk through `src/git` (`src/git:V3`). ⊥ a work tree, or ⊥ git ⇒ the fixed list alone, i.e. the behaviour before. the fixed list is a FLOOR, ⊥ replaced: a tracked `vendor/` stays out (B15)
 V23: a node's spec is the file named EXACTLY `SPEC.md`, compared by NAME from `read_dir`, ⊥ by `is_file()` on a joined path — a case-insensitive filesystem (macOS, Windows) answers `is_file()` for `spec.md` too ∴ the same tree federates differently per OS. ONE predicate (`is_node`) for every 'is this dir a node' question (B16)
+V24: `sib` row lens = `-`. N co-children ⊥ N×(N−1) copies of N texts: the parent is in every chain & its `§F` holds each once. `sync --check` still flags a missing|extra `sib` (`.:V34`)
 
 ## §T TASKS
 

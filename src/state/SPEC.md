@@ -10,24 +10,24 @@ rel|path|lens
 up|.|-
 up|src|code nodes — tokens, spec, fed, lens facades & logic
 self|src/state|one idempotent cached store — pace, telemetry, applied rows
-sib|src/tokens|`itok` facade, counts w/ method label, entry cost, working budget
-sib|src/spec|`microlith` facade, §-section split, structural check, fmt
-sib|src/split|PROPOSE a federation — modules the code separated, the rows naming each, a home for an unmanaged row
-sib|src/fed|`§F` parse, edges, chain root→node, `SPEC.md` discovery
-sib|src/adopt|foreign single-file spec → federation: row placement, citation rewrite, conservation
-sib|src/lens|pack assembly, depth `rule`\|`why`, budget verdict
-sib|src/ollama|local endpoint client, `num_ctx`, fence extraction
-sib|src/tdd|red→judge→green→gate→repair loop, source region edits
-sib|src/plan|open `§T` rows, horizon, confidence, `apply` one step
-sib|src/wave|the SCHEDULE a parallel build follows — code DAG, ready set per round, depth & width
-sib|src/review|mechanical checks on what `apply` committed
-sib|src/slice|distil a document to the part needed to ACT, generated
-sib|src/land|run branch → `main` when believability earns it
-sib|src/cli|arg dispatch, usage, exit codes
-sib|src/code|read Rust source as text — split, public fns, call detection, signatures
-sib|src/debt|a ratchet — measure, compare to a recorded floor, refuse the wrong way
-sib|src/assay|a corpus + a compiler grader — measure WHETHER the model can, ⊥ make it
-sib|src/git|one git invocation shape — the repo a command acts on, & the env it refuses
+sib|src/tokens|-
+sib|src/spec|-
+sib|src/split|-
+sib|src/fed|-
+sib|src/adopt|-
+sib|src/lens|-
+sib|src/ollama|-
+sib|src/tdd|-
+sib|src/plan|-
+sib|src/wave|-
+sib|src/review|-
+sib|src/slice|-
+sib|src/land|-
+sib|src/cli|-
+sib|src/code|-
+sib|src/debt|-
+sib|src/assay|-
+sib|src/git|-
 
 ## §V INVARIANTS
 
