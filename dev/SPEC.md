@@ -9,7 +9,7 @@ Tooling that maintains THIS repository & ships to nobody. `sherd-dev`, a `publis
 rel|path|lens
 up|.|-
 self|dev|repo-maintaining tooling, `publish = false` — README generation
-sib|src|code nodes — tokens, spec, fed, lens facades & logic
+sib|src|-
 
 ## §C CONSTRAINTS
 

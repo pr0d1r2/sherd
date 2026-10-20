@@ -13,7 +13,7 @@ fn the_root_has_no_up_and_no_siblings() {
 }
 
 /// V34: one `self`, an `up` per ancestor, a `sib` per co-child. The lens
-/// is the parent's own words about that child (V38), never re-described.
+/// of a `sib` is `-` (V24); `up`/`self` keep the parent's words (V21).
 #[test]
 #[allow(
     clippy::too_many_lines,
@@ -38,9 +38,12 @@ fn a_leaf_names_its_ancestors_itself_and_its_co_children() {
     assert!(!sibs.is_empty(), "src has other children");
     assert!(sibs.iter().all(|s| s.path != "src/fed"), "no self as sib");
     assert!(
-        sibs.iter()
-            .any(|s| s.path == "src/lens" && !s.lens.is_empty()),
-        "a sibling carries its parent's lens: {sibs:?}"
+        sibs.iter().any(|s| s.path == "src/lens"),
+        "a sibling is named: {sibs:?}"
+    );
+    assert!(
+        sibs.iter().all(|s| s.lens == "-"),
+        "a sibling's lens lives in the parent's `§F` (V24): {sibs:?}"
     );
 }
 
