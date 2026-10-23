@@ -585,7 +585,8 @@ pub struct Nav {
 ///
 /// `§F` is authoritative and `§N` is generated (`.:V36`), so this never reads
 /// an existing `§N` -- it computes what one must say. The lens of each row is
-/// a verbatim copy of that directory's `§F` row `owns` cell (`src/fed:V21`): one
+/// a verbatim copy of that directory's `§F` row `owns` cell (`src/fed:V21`), except a `sib` row, which says `-`
+/// (`src/fed:V24`): one
 /// source, and a nav table that cannot describe a node differently from the
 /// table that declares it.
 ///
@@ -662,6 +663,10 @@ fn lens_of(parent: &Path, child: &str) -> String {
 }
 
 /// Every co-child of `name` under `parent`, as `sib` rows.
+///
+/// The lens is `-`, ⊥ a copy of the co-child's `owns` (`src/fed:V24`): N
+/// children would carry N×(N−1) copies of N texts, while the parent -- in
+/// every chain and pack -- holds each once in its `§F`.
 fn siblings(parent: &Path, root: &Path, name: &str) -> Vec<Nav> {
     let Ok(text) = std::fs::read_to_string(parent.join("SPEC.md")) else {
         return Vec::new();
@@ -673,7 +678,7 @@ fn siblings(parent: &Path, root: &Path, name: &str) -> Vec<Nav> {
         .map(|e| Nav {
             rel: "sib".into(),
             path: base.join(&e.dir).to_string_lossy().to_string(),
-            lens: e.owns,
+            lens: "-".into(),
         })
         .collect()
 }
