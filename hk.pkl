@@ -557,6 +557,34 @@ local all = (fast) {
   }
 }
 
+/// THE RELEASE SET: everything `all` runs, plus the one step too slow for
+/// a push. `release.toml`'s `pre-release-hook` runs it, so it is a
+/// precondition of publishing (V126).
+local release = (all) {
+  // paradigm V28's universal binary, pklith's `cargo-universal`: each bin
+  // built in release for BOTH Macs, `lipo`-joined, and refused unless the
+  // result holds exactly arm64 + x86_64, each at `minos` 14.0. Owner
+  // 2026-10-24: RELEASE ONLY, not pre-push, because it is two full release
+  // builds and the second needs the other Mac's std. `nix run` so the dev
+  // shell never pays for it. On Linux it passes with a notice: no `lipo`.
+  //
+  // FROM CLEAN, in its own target AND build dir, both emptied first. cargo
+  // does not rebuild when only the floor changes: MEASURED here, with
+  // `.cargo/config.toml` forced to 26.0 and a warm (shared) build dir, the
+  // step reported `each minos 14.0` from binaries linked before the edit;
+  // from clean the same tree failed on `arm64 slice has minos 26.0`. A
+  // check that judges an artifact must know it came from this tree (V125).
+  ["cargo-universal"] {
+    glob = List("**/*.rs", "**/Cargo.toml", "Cargo.lock", ".cargo/config.toml")
+    depends = List("coverage")
+    check = """
+      out=$PWD/target/release-universal
+      rm -rf "$out"
+      CARGO_TARGET_DIR=$out CARGO_BUILD_BUILD_DIR=$out/build nix run .#cargo-universal
+      """
+  }
+}
+
 hooks {
   // `stash = "git"` is correctness, not speed -- without it a partially staged
   // file (`git add -p`) is checked as it looks in the WORKTREE, giving a
@@ -582,5 +610,9 @@ hooks {
     fix = true
     stage = true
     steps = all
+  }
+  // Not a git hook: `cargo release hook` calls `hk run release` (V126).
+  ["release"] {
+    steps = release
   }
 }
