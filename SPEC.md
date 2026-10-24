@@ -42,6 +42,7 @@ self|.|-
 - SETTING as contract (V82), one line each: `rustfmt` 80 col + edition 2024 · `clippy -D warnings` · `cargo test` · `sherd slice/check/budget` · coverage · lint ratchet · hygiene & linters, named in `hk.pkl`.
 - CODE limits as contract (V82), `clippy.toml` @ root + `[lints.clippy]` denies: fn ≤15 lines · cognitive ≤7 · nesting ≤4 · args ≤4 · fn bools ≤1 · struct bools ≤3 · trait bounds ≤3 · type complexity ≤150 · `unwrap`/`expect`/`panic`/`indexing_slicing`/`todo`/`unimplemented`/`dbg_macro`/`arithmetic_side_effects` DENY · `unsafe_code` FORBID. thresholds are Sandi Metz adapted; reasoning RESTATED here, ⊥ cited to a sibling — an id that resolves in no namespace this repo can reach reads authoritative & is ⊥ checkable.
 - ⊥ global index file. discovery by walk.
+- platforms (`paradigm/V28`, owner 2026-10-24): `aarch64-darwin` · `x86_64-darwin` · `x86_64-linux` · `aarch64-linux`; macOS floor 14.0 (V126).
 
 ## §I INTERFACES
 
@@ -257,6 +258,7 @@ V73: dir promotion has 2 triggers — (a) V50 code ceiling, (b) module owns SPEC
 V123: the EXECUTOR is an ADAPTER & sherd owns everything AROUND it: the code DAG, ready set, worktrees, ceilings, gate & merge order stay DETERMINISTIC & offline (V18). WHO writes the code is NAMED — local model | external command — & swapping it changes ⊥ about scheduling.
 V124: TESTS live in a `tests/` tree beside the code they test, ⊥ inline `mod tests { }`. include as `#[cfg(test)] #[path = "tests/x.rs"] mod tests;` — a CHILD module ∴ private fns stay reachable; the crate `tests/` dir sees `pub` only & widening a published API to test it is the wrong trade. a `tests/` file NOTHING reaches is ⊥ compiled ∴ its tests pass by ⊥ existing — every one ! be reached (B33). V50 measures a file under a `tests` path component as tests in FULL
 V125: a gate step that RUNS this repo's binary ! first prove the binary was built from THIS tree. cargo judges freshness by the mtimes of the files its dep-info lists, & a binary built from `cargo package`'s unpacked copy lists `target/package/sherd-<ver>/src/…`, which never changes ∴ `cargo run` calls it fresh forever & every dogfood step judges OLD code. `scripts/fresh-binary.sh` refuses when `sherd.d` or `sherd-dev.d` names a `package/sherd` path, & every step that runs either binary depends on it (B34)
+V126: `paradigm/V28` via `pklith` checks (owner 2026-10-24). flake `systems` = the 4. `.cargo/config.toml` `[env] MACOSX_DEPLOYMENT_TARGET = { value = "14.0", force = true }` — `force` ∵ nix's darwin stdenv exports its own & unforced `[env]` loses. `cargo-deployment-target` judges it @ COMMIT. `cargo-universal` (both Macs' release bins `lipo`-joined = arm64 + x86_64, each minos 14.0) @ RELEASE ONLY: `pre-release-hook` → `hk run release`, built from CLEAN ∵ cargo ⊥ rebuilds on a floor-only change; ⊥ pre-push ∵ 2 full release builds per push
 
 ## §T TASKS
 
@@ -295,6 +297,7 @@ T107|x|V50 splits a file @ the 1st `#[cfg(test)]` ∴ code BELOW a test module c
 T108|.|move each node's inline `mod tests { }` into its `tests/` tree per V124, 1 PR per node — none left outside the freeze; `src/assay`·`src/ollama`·`src/tdd` @ `0.7` (V117)|V124,V50
 T109|x|flake inputs `nixpkgs-lock` & `nix-hk` fetched over GIT — `git+https://github.com/pr0d1r2/<repo>?ref=main&shallow=1`, ⊥ `github:`. a Claude Code cloud session's proxy 403s the ARCHIVE tarball `github:` downloads, even for a public repo, & passes plain git reads ∴ `nix develop` dies before eval. `flake.lock` still pins rev + `narHash`; both `follows` unchanged. done = `nix develop -c cargo test` in a cloud session w/ ⊥ `--override-input` (#96)|C
 T110|x|`zizmor` hk step in a Claude Code cloud session (`CLAUDE_CODE_REMOTE=true`): run w/ `GH_TOKEN` & `GITHUB_TOKEN` UNSET — the cloud sets both to the placeholder `proxy-injected`, zizmor sends it & GitHub 401s — ∴ git reads go out anonymously; still unreachable → `--offline`, cloud ONLY. split by exit code: a FINDING keeps today's message, a run that never audited prints `zizmor could not run: <reason>` & still exits non-zero ⊥ a finding it never made. local & GitHub CI unchanged. done = `hk check --all` green in a cloud session (#100)|C
+T111|.|x86_64-darwin in CI: GitHub's Intel macOS runners are retired; `paradigm/T19` has pipelith pick CI systems & actlith render them, & `ci.yml` is hand-written ∴ adopting that is its own PR. until then x86_64-darwin = eval + the release's x86_64 slice, built ⊥ run|V126
 
 ## §B BUGS
 
