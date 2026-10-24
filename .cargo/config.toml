@@ -1,0 +1,11 @@
+# paradigm V28's macOS floor, for every cargo build: the dev shell, CI (which
+# runs the dev shell), nix's `buildRustPackage` and plain cargo (V126).
+# Matches pklith's seed (`src/seed/cargo-config.toml`), and pklith's
+# `cargo-deployment-target` check refuses this file without it.
+#
+# `force` is load-bearing: nixpkgs' darwin stdenv EXPORTS its own
+# MACOSX_DEPLOYMENT_TARGET in the dev shell and in `buildRustPackage`, and
+# cargo's `[env]` does not override a variable that is already set unless
+# forced. Unforced, this line pins nothing the day nixpkgs moves its default.
+[env]
+MACOSX_DEPLOYMENT_TARGET = { value = "14.0", force = true }
