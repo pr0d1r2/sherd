@@ -141,6 +141,13 @@
             licenses = pkgs.lib.licenses.mit;
           };
         };
+        # paradigm V28's universal check, run at RELEASE only (V126): two
+        # full release builds, one per Mac, and on a Mac the other Mac's std
+        # copied from cache.nixos.org. A package rather than a shell tool so
+        # entering the shell never pays for it; `hk run release` calls it
+        # through `nix run .#cargo-universal`. It passes with a notice on
+        # Linux, where there is no `lipo`.
+        inherit (catalog pkgs) cargo-universal;
       });
 
       devShells = forAll (pkgs: {

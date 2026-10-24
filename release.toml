@@ -60,7 +60,20 @@ allow-branch = ["main"]
 # `--check` because the fix commands would rewrite a tree cargo-release has
 # just asserted is clean. `--no-fail-fast` because a release is the one
 # moment where a complete list beats an early one -- nobody is iterating.
-pre-release-hook = ["hk", "check", "--all", "--check", "--no-fail-fast"]
+#
+# `hk run release`, not `hk check`: the release set is `all` plus pklith's
+# `cargo-universal` (V126), which owner 2026-10-24 put at RELEASE ONLY --
+# two full release builds per push is too slow for pre-push, and the
+# universal binary only matters for what ships. `hk check` and CI keep
+# running `all` without it.
+pre-release-hook = [
+  "hk",
+  "run",
+  "release",
+  "--all",
+  "--check",
+  "--no-fail-fast",
+]
 
 # `v<x.y.z>`, because the `semver` gate step diffs the pub API against the
 # last `v*` tag. Publishing under any other tag shape leaves that step green
