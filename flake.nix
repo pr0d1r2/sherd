@@ -146,7 +146,8 @@
         # copied from cache.nixos.org. A package rather than a shell tool so
         # entering the shell never pays for it; `hk run release` calls it
         # through `nix run .#cargo-universal`. It passes with a notice on
-        # Linux, where there is no `lipo`.
+        # Linux, where there is no `lipo`, so the release step refuses any
+        # host but macOS.
         inherit (catalog pkgs) cargo-universal;
       });
 
