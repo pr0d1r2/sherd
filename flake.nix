@@ -24,10 +24,11 @@
     ];
   };
 
-  # THREE declared inputs, ONE nixpkgs. `nix-hk` follows the same lock rather
-  # than its own copy: a second nixpkgs edge would fork the rev, the cached hk
-  # would be built against a nixpkgs this shell does not have, and every
-  # substitution would miss while looking exactly like success.
+  # FOUR declared inputs, ONE nixpkgs. `nix-hk` and `pklith` follow the same
+  # lock rather than their own copy: a second nixpkgs edge would fork the
+  # rev, the cached hk would be built against a nixpkgs this shell does not
+  # have, and every substitution would miss while looking exactly like
+  # success.
   #
   # Fetched over GIT, not `github:` (T109). A Claude Code cloud session's
   # proxy refuses the archive tarball `github:` downloads -- HTTP 403, even
@@ -39,6 +40,14 @@
     nixpkgs.follows = "nixpkgs-lock/nixpkgs";
     nix-hk.url = "git+https://github.com/pr0d1r2/nix-hk?ref=main&shallow=1";
     nix-hk.inputs.nixpkgs-lock.follows = "nixpkgs-lock";
+    # The FOURTH input, for two of its catalog checks and nothing else:
+    # `cargo-deployment-target` (commit) and `cargo-universal` (release),
+    # paradigm V28 as pklith ships it (V126). Its nixpkgs and hk FOLLOW
+    # ours, so the lock still resolves one nixpkgs; its own microlith,
+    # sherd and itok stay in the lock and are never evaluated here.
+    pklith.url = "git+https://github.com/pr0d1r2/pklith?ref=main&shallow=1";
+    pklith.inputs.nixpkgs-lock.follows = "nixpkgs-lock";
+    pklith.inputs.nix-hk.follows = "nix-hk";
   };
 
   outputs =
@@ -46,6 +55,7 @@
       self,
       nixpkgs,
       nix-hk,
+      pklith,
       ...
     }:
     let
@@ -61,6 +71,8 @@
       # place to forget, and the package list stays a list of names.
       forAll =
         f: nixpkgs.lib.genAttrs systems (s: f (nixpkgs.legacyPackages.${s}.extend nix-hk.overlays.default));
+      # pklith's catalog checks for this system (V126).
+      catalog = pkgs: pklith.legacyPackages.${pkgs.stdenv.hostPlatform.system}.catalog;
 
       # sherd dogfoods itself (V27) -- `sherd check` gates its own commits --
       # so the dev shell must PROVIDE `sherd`, not merely the toolchain to build
@@ -201,6 +213,10 @@
             # dry-run first, verify, publish, push -- this already does, and
             # `release.toml` configures it.
             pkgs.cargo-release
+            # paradigm V28's macOS floor, judged at commit (V126): parses
+            # `.cargo/config.toml` and refuses unless `[env]` FORCES
+            # MACOSX_DEPLOYMENT_TARGET to pklith's floor. taplo and jq only.
+            (catalog pkgs).cargo-deployment-target
           ];
 
           # `cargo-llvm-cov` looks these up by name and gives up if they are

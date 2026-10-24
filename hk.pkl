@@ -306,6 +306,16 @@ local fast = new Mapping<String, Step> {
     check = "command -v nixfmt >/dev/null 2>&1 || { echo 'hk: nixfmt is not on PATH -- re-enter the dev shell (`nix develop`, or `direnv reload`). This is a MISSING TOOL, not a finding.' >&2; exit 1; }; nixfmt --check {{files}}"
     fix = "command -v nixfmt >/dev/null 2>&1 || { echo 'hk: nixfmt is not on PATH -- re-enter the dev shell (`nix develop`, or `direnv reload`). This is a MISSING TOOL, not a finding.' >&2; exit 1; }; nixfmt {{files}}"
   }
+  // paradigm V28's macOS floor (V126), pklith's catalog check from the
+  // `pklith` flake input. It PARSES `.cargo/config.toml` (taplo + jq) and
+  // refuses unless `[env]` FORCES MACOSX_DEPLOYMENT_TARGET to pklith's
+  // floor: unforced, nix's darwin stdenv exports its own value and wins.
+  // It judges the repository root, so it takes no {{files}}; the glob only
+  // decides WHEN it runs.
+  ["cargo-deployment-target"] {
+    glob = List("**/Cargo.toml", ".cargo/config.toml")
+    check = "command -v cargo-deployment-target >/dev/null 2>&1 || { echo 'hk: cargo-deployment-target is not on PATH -- re-enter the dev shell (`nix develop`, or `direnv reload`). This is a MISSING TOOL, not a finding.' >&2; exit 1; }; cargo-deployment-target"
+  }
   ["taplo"] {
     glob = List("**/*.toml")
     exclude = List("pkl/**")

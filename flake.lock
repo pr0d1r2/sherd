@@ -1,5 +1,111 @@
 {
   "nodes": {
+    "itok": {
+      "inputs": {
+        "hk": [
+          "pklith",
+          "microlith",
+          "nix-hk"
+        ],
+        "microlith": "microlith_2",
+        "nixpkgs": [
+          "pklith",
+          "microlith",
+          "itok",
+          "nixpkgs-lock",
+          "nixpkgs"
+        ],
+        "nixpkgs-lock": [
+          "pklith",
+          "microlith",
+          "nixpkgs-lock"
+        ]
+      },
+      "locked": {
+        "lastModified": 1788092230,
+        "narHash": "sha256-bKaQ5Ejf3X5ObtxiwDIDHpCbZCkjQ9Ttdr7H1cTkIxs=",
+        "owner": "pr0d1r2",
+        "repo": "itok",
+        "rev": "7bb0cc19947eaf45b97cd4d1787df91fddbdda90",
+        "type": "github"
+      },
+      "original": {
+        "owner": "pr0d1r2",
+        "repo": "itok",
+        "type": "github"
+      }
+    },
+    "microlith": {
+      "inputs": {
+        "itok": "itok",
+        "nix-hk": [
+          "pklith",
+          "nix-hk"
+        ],
+        "nixpkgs": [
+          "pklith",
+          "microlith",
+          "nixpkgs-lock",
+          "nixpkgs"
+        ],
+        "nixpkgs-lock": [
+          "pklith",
+          "nixpkgs-lock"
+        ]
+      },
+      "locked": {
+        "lastModified": 1789925744,
+        "narHash": "sha256-uNVVUqzh7Od5UzDhKu5X7R3Xeje/8vmk0zOGbu5SsQE=",
+        "owner": "pr0d1r2",
+        "repo": "microlith",
+        "rev": "58a36c3bc90b76e1f561996b14cf3beaf9a40ed2",
+        "type": "github"
+      },
+      "original": {
+        "owner": "pr0d1r2",
+        "ref": "v0.7.3",
+        "repo": "microlith",
+        "type": "github"
+      }
+    },
+    "microlith_2": {
+      "inputs": {
+        "nix-hk": [
+          "pklith",
+          "microlith",
+          "itok",
+          "hk"
+        ],
+        "nixpkgs": [
+          "pklith",
+          "microlith",
+          "itok",
+          "microlith",
+          "nixpkgs-lock",
+          "nixpkgs"
+        ],
+        "nixpkgs-lock": [
+          "pklith",
+          "microlith",
+          "itok",
+          "nixpkgs-lock"
+        ]
+      },
+      "locked": {
+        "lastModified": 1786709569,
+        "narHash": "sha256-KLxL48Qug7X0R9F/bG0MpJTsn/kmQz17CXQN4saLsks=",
+        "owner": "pr0d1r2",
+        "repo": "microlith",
+        "rev": "aa0380ac3b51b8d46bd536de28ea83452f01be90",
+        "type": "github"
+      },
+      "original": {
+        "owner": "pr0d1r2",
+        "ref": "v0.6.1",
+        "repo": "microlith",
+        "type": "github"
+      }
+    },
     "nix-hk": {
       "inputs": {
         "nixpkgs": [
@@ -63,6 +169,43 @@
         "url": "https://github.com/pr0d1r2/nixpkgs-lock"
       }
     },
+    "pklith": {
+      "inputs": {
+        "itok": [
+          "pklith",
+          "microlith",
+          "itok"
+        ],
+        "microlith": "microlith",
+        "nix-hk": [
+          "nix-hk"
+        ],
+        "nixpkgs": [
+          "pklith",
+          "nixpkgs-lock",
+          "nixpkgs"
+        ],
+        "nixpkgs-lock": [
+          "nixpkgs-lock"
+        ],
+        "sherd": "sherd"
+      },
+      "locked": {
+        "lastModified": 1792823894,
+        "narHash": "sha256-ud/BIji9tH36ZEdV6Kxx/Crr8+a33g2uIUof5RDE/2k=",
+        "ref": "main",
+        "rev": "66e0eb93f605499c52ae767166ccaae64e93a559",
+        "shallow": true,
+        "type": "git",
+        "url": "https://github.com/pr0d1r2/pklith"
+      },
+      "original": {
+        "ref": "main",
+        "shallow": true,
+        "type": "git",
+        "url": "https://github.com/pr0d1r2/pklith"
+      }
+    },
     "root": {
       "inputs": {
         "nix-hk": "nix-hk",
@@ -70,7 +213,40 @@
           "nixpkgs-lock",
           "nixpkgs"
         ],
-        "nixpkgs-lock": "nixpkgs-lock"
+        "nixpkgs-lock": "nixpkgs-lock",
+        "pklith": "pklith"
+      }
+    },
+    "sherd": {
+      "inputs": {
+        "nix-hk": [
+          "pklith",
+          "nix-hk"
+        ],
+        "nixpkgs": [
+          "pklith",
+          "sherd",
+          "nixpkgs-lock",
+          "nixpkgs"
+        ],
+        "nixpkgs-lock": [
+          "pklith",
+          "nixpkgs-lock"
+        ]
+      },
+      "locked": {
+        "lastModified": 1790009200,
+        "narHash": "sha256-7/jJBzDlzFEKntVNydCvAym8lEMIwj2CT3Gmnl04mmQ=",
+        "owner": "pr0d1r2",
+        "repo": "sherd",
+        "rev": "3aea213095e1c35519f3d438c4f08c8d2b653f95",
+        "type": "github"
+      },
+      "original": {
+        "owner": "pr0d1r2",
+        "ref": "v0.5.1",
+        "repo": "sherd",
+        "type": "github"
       }
     }
   },
