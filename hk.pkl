@@ -566,7 +566,9 @@ local release = (all) {
   // result holds exactly arm64 + x86_64, each at `minos` 14.0. Owner
   // 2026-10-24: RELEASE ONLY, not pre-push, because it is two full release
   // builds and the second needs the other Mac's std. `nix run` so the dev
-  // shell never pays for it. On Linux it passes with a notice: no `lipo`.
+  // shell never pays for it. pklith's check passes with a notice off macOS
+  // (no `lipo`); at RELEASE that would be a vacuous green, so this step
+  // refuses any host but macOS instead.
   //
   // FROM CLEAN, in its own target AND build dir, both emptied first. cargo
   // does not rebuild when only the floor changes: MEASURED here, with
@@ -578,6 +580,7 @@ local release = (all) {
     glob = List("**/*.rs", "**/Cargo.toml", "Cargo.lock", ".cargo/config.toml")
     depends = List("coverage")
     check = """
+      [ "$(uname -s)" = Darwin ] || { echo "hk: cargo-universal: a release must run on macOS, and this host is $(uname -s). pklith's check PASSES with a notice where there is no lipo, which is right at push and vacuous here: publishing from this host would ship a universal binary nothing built (V126)." >&2; exit 1; }
       out=$PWD/target/release-universal
       rm -rf "$out"
       CARGO_TARGET_DIR=$out CARGO_BUILD_BUILD_DIR=$out/build nix run .#cargo-universal
