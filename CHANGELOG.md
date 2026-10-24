@@ -53,6 +53,17 @@ publish run surfaced two warnings that eleven gate steps had read past
 
 ### Added
 
+- **paradigm V28 for this crate** (`.:V126`, paradigm T20). The flake
+  covers `aarch64-darwin`, `x86_64-darwin`, `x86_64-linux` and
+  `aarch64-linux`. `.cargo/config.toml` pins the macOS floor with
+  `[env] MACOSX_DEPLOYMENT_TARGET = { value = "14.0", force = true }`,
+  so every cargo build (dev shell, CI, `nix build`, plain cargo) targets
+  macOS 14.0. Two of pklith's catalog checks come in through a new
+  `pklith` flake input: `cargo-deployment-target` runs at commit and
+  refuses that file without the forced pin, and `cargo-universal` runs at
+  release only (`cargo release hook` → `hk run release`). It builds both
+  Macs' release binaries, joins them with `lipo`, and refuses unless the
+  result holds exactly arm64 and x86_64, each at minos 14.0.
 - **`sherd coverage` measures a SwiftPM package** (`src/debt:V10`, #138).
   A repository with `Package.swift` at its root and no `Cargo.toml` is
   measured by `swift test --enable-code-coverage`, reading the llvm-cov
