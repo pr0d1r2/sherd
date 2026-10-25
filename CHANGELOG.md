@@ -51,6 +51,24 @@ publish run surfaced two warnings that eleven gate steps had read past
 
 ## [Unreleased]
 
+## [0.5.5] - 2026-10-25
+
+Still the `0.5` rung, and a patch. Its subject is a second language:
+`sherd coverage` now measures a SwiftPM package, found by running sherd
+on age-plugin-se. `cargo semver-checks check-release --baseline-rev
+v0.5.4` requires no semver update (196 checks pass); every new library
+item is additive. What a caller can observe changing:
+
+- `sherd coverage` on a tree with `Package.swift` and no `Cargo.toml`
+  measures it, where it used to fail. A tree with a `Cargo.toml` is
+  measured exactly as before.
+- `sync` writes `-` in a `sib` row's lens instead of a copy of the
+  sibling's `owns` text. A federation synced by `0.5.4` reports stale
+  under `sync --check` once, until one `sync` rewrites it.
+- A build from this repository (dev shell, CI, `nix build`) targets
+  macOS 14.0. `cargo install sherd` does not read the repository's
+  `.cargo/config.toml`, so it builds as before.
+
 ### Added
 
 - **paradigm V28 for this crate** (`.:V126`, paradigm T20). The flake
@@ -98,6 +116,15 @@ publish run surfaced two warnings that eleven gate steps had read past
   `debt::exclusions`, `debt::Exclusion`, `debt::excluded_cap`,
   `debt::measure_export`, `debt::swift_measure`, `debt::SwiftMeasure`,
   `debt::excluded_verdict`, `debt::record_excluded`.
+
+### Fixed
+
+- **`sherd sync` writes `sib` rows with lens `-`** (`src/fed:V24`). Each
+  non-root node carried a `sib` row per co-child holding that co-child's
+  `§F` `owns` text: N×(N−1) copies of N texts, each paid against the
+  node's file ceiling. The parent is in every chain and lens pack and
+  holds each text once. `sync --check` still catches a missing or extra
+  sibling; `up` and `self` rows keep the verbatim lens.
 
 ## [0.5.4] - 2026-10-04
 
