@@ -60,7 +60,21 @@ pub(super) fn sync_cmd(
     dir: Option<&PathBuf>,
     check: bool,
 ) -> ExitCode {
-    let targets = dir.map_or_else(|| fed::discover(root), |d| vec![d.clone()]);
+    // `[dir]` covers the SUBTREE under it, as `check [dir]` does, with or
+    // without `--check`: the fixer and its check examine the same nodes.
+    let targets = dir.map_or_else(
+        || fed::discover(root),
+        |d| {
+            let found = fed::discover(d);
+            // A dir with no discoverable node is still named, so an
+            // unreadable `SPEC.md` there fails loudly rather than vanishing.
+            if found.is_empty() {
+                vec![d.clone()]
+            } else {
+                found
+            }
+        },
+    );
     // 1 means it WROTE, or found a node stale. A node it could not read or
     // write is neither, so 2 (`src/cli:V1`, `B11`).
     let Ok(wrote) = sync_all(root, &targets, check) else {

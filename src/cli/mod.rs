@@ -177,7 +177,9 @@ pub fn run_args(args: Vec<String>) -> ExitCode {
         },
         Some("sync") => {
             let check = args.iter().any(|a| a == "--check");
-            let dir = args.get(1).filter(|a| !a.starts_with("--"));
+            // Any argument may be the dir (`src/cli:B7`), so `sync --check .`
+            // and `sync .` name the same subtree.
+            let dir = args.iter().skip(1).find(|a| !a.starts_with("--"));
             sync_cmd(&root, dir.map(|d| root.join(d)).as_ref(), check)
         }
         Some("route") => match args.get(1) {
