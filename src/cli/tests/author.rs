@@ -260,3 +260,26 @@ fn sync_dir_walks_the_subtree_like_its_check() -> Result<(), String> {
     assert_eq!(sync_cmd(r.path(), Some(&dir), true), ExitCode::SUCCESS);
     Ok(())
 }
+
+/// Selecting `a` rewrites `a` alone: a stale sibling outside the subtree is
+/// left as it was, which whole-repository discovery would not do.
+#[test]
+fn sync_dir_leaves_a_stale_sibling_outside_the_subtree() -> Result<(), String> {
+    let r = crate::testrepo::TestRepo::new("cli-sync-sibling")?;
+    r.write(
+        "SPEC.md",
+        "# SPEC\n\n## \u{a7}G GOAL\n\nroot.\n\n## \u{a7}F FEDERATION\n\ndir|owns|\u{22a5}owns|tokens\na|thing a|-|-\nb|thing b|-|-\n\n## \u{a7}N NAV\n\nrel|path|lens\nup|-|-\nself|.|-\n",
+    )?;
+    let stale = "# SPEC\n\n## \u{a7}G GOAL\n\nnode.\n\n## \u{a7}N NAV\n\nrel|path|lens\nup|.|-\n";
+    r.write("a/SPEC.md", stale)?;
+    r.write("b/SPEC.md", stale)?;
+    r.commit("init")?;
+    let a = r.path().join("a");
+    assert_eq!(sync_cmd(r.path(), Some(&a), false), ExitCode::from(1));
+    let read = |n: &str| {
+        std::fs::read_to_string(r.path().join(n)).map_err(|e| e.to_string())
+    };
+    assert_ne!(read("a/SPEC.md")?, stale, "the selected node was rewritten");
+    assert_eq!(read("b/SPEC.md")?, stale, "the sibling was left alone");
+    Ok(())
+}
