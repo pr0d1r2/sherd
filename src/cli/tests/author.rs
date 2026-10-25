@@ -239,3 +239,24 @@ fn slice_refuses_a_malformed_registry_and_a_missing_source()
     assert_eq!(slice_cmd(r.path(), "--check"), ExitCode::from(1));
     Ok(())
 }
+
+/// `sync .` and `sync --check .` examine the same subtree: the fixer once
+/// stopped at the root while its check walked every node.
+#[test]
+fn sync_dir_walks_the_subtree_like_its_check() -> Result<(), String> {
+    let r = crate::testrepo::TestRepo::new("cli-sync-subtree")?;
+    r.write(
+        "SPEC.md",
+        "# SPEC\n\n## \u{a7}G GOAL\n\nroot.\n\n## \u{a7}F FEDERATION\n\ndir|owns|\u{22a5}owns|tokens\na|thing a|-|-\n\n## \u{a7}N NAV\n\nrel|path|lens\nup|-|-\nself|.|-\n",
+    )?;
+    r.write(
+        "a/SPEC.md",
+        "# SPEC\n\n## \u{a7}G GOAL\n\nnode a.\n\n## \u{a7}N NAV\n\nrel|path|lens\nup|.|-\n",
+    )?;
+    r.commit("init")?;
+    let dir = r.path().to_path_buf();
+    assert_eq!(sync_cmd(r.path(), Some(&dir), true), ExitCode::from(1));
+    assert_eq!(sync_cmd(r.path(), Some(&dir), false), ExitCode::from(1));
+    assert_eq!(sync_cmd(r.path(), Some(&dir), true), ExitCode::SUCCESS);
+    Ok(())
+}
