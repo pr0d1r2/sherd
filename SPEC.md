@@ -55,7 +55,7 @@ self|.|-
 - cmd: `sherd check [dir] [--format text|json]` → drift spec↔code + file ceilings. 0 clean / 1 violation / 2 usage
 - cmd: `sherd split [dir]` → PROPOSE a federation from the CODE'S structure: dirs · `pub mod` · naming families w/ their shared hub. spec rows attach as EVIDENCE about a node, ⊥ as the reason for it. writes ⊥ ever; `--apply` refuses, ∵ which module owns which rule is a JUDGEMENT
 - cmd: `sherd adopt <dir> [--map FILE] [--check]` → MIGRATE a foreign single-file `SPEC.md` onto a federation: PROPOSE which node owns each `§V`/`§T`/`§B`/`§R` row, REWRITE citations to the namespaced form, emit node files `check` ACCEPTS. writes ⊥ w/o `--map`; `--check` reports & writes ⊥. the proposal PRINTS the map file itself ∴ `adopt <dir> > map` → edit → `adopt <dir> --map map`. 0 ⊥ to move / 1 a migration PENDING or WRITTEN (`sync`'s rule 1 verb over) / 2 usage
-- cmd: `sherd sync [dir] [--check]` → regen `§N` from the `§F` above it. exit 1 IF IT WROTE, ∵ a generated section that had to change means the committed tree was STALE. `--check` reports & writes ⊥
+- cmd: `sherd sync [dir] [--check]` → regen `§N` from the `§F` above it, ∀ node in the subtree under `[dir]` (default: the repo). exit 1 IF IT WROTE, ∵ a generated section that had to change means the committed tree was STALE. `--check` reports & writes ⊥
 - cmd: `sherd graph [--dot|--json|--mermaid]` → federation DAG. `--mermaid` = the generated architecture diagram
 - cmd: `sherd lens <dir> [--facet set|setting|human|all]` → default `set`
 - cmd: `sherd budget [dir] [--format text|json]` → node/chain/lens/file token table. exit 1 over

@@ -281,5 +281,12 @@ fn sync_dir_leaves_a_stale_sibling_outside_the_subtree() -> Result<(), String> {
     };
     assert_ne!(read("a/SPEC.md")?, stale, "the selected node was rewritten");
     assert_eq!(read("b/SPEC.md")?, stale, "the sibling was left alone");
+    // Through dispatch, `[dir]` is read on either side of `--check`
+    // (`src/cli:B13`): checking the whole repo would find `b` stale.
+    let (a, b) = (a.display().to_string(), r.path().join("b"));
+    let b = b.display().to_string();
+    assert_eq!(run_args(argv(&["sync", "--check", &a])), ExitCode::SUCCESS);
+    assert_eq!(run_args(argv(&["sync", &a, "--check"])), ExitCode::SUCCESS);
+    assert_eq!(run_args(argv(&["sync", "--check", &b])), ExitCode::from(1));
     Ok(())
 }
