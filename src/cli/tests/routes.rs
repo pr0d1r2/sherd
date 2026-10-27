@@ -191,3 +191,16 @@ fn each_model_verb_names_itself_when_not_compiled_in() {
         assert_eq!(run_args(argv(a)), ExitCode::from(2), "{a:?}");
     }
 }
+
+/// A missing or non-directory `At` selector is usage, not a silent fall
+/// back to the CWD's repository.
+#[test]
+fn a_selector_that_is_not_a_directory_is_usage() {
+    for verb in ["validate", "graph", "plan", "land", "slice", "debt"] {
+        assert_eq!(
+            run_args(argv(&[verb, "/nonexistent/sherd-at"])),
+            ExitCode::from(2),
+            "{verb}"
+        );
+    }
+}
