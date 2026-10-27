@@ -115,6 +115,21 @@ ureq = { version = "3", default-features = false, features = [
   "rustls",
 ], optional = true }
 serde_json = { version = "1", optional = true }
+# The CLI's argv grammar (`src/cli/parse.rs`). Derive only, with the features a
+# plain `--help`/error path needs: no `color`, no `env` (the endpoint variables
+# are read by `src/ollama`, not by a flag) and no `wrap_help` (terminal-size).
+# `suggestions` is the "did you mean" the hand parser never had.
+clap = { version = "4", default-features = false, features = [
+  "std",
+  "derive",
+  "help",
+  "usage",
+  "error-context",
+  "suggestions",
+] }
+# `sherd completions <shell>` and `sherd man`.
+clap_complete = { version = "4", default-features = false }
+clap_mangen = { version = "0.3", default-features = false }
 
 [lints.rust]
 unsafe_code = "forbid"
