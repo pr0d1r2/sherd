@@ -117,3 +117,77 @@ fn lens_on_a_dir_that_is_no_node_is_a_miss() -> Result<(), String> {
     assert_eq!(run_args(argv(&["lens", "nowhere"])), ExitCode::from(2));
     Ok(())
 }
+
+/// The verbs that read a fixture and write nothing, driven through the
+/// parsed route. Each flag spelling reaches its own arm: `--stdout` for
+/// `init`, the four `graph` renderings, both `validate` forms and each
+/// `slice` mode.
+#[test]
+fn parsed_verbs_reach_their_arms_on_a_fixture() {
+    let r = routing_fixture("route-parsed");
+    for flag in ["--dot", "--table", "--tree"] {
+        assert_eq!(run_args(argv(&["graph", flag])), ExitCode::SUCCESS);
+    }
+    let preview = vec![
+        "init".into(),
+        r.path().join("alpha").display().to_string(),
+        "--stdout".into(),
+    ];
+    assert_ne!(run_args(preview), ExitCode::from(2));
+    for verb in [
+        &["check"][..],
+        &["validate"],
+        &["validate", "--format", "json"],
+        &["slice"],
+        &["slice", "--check"],
+        &["slice", "--list"],
+    ] {
+        let code = run_args(at(verb, &r));
+        assert_ne!(code, ExitCode::from(2), "`sherd {}`", verb.join(" "));
+    }
+}
+
+#[test]
+fn mode_flag_prefers_check_and_defaults_to_none() {
+    assert_eq!(mode_flag(true, false), Some("--check"));
+    assert_eq!(mode_flag(false, true), Some("--record"));
+    assert_eq!(mode_flag(false, false), None);
+}
+
+#[test]
+fn graph_flags_pick_four_different_renderings() {
+    let r = routing_fixture("route-graph-render");
+    let p = r.path();
+    let all = [
+        graph_render(p, false, false, true),
+        graph_render(p, false, true, false),
+        graph_render(p, true, false, false),
+        graph_render(p, false, false, false),
+    ];
+    for (i, a) in all.iter().enumerate() {
+        for b in all.iter().skip(i + 1) {
+            assert_ne!(a, b);
+        }
+    }
+}
+
+#[test]
+fn only_kept_scores_as_kept() {
+    assert!(Verdict::Kept.is_kept());
+    assert!(!Verdict::Reverted.is_kept());
+    assert!(!Verdict::Failed.is_kept());
+}
+
+/// With no feature the model verbs each name themselves.
+#[cfg(not(feature = "ollama"))]
+#[test]
+fn each_model_verb_names_itself_when_not_compiled_in() {
+    for a in [
+        &["apply"][..],
+        &["ask", "d", "q"],
+        &["oneshot", "d", "V1", "t"],
+        &["tdd", "d", "V1", "t"],
+    ] {
+        assert_eq!(run_args(argv(a)), ExitCode::from(2), "{a:?}");
+    }
+}
