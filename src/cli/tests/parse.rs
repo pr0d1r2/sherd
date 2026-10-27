@@ -152,3 +152,19 @@ fn completions_and_man_page_can_be_generated() {
         std::process::ExitCode::from(2)
     );
 }
+
+/// The root comes from the PARSED `dir`, so a flag VALUE that happens to
+/// name a directory (`--format json` beside a `json/` dir) is not it.
+#[test]
+fn dir_of_is_the_parsed_field_not_a_raw_argument() {
+    let dir = |argv: &[&str]| {
+        let c = Cli::try_parse_from(argv).ok().and_then(|c| c.cmd);
+        c.as_ref().and_then(super::super::dir_of).map(String::from)
+    };
+    assert_eq!(
+        dir(&["sherd", "check", "--format", "json", "/x/other"]),
+        Some("/x/other".into())
+    );
+    assert_eq!(dir(&["sherd", "check", "--format", "json"]), None);
+    assert_eq!(dir(&["sherd", "review", "HEAD"]), None);
+}
