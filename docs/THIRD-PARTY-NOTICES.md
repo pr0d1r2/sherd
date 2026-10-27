@@ -64,7 +64,7 @@ SOFTWARE.
 
 ## Dependencies
 
-**45 runtime packages** with `--all-features` (`cargo tree -e normal`).
+**59 runtime packages** with `--all-features` (`cargo tree -e normal`).
 Dev-dependencies are excluded: they are not distributed in anything you run.
 
 Two are siblings, and their own notices apply in turn:
@@ -78,12 +78,13 @@ The remaining closure is permissive throughout:
 
 | licence | packages |
 |---|---|
-| `MIT OR Apache-2.0` (and spelling variants) | 31 |
-| `MIT` | 6 |
+| `MIT OR Apache-2.0` (and spelling variants) | 43 |
+| `MIT` | 7 |
 | `Unlicense OR MIT` | 2 |
 | `ISC` | 2 |
 | `Apache-2.0 OR ISC OR MIT` | 1 |
 | `Apache-2.0 AND ISC` | 1 |
+| `(MIT OR Apache-2.0) AND Unicode-3.0` | 1 |
 | `BSD-3-Clause` | 1 |
 | `CDLA-Permissive-2.0` | 1 |
 
@@ -101,8 +102,13 @@ permissive-Rust:
   (`BSD-3-Clause`) — the rest of the TLS path.
 
 All four arrive with the `ollama` feature, which is **on by default**. There
-is no `Unicode-3.0` obligation: `ureq 3` avoids the `url` → `idna` → ICU
+is no ICU-stack Unicode obligation from them: `ureq 3` avoids the `url` → `idna` → ICU
 chain that `ureq 2` pulled in.
+
+`unicode-ident` (`(MIT OR Apache-2.0) AND Unicode-3.0`) is the one package that does
+carry `Unicode-3.0`. It arrives with `clap_derive`'s `syn`, on every build, and
+the licence is permissive: it asks only that its notice travel with the
+Unicode data tables.
 
 ## Reproducing these numbers
 
