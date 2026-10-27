@@ -170,7 +170,9 @@ fn dispatch(root: &Path, cmd: Cmd) -> ExitCode {
         }
         Cmd::Fed { dir } => fed_cmd(&arg_dir(dir.as_deref(), root)),
         Cmd::Init { dir, stdout } => init_cmd(root, dir.as_deref(), stdout),
-        Cmd::Graph { tree, table, dot } => {
+        Cmd::Graph {
+            tree, table, dot, ..
+        } => {
             print!("{}", graph_render(root, tree, table, dot));
             ExitCode::SUCCESS
         }

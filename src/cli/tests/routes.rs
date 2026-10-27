@@ -125,8 +125,8 @@ fn lens_on_a_dir_that_is_no_node_is_a_miss() -> Result<(), String> {
 #[test]
 fn parsed_verbs_reach_their_arms_on_a_fixture() {
     let r = routing_fixture("route-parsed");
-    for flag in ["--dot", "--table", "--tree"] {
-        assert_eq!(run_args(argv(&["graph", flag])), ExitCode::SUCCESS);
+    for flag in ["--dot", "--table", "--tree", "--mermaid"] {
+        assert_eq!(run_args(at(&["graph", flag], &r)), ExitCode::SUCCESS);
     }
     let preview = vec![
         "init".into(),
