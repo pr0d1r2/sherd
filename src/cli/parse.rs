@@ -234,6 +234,11 @@ pub enum Cmd {
         table: bool,
         #[arg(long, group = "form")]
         dot: bool,
+        /// the default rendering, accepted by name
+        #[arg(long, group = "form")]
+        mermaid: bool,
+        #[command(flatten)]
+        at: At,
     },
     /// next 3 steps, with what would invalidate each
     Plan {
