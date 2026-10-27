@@ -87,7 +87,7 @@ fn mistakes_are_parse_errors_not_silent_fallbacks() {
         &["graph", "--dot", "--tree"],
         &["debt", "--check", "--record"],
         &["plan", "--triage", "--milestone", "M1"],
-        &["budget", "--formt", "json"],
+        &["budget", "--formta", "json"],
         &["nope"],
     ] {
         assert!(parse(bad).is_err(), "{bad:?} must not parse");
@@ -96,7 +96,7 @@ fn mistakes_are_parse_errors_not_silent_fallbacks() {
 
 #[test]
 fn a_mistyped_flag_is_suggested() {
-    let Err(e) = parse(&["budget", "--formt", "json"]) else {
+    let Err(e) = parse(&["budget", "--formta", "json"]) else {
         unreachable!("a mistyped flag does not parse")
     };
     assert!(e.to_string().contains("--format"), "{e}");
