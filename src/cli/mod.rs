@@ -131,14 +131,54 @@ pub fn run_args(args: Vec<String>) -> ExitCode {
     if cli.verbose {
         crate::ollama::set_verbose(true);
     }
-    let root = root_for(&args);
-    #[cfg(feature = "ollama")]
-    crate::ollama::load_pace();
     let Some(cmd) = cli.cmd else {
         println!("{USAGE}");
         return ExitCode::SUCCESS;
     };
+    // A verb with an `At` selector takes its root from the PARSED selector.
+    // Scanning raw argv instead let any directory named like a flag value or
+    // a query win over the trailing path.
+    let root = match at_of(&cmd) {
+        Some(at) => match root_at(at.as_deref()) {
+            Ok(r) => r,
+            Err(e) => return usage(&e),
+        },
+        None => root_for(&args),
+    };
+    #[cfg(feature = "ollama")]
+    crate::ollama::load_pace();
     dispatch(&root, cmd)
+}
+
+/// The `At` selector of a verb that carries one; `None` for verbs that don't.
+fn at_of(cmd: &Cmd) -> Option<&Option<String>> {
+    match cmd {
+        Cmd::Debt { at, .. }
+        | Cmd::Coverage { at, .. }
+        | Cmd::Validate { at, .. }
+        | Cmd::Graph { at, .. }
+        | Cmd::Route { at, .. }
+        | Cmd::Slice { at, .. }
+        | Cmd::Plan { at, .. }
+        | Cmd::Apply { at, .. }
+        | Cmd::Land { at, .. } => Some(&at.at),
+        _ => None,
+    }
+}
+
+/// The repository root for an `At` selector: walk up from the named
+/// directory, or from the CWD when none was given.
+fn root_at(at: Option<&str>) -> Result<PathBuf, String> {
+    let here = cwd();
+    let Some(a) = at else {
+        return Ok(repo_root_from(&here));
+    };
+    let p = here.join(a);
+    if p.is_dir() {
+        Ok(repo_root_from(&p))
+    } else {
+        Err(format!("`{a}` is not a directory"))
+    }
 }
 
 /// Route one parsed verb. Split from [`run_args`] so the parse and the
