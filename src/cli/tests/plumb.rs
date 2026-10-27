@@ -140,15 +140,26 @@ fn validate_json_is_pinned_whole() {
     ));
 }
 
-/// `--format` is lifted out wherever it sits and the verb stays at `[0]`,
-/// so `arg_dir` reads `[dir]` from the same place with or without it.
+/// `--format` is accepted wherever it sits, and a value outside `text|json`
+/// is a parse error rather than a fall back to text.
 #[test]
-fn with_format_keeps_the_verb_and_drops_the_flag() {
-    let a = |s: &[&str]| s.iter().map(|x| (*x).to_string()).collect::<Vec<_>>();
+fn format_is_positional_agnostic_and_strict() {
+    let json = |a: &[&str]| match parse::Cli::try_parse_from(a) {
+        Ok(parse::Cli {
+            cmd: Some(Cmd::Budget { format, dir }),
+            ..
+        }) => Some((format.format.is_json(), dir)),
+        _ => None,
+    };
+    let src = Some("src".to_string());
     assert_eq!(
-        with_format(&a(&["budget", "--format", "json", "src"])),
-        Ok((true, a(&["budget", "src"])))
+        json(&["sherd", "budget", "--format", "json", "src"]),
+        Some((true, src.clone()))
     );
-    assert_eq!(with_format(&a(&["check"])), Ok((false, a(&["check"]))));
-    assert!(with_format(&a(&["validate", "--format", "yaml"])).is_err());
+    assert_eq!(
+        json(&["sherd", "budget", "src", "--format", "json"]),
+        Some((true, src))
+    );
+    assert_eq!(json(&["sherd", "budget"]), Some((false, None)));
+    assert_eq!(json(&["sherd", "budget", "--format", "yaml"]), None);
 }

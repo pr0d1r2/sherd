@@ -103,28 +103,8 @@ pub(super) fn repo_root_from(start: &Path) -> PathBuf {
 ///
 /// `join` leaves an absolute argument alone, so passing a full path still
 /// works.
-/// `--depth rule|why|all`, defaulting to `rule` (`.:V45`).
-///
-/// An unknown value is a USAGE error, never a quiet fall back to the default.
-/// `sherd lens x --depth rules` would otherwise look exactly like a flag that
-/// was honoured, which is `.:B8` wearing a typo -- and `.:V105` says a
-/// declared option must change behaviour or it is a claim with no runner.
-pub(super) fn depth_arg(args: &[String]) -> Result<lens::Depth, String> {
-    let Some(i) = args.iter().position(|a| a == "--depth") else {
-        return Ok(lens::Depth::Rule);
-    };
-    match args.get(i + 1).map(String::as_str) {
-        Some("rule") => Ok(lens::Depth::Rule),
-        Some("why") => Ok(lens::Depth::Why),
-        Some("all") => Ok(lens::Depth::All),
-        Some(v) => Err(format!("unknown --depth `{v}` -- rule|why|all")),
-        None => Err("--depth needs rule|why|all".into()),
-    }
-}
-
-pub(super) fn arg_dir(args: &[String], root: &Path) -> PathBuf {
-    args.get(1)
-        .map_or_else(|| root.to_path_buf(), |d| root.join(d))
+pub(super) fn arg_dir(dir: Option<&str>, root: &Path) -> PathBuf {
+    dir.map_or_else(|| root.to_path_buf(), |d| root.join(d))
 }
 
 /// A `[dir]` that matched no node, said in full (V2, V18).

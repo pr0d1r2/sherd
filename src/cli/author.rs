@@ -2,16 +2,6 @@
 
 use super::*;
 
-/// `sherd init [dir] [--stdout]` -- scaffold a `SPEC.md` for a directory.
-///
-/// REFUSES an existing file, exit 1, and there is no `--force`. Clobbering a
-/// spec is the one write this tool must never make: `SPEC.md` is the law the
-/// rest of the binary enforces, and a scaffold that can overwrite it can
-/// erase every invariant a repository has recorded. Deleting it first is a
-/// deliberate act a human takes, with git watching.
-///
-/// `--stdout` writes nothing and prints instead, so the output can be read
-/// before it is a file.
 /// Directories under `dir` that could BE nodes.
 ///
 /// The same exclusions the walk uses, so `init` and `graph` cannot disagree
@@ -28,24 +18,6 @@ pub(super) fn child_dirs(dir: &Path) -> Result<Vec<String>, String> {
         .collect();
     children.sort();
     Ok(children)
-}
-
-/// `sherd init [dir] [--stdout]` -- scaffold a `SPEC.md` for a directory.
-///
-/// REFUSES an existing file, exit 1, and there is no `--force`. Clobbering a
-/// spec is the one write this tool must never make: `SPEC.md` is the law the
-/// rest of the binary enforces, and a scaffold that can overwrite it can
-/// erase every invariant a repository has recorded. Deleting it first is a
-/// deliberate act a human takes, with git watching.
-///
-/// `--stdout` writes nothing and prints instead, so the output can be read
-/// before it is a file.
-/// The directory to scaffold: the first non-flag argument, or the root.
-pub(super) fn init_dir(root: &Path, args: &[String]) -> PathBuf {
-    args.iter()
-        .skip(1)
-        .find(|a| !a.starts_with("--"))
-        .map_or_else(|| root.to_path_buf(), |d| root.join(d))
 }
 
 /// `sherd sync [dir]` -- regenerate `§N` from the `§F` tables above it.
@@ -178,9 +150,22 @@ pub(super) fn init_refusal(target: &Path) -> Option<ExitCode> {
     })
 }
 
-pub(super) fn init_cmd(root: &Path, args: &[String]) -> ExitCode {
-    let stdout = args.iter().any(|a| a == "--stdout");
-    let dir = init_dir(root, args);
+/// `sherd init [dir] [--stdout]` -- scaffold a `SPEC.md` for a directory.
+///
+/// REFUSES an existing file, exit 1, and there is no `--force`. Clobbering a
+/// spec is the one write this tool must never make: `SPEC.md` is the law the
+/// rest of the binary enforces, and a scaffold that can overwrite it can
+/// erase every invariant a repository has recorded. Deleting it first is a
+/// deliberate act a human takes, with git watching.
+///
+/// `--stdout` writes nothing and prints instead, so the output can be read
+/// before it is a file.
+pub(super) fn init_cmd(
+    root: &Path,
+    dir: Option<&str>,
+    stdout: bool,
+) -> ExitCode {
+    let dir = arg_dir(dir, root);
     if !dir.is_dir() {
         eprintln!("sherd: {} is not a directory", dir.display());
         return ExitCode::from(2);
