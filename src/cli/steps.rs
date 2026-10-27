@@ -88,38 +88,6 @@ pub(super) fn tdd_cmd(
     }
 }
 
-/// Split `--format <text|json>` out of a verb's arguments, wherever it sits
-/// (V4's rule for a mode). `Ok((true, rest))` for json; a missing or unknown
-/// value is usage, ⊥ a silent fall back to text a parser then chokes on.
-pub(super) fn take_format(
-    args: &[String],
-) -> Result<(bool, Vec<String>), String> {
-    let Some(at) = args.iter().position(|a| a == "--format") else {
-        return Ok((false, args.to_vec()));
-    };
-    let json = match args.get(at.saturating_add(1)).map(String::as_str) {
-        Some("json") => true,
-        Some("text") => false,
-        Some(v) => return Err(format!("unknown --format `{v}` -- text|json")),
-        None => return Err("--format needs a value -- text|json".into()),
-    };
-    let rest = (0usize..)
-        .zip(args)
-        .filter(|(i, _)| *i != at && *i != at.saturating_add(1))
-        .map(|(_, a)| a.clone())
-        .collect();
-    Ok((json, rest))
-}
-
-/// [`take_format`] over a whole argv: the verb stays at `[0]`, so the
-/// positional readers (`arg_dir`) see the same shape with or without the flag.
-pub(super) fn with_format(
-    args: &[String],
-) -> Result<(bool, Vec<String>), String> {
-    let (json, rest) = take_format(args.get(1..).unwrap_or_default())?;
-    Ok((json, args.iter().take(1).cloned().chain(rest).collect()))
-}
-
 pub(super) fn plan_cmd(
     root: &Path,
     milestone: Option<&str>,

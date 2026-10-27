@@ -172,7 +172,10 @@ fn readme(check_only: bool, paths: &[String]) -> ExitCode {
     // comparison needs the dispatch SOURCE beside the const -- and the
     // Commands table below is rendered from that same const, so one command
     // keeps both halves of the contract.
-    match read(&root, "src/cli/mod.rs") {
+    // Dispatch is `mod.rs`; the verb list is the clap grammar beside it. A
+    // tree without `parse.rs` is a fixture with only the `match`.
+    let grammar = read(&root, "src/cli/parse.rs").unwrap_or_default();
+    match read(&root, "src/cli/mod.rs").map(|m| format!("{m}\n{grammar}")) {
         Ok(src) => {
             let missing = commands::undocumented(sherd::cli::USAGE, &src);
             if !missing.is_empty() {

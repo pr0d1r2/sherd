@@ -149,17 +149,19 @@ fn depth_defaults_to_rule_and_refuses_a_typo() {
     // `.:V45` -- `rule` is the default. A typo must be a usage error, not
     // a silent fall back, or an ignored flag looks exactly like an
     // honoured one (`.:B8`).
-    assert_eq!(depth_arg(&argv(&["lens", "."])), Ok(lens::Depth::Rule));
-    assert_eq!(
-        depth_arg(&argv(&["lens", ".", "--depth", "all"])),
-        Ok(lens::Depth::All)
-    );
-    assert_eq!(
-        depth_arg(&argv(&["lens", ".", "--depth", "why"])),
-        Ok(lens::Depth::Why)
-    );
-    assert!(depth_arg(&argv(&["lens", ".", "--depth", "rules"])).is_err());
-    assert!(depth_arg(&argv(&["lens", ".", "--depth"])).is_err());
+    let depth = |a: &[&str]| {
+        let mut v = vec!["sherd", "lens", "."];
+        v.extend(a);
+        match parse::Cli::try_parse_from(v).map(|c| c.cmd) {
+            Ok(Some(Cmd::Lens { depth, .. })) => Some(lens::Depth::from(depth)),
+            _ => None,
+        }
+    };
+    assert_eq!(depth(&[]), Some(lens::Depth::Rule));
+    assert_eq!(depth(&["--depth", "all"]), Some(lens::Depth::All));
+    assert_eq!(depth(&["--depth", "why"]), Some(lens::Depth::Why));
+    assert_eq!(depth(&["--depth", "rules"]), None);
+    assert_eq!(depth(&["--depth"]), None);
 }
 
 #[test]
@@ -168,14 +170,11 @@ fn arg_dir_resolves_against_root_not_the_cwd() {
     // compared equal to the absolute paths `fed::discover` returns, so
     // `budget src/tdd` examined nothing.
     let root = Path::new("/tmp/xyz");
-    assert_eq!(arg_dir(&argv(&["budget"]), root), root.to_path_buf());
-    assert_eq!(
-        arg_dir(&argv(&["budget", "src/tdd"]), root),
-        root.join("src/tdd")
-    );
+    assert_eq!(arg_dir(None, root), root.to_path_buf());
+    assert_eq!(arg_dir(Some("src/tdd"), root), root.join("src/tdd"));
     // An absolute argument is left alone.
     assert_eq!(
-        arg_dir(&argv(&["budget", "/elsewhere"]), root),
+        arg_dir(Some("/elsewhere"), root),
         PathBuf::from("/elsewhere")
     );
 }

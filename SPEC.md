@@ -72,6 +72,8 @@ self|.|-
 - cmd: `sherd ask <dir> <q>` → ask the endpoint from a node's lens pack. the pack is the whole prompt
 - cmd: `sherd tdd <dir> <Vn> <task>` → red → judge → green → gate → repair. the LOOP the §G target is about
 - cmd: `sherd oneshot <dir> <Vn> <task>` → the MONOLITH arm: 1 call, whole repo. exists to be COMPARED against `tdd` (R29/R30), ⊥ recommended
+- cmd: `sherd completions <shell>` → shell completion script on stdout (bash·zsh·fish·elvish·powershell), generated from the clap grammar (`src/cli:V21`)
+- cmd: `sherd man` → the man page, roff, on stdout, generated from the same grammar
 - file: `SPEC.md` ∀ dir any depth. `§G §C §I §R §V §T §B` + `§F` + `§N`
 - file: `§F FEDERATION` pipe table `dir|owns|⊥owns|tokens` — child dir depth +1. `⊥owns` = what it does NOT own + where that lives
 - file: `§N NAV` pipe table `rel|path|lens`, `rel` ∈ `up`|`self`|`sib`. generated, ⊥ hand-edit

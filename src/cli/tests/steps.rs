@@ -14,14 +14,25 @@ fn plan_for_an_undeclared_milestone_is_usage() {
 /// a JSON caller then fails to parse.
 #[test]
 fn plan_format_is_positional_agnostic_and_strict() {
-    let s = |a: &[&str]| a.iter().map(|x| (*x).to_string()).collect();
-    let v: Vec<String> = s(&["--milestone", "M1", "--format", "json"]);
-    assert_eq!(take_format(&v), Ok((true, s(&["--milestone", "M1"]))));
-    let v: Vec<String> = s(&["--format", "json", "--milestone", "M1"]);
-    assert_eq!(take_format(&v), Ok((true, s(&["--milestone", "M1"]))));
-    let v: Vec<String> = s(&["--format", "text"]);
-    assert_eq!(take_format(&v), Ok((false, vec![])));
-    assert_eq!(take_format(&[]), Ok((false, vec![])));
+    let fmt = |a: &[&str]| {
+        let mut v = vec!["sherd", "plan"];
+        v.extend(a);
+        match parse::Cli::try_parse_from(v).map(|c| c.cmd) {
+            Ok(Some(Cmd::Plan {
+                format, milestone, ..
+            })) => Some((format.format.is_json(), milestone)),
+            _ => None,
+        }
+    };
+    let m1 = Some("M1".to_string());
+    let both = ["--milestone", "M1", "--format", "json"];
+    assert_eq!(fmt(&both), Some((true, m1.clone())));
+    assert_eq!(
+        fmt(&["--format", "json", "--milestone", "M1"]),
+        Some((true, m1))
+    );
+    assert_eq!(fmt(&["--format", "text"]), Some((false, None)));
+    assert_eq!(fmt(&[]), Some((false, None)));
     let m = |a: &[&str]| run_args(a.iter().map(|x| (*x).to_string()).collect());
     assert_eq!(m(&["plan", "--format", "yaml"]), ExitCode::from(2));
     assert_eq!(m(&["plan", "--format"]), ExitCode::from(2));

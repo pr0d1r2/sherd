@@ -10,7 +10,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![edition 2024](https://img.shields.io/badge/edition-2024-000000?logo=rust&logoColor=white)](Cargo.toml)
 [![MSRV 1.95](https://img.shields.io/badge/MSRV-1.95-000000?logo=rust&logoColor=white)](Cargo.toml)
-[![direct dependencies 4](https://img.shields.io/badge/direct_dependencies-4-brightgreen)](docs/THIRD-PARTY-NOTICES.md)
+[![direct dependencies 7](https://img.shields.io/badge/direct_dependencies-7-brightgreen)](docs/THIRD-PARTY-NOTICES.md)
 [![unsafe forbidden](https://img.shields.io/badge/unsafe-forbidden-brightgreen)](Cargo.toml)
 
 [![gate hk](https://img.shields.io/badge/gate-hk-6E4AFF)](hk.pkl)
@@ -422,6 +422,8 @@ line fails the gate (`src/cli:V7`, after `src/cli:B2`).
 | `sherd ask <dir> <q>` | ask the endpoint from a node's lens pack |
 | `sherd tdd <dir> <Vn> <task>` | red -> judge -> green -> gate -> repair |
 | `sherd oneshot <dir> <Vn> <task>` | the monolith arm: one call, whole repo |
+| `sherd completions <shell>` | shell completion script (bash zsh fish elvish powershell) |
+| `sherd man` | the man page, roff, on stdout |
 <!-- END commands -->
 
 ## Reading the specs

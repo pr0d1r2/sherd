@@ -22,6 +22,8 @@ fn usage_lines(usage: &str) -> Vec<(String, String)> {
 
 /// The verbs `run_args` actually dispatches, read from the source.
 ///
+/// Also reads the clap grammar's `pub enum Cmd` when the source carries one.
+///
 /// SCOPED to the top-level `match args.first()` and its closing brace, not
 /// matched across the file. The unscoped version reported `--dot`, `--tree`,
 /// `rule`, `why` and `all` as undocumented verbs: those are ARGUMENT arms of
@@ -35,7 +37,38 @@ fn usage_lines(usage: &str) -> Vec<(String, String)> {
 pub fn dispatched(source: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut inside = false;
+    let mut in_enum = false;
     for line in source.lines() {
+        // The clap grammar: one variant per verb, `src/cli/parse.rs`. The
+        // lowercased variant name IS the verb, so it joins the list the
+        // `match` arms above build (`src/cli:V21`).
+        if line.starts_with("pub enum Cmd {") {
+            in_enum = true;
+            continue;
+        }
+        if in_enum {
+            if line == "}" {
+                in_enum = false;
+                continue;
+            }
+            const VARIANT: &str = "    ";
+            let Some(rest) = line.strip_prefix(VARIANT) else {
+                continue;
+            };
+            let name: String = rest
+                .chars()
+                .take_while(|c| c.is_ascii_alphanumeric())
+                .collect();
+            if name.chars().next().is_some_and(|c| c.is_ascii_uppercase())
+                && !rest.starts_with(' ')
+            {
+                let verb = name.to_lowercase();
+                if !out.contains(&verb) {
+                    out.push(verb);
+                }
+            }
+            continue;
+        }
         if line.contains("match args.first()") {
             inside = true;
             continue;

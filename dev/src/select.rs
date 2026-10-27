@@ -55,7 +55,12 @@ pub const BLOCKS: &[Generated] = &[
     // input covers both halves of `src/cli:V7`.
     Generated {
         name: "commands",
-        inputs: &["src/cli/mod.rs", "SPEC.md", "dev/src/**"],
+        inputs: &[
+            "src/cli/mod.rs",
+            "src/cli/parse.rs",
+            "SPEC.md",
+            "dev/src/**",
+        ],
     },
 ];
 
