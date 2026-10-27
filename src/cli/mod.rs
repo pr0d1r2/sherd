@@ -143,7 +143,14 @@ pub fn run_args(args: Vec<String>) -> ExitCode {
             Ok(r) => r,
             Err(e) => return usage(&e),
         },
-        None => root_for(&args),
+        // The rest take a `dir` field, or nothing: the parsed field, never a
+        // raw argument, so `--format json` cannot be read as a directory.
+        None => {
+            let named: Vec<String> = std::iter::once("sherd".to_string())
+                .chain(dir_of(&cmd).map(String::from))
+                .collect();
+            root_for(&named)
+        }
     };
     #[cfg(feature = "ollama")]
     crate::ollama::load_pace();
@@ -162,6 +169,26 @@ fn at_of(cmd: &Cmd) -> Option<&Option<String>> {
         | Cmd::Plan { at, .. }
         | Cmd::Apply { at, .. }
         | Cmd::Land { at, .. } => Some(&at.at),
+        _ => None,
+    }
+}
+
+/// The `dir` a verb without an `At` selector was given, if any.
+fn dir_of(cmd: &Cmd) -> Option<&str> {
+    match cmd {
+        Cmd::Init { dir, .. }
+        | Cmd::Budget { dir, .. }
+        | Cmd::Fed { dir }
+        | Cmd::Check { dir, .. }
+        | Cmd::Split { dir, .. }
+        | Cmd::Seam { dir }
+        | Cmd::Wave { dir }
+        | Cmd::Sync { dir, .. } => dir.as_deref(),
+        Cmd::Lens { dir, .. }
+        | Cmd::Adopt { dir, .. }
+        | Cmd::Ask { dir, .. }
+        | Cmd::Tdd { dir, .. }
+        | Cmd::Oneshot { dir, .. } => Some(dir),
         _ => None,
     }
 }
