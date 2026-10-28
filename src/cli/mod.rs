@@ -131,7 +131,7 @@ pub fn run_args(args: Vec<String>) -> ExitCode {
     if cli.verbose {
         crate::ollama::set_verbose(true);
     }
-    let Some(cmd) = cli.cmd else {
+    let Some(mut cmd) = cli.cmd else {
         println!("{USAGE}");
         return ExitCode::SUCCESS;
     };
@@ -149,7 +149,9 @@ pub fn run_args(args: Vec<String>) -> ExitCode {
             let named: Vec<String> = std::iter::once("sherd".to_string())
                 .chain(dir_of(&cmd).map(String::from))
                 .collect();
-            root_for(&named)
+            let root = root_for(&named);
+            absolutize_dir(&mut cmd);
+            root
         }
     };
     #[cfg(feature = "ollama")]
@@ -170,6 +172,40 @@ fn at_of(cmd: &Cmd) -> Option<&Option<String>> {
         | Cmd::Apply { at, .. }
         | Cmd::Land { at, .. } => Some(&at.at),
         _ => None,
+    }
+}
+
+/// Make a `dir` that names a directory from where the command was typed
+/// absolute. The root is chosen by walking up from that directory, so for a
+/// nested repository `arg_dir` would otherwise join the same relative path
+/// onto a root that already ends in it.
+fn absolutize_dir(cmd: &mut Cmd) {
+    let here = cwd();
+    let fix = |d: &mut String| {
+        let p = here.join(&*d);
+        if p.is_dir() {
+            *d = p.to_string_lossy().into_owned();
+        }
+    };
+    match cmd {
+        Cmd::Init { dir, .. }
+        | Cmd::Budget { dir, .. }
+        | Cmd::Fed { dir }
+        | Cmd::Check { dir, .. }
+        | Cmd::Split { dir, .. }
+        | Cmd::Seam { dir }
+        | Cmd::Wave { dir }
+        | Cmd::Sync { dir, .. } => {
+            if let Some(d) = dir {
+                fix(d);
+            }
+        }
+        Cmd::Lens { dir, .. }
+        | Cmd::Adopt { dir, .. }
+        | Cmd::Ask { dir, .. }
+        | Cmd::Tdd { dir, .. }
+        | Cmd::Oneshot { dir, .. } => fix(dir),
+        _ => {}
     }
 }
 
