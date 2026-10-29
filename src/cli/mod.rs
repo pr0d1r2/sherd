@@ -167,6 +167,7 @@ fn at_of(cmd: &Cmd) -> Option<&Option<String>> {
         | Cmd::Validate { at, .. }
         | Cmd::Graph { at, .. }
         | Cmd::Route { at, .. }
+        | Cmd::Outcome { at, .. }
         | Cmd::Slice { at, .. }
         | Cmd::Plan { at, .. }
         | Cmd::Apply { at, .. }
@@ -298,7 +299,7 @@ fn dispatch(root: &Path, cmd: Cmd) -> ExitCode {
             sync_cmd(root, dir.map(|d| root.join(d)).as_ref(), check)
         }
         Cmd::Route { query, .. } => route_cmd(root, &query),
-        Cmd::Outcome { node, verdict, .. } => outcome_cmd(&node, verdict),
+        Cmd::Outcome { node, verdict, .. } => outcome_cmd(root, &node, verdict),
         Cmd::Slice { check, list, .. } => slice_cmd(
             root,
             match (check, list) {
@@ -358,13 +359,19 @@ fn graph_render(root: &Path, tree: bool, table: bool, dot: bool) -> String {
     }
 }
 
-/// `outcome <node> <kept|reverted|failed>`.
-fn outcome_cmd(node: &str, verdict: Verdict) -> ExitCode {
-    plan::record_outcome(Path::new(node), verdict.is_kept());
-    let (tried, k) = plan::record(Path::new(node));
+/// `outcome <node> <kept|reverted|failed>`, in the selected repository's
+/// store (`SHERD_STATE` first, as everywhere else).
+fn outcome_cmd(root: &Path, node: &str, verdict: Verdict) -> ExitCode {
+    let mut st = crate::state::State::at(crate::state::resolve(
+        std::env::var("SHERD_STATE").ok(),
+        crate::state::git_common_dir(root),
+    ));
+    plan::record_outcome_in(&mut st, Path::new(node), verdict.is_kept());
+    st.save();
+    let (tried, k) = plan::record_in(&st, Path::new(node));
     eprintln!(
         "{node}: {k}/{tried} kept · believability {:.2}",
-        plan::believability(Path::new(node))
+        plan::believability_in(&st, Path::new(node))
     );
     ExitCode::SUCCESS
 }
