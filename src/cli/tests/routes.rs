@@ -148,10 +148,11 @@ fn parsed_verbs_reach_their_arms_on_a_fixture() {
 }
 
 #[test]
-fn mode_flag_prefers_check_and_defaults_to_none() {
-    assert_eq!(mode_flag(true, false), Some("--check"));
-    assert_eq!(mode_flag(false, true), Some("--record"));
-    assert_eq!(mode_flag(false, false), None);
+fn ratchet_prefers_check_and_defaults_to_none() {
+    assert_eq!(ratchet(true, false).map(Ratchet::flag), Some("--check"));
+    assert_eq!(ratchet(true, true).map(Ratchet::flag), Some("--check"));
+    assert_eq!(ratchet(false, true).map(Ratchet::flag), Some("--record"));
+    assert!(ratchet(false, false).is_none());
 }
 
 #[test]
@@ -159,10 +160,10 @@ fn graph_flags_pick_four_different_renderings() {
     let r = routing_fixture("route-graph-render");
     let p = r.path();
     let all = [
-        graph_render(p, false, false, true),
-        graph_render(p, false, true, false),
-        graph_render(p, true, false, false),
-        graph_render(p, false, false, false),
+        graph_render(p, GraphView::Dot),
+        graph_render(p, GraphView::Table),
+        graph_render(p, GraphView::Tree),
+        graph_render(p, GraphView::Mermaid),
     ];
     for (i, a) in all.iter().enumerate() {
         for b in all.iter().skip(i + 1) {

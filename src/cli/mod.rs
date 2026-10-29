@@ -254,12 +254,14 @@ fn dispatch(root: &Path, cmd: Cmd) -> ExitCode {
             &arg_dir(dir.as_deref(), root),
             format.format.is_json(),
         ),
-        Cmd::Debt { check, record, .. } => {
-            debt_cmd(root, mode_flag(check, record), &crate::land::cargo_bin())
-        }
+        Cmd::Debt { check, record, .. } => debt_cmd(
+            root,
+            ratchet(check, record).map(Ratchet::flag),
+            &crate::land::cargo_bin(),
+        ),
         Cmd::Coverage { check, record, .. } => coverage_in(
             root,
-            mode_flag(check, record),
+            ratchet(check, record).map(Ratchet::flag),
             &crate::land::cargo_bin(),
             &crate::debt::swift_bin(),
         ),
@@ -277,7 +279,13 @@ fn dispatch(root: &Path, cmd: Cmd) -> ExitCode {
         Cmd::Graph {
             tree, table, dot, ..
         } => {
-            print!("{}", graph_render(root, tree, table, dot));
+            let view = match (dot, table, tree) {
+                (true, _, _) => GraphView::Dot,
+                (_, true, _) => GraphView::Table,
+                (_, _, true) => GraphView::Tree,
+                _ => GraphView::Mermaid,
+            };
+            print!("{}", graph_render(root, view));
             ExitCode::SUCCESS
         }
         Cmd::Check { format, .. } => check_as(root, format.format.is_json()),
@@ -316,7 +324,14 @@ fn dispatch(root: &Path, cmd: Cmd) -> ExitCode {
             triage,
             milestone,
             ..
-        } => plan_verb(root, format.format.is_json(), triage, milestone),
+        } => {
+            let mode = match (triage, milestone) {
+                (true, _) => PlanMode::Triage,
+                (_, Some(m)) => PlanMode::Milestone(m),
+                _ => PlanMode::Current,
+            };
+            plan_verb(root, format.format.is_json(), mode)
+        }
         Cmd::Land { push, .. } => land_verb(root, push),
         Cmd::Completions { shell } => {
             clap_complete::generate(
@@ -340,23 +355,55 @@ fn dispatch(root: &Path, cmd: Cmd) -> ExitCode {
     }
 }
 
-/// `--check` / `--record` as the one mode string the ratchet verbs read.
-fn mode_flag(check: bool, record: bool) -> Option<&'static str> {
+/// The ratchet mode a `--check` / `--record` pair selects.
+#[derive(Clone, Copy)]
+enum Ratchet {
+    Check,
+    Record,
+}
+
+impl Ratchet {
+    /// The mode string the ratchet verbs read.
+    const fn flag(self) -> &'static str {
+        match self {
+            Self::Check => "--check",
+            Self::Record => "--record",
+        }
+    }
+}
+
+/// `--check` wins over `--record`; neither is no mode.
+fn ratchet(check: bool, record: bool) -> Option<Ratchet> {
     match (check, record) {
-        (true, _) => Some("--check"),
-        (_, true) => Some("--record"),
+        (true, _) => Some(Ratchet::Check),
+        (_, true) => Some(Ratchet::Record),
         _ => None,
     }
 }
 
 /// The `graph` rendering a flag picks; mermaid when none does.
-fn graph_render(root: &Path, tree: bool, table: bool, dot: bool) -> String {
-    match (dot, table, tree) {
-        (true, _, _) => fed::dot(root),
-        (_, true, _) => fed::table(root),
-        (_, _, true) => fed::tree(root),
-        _ => fed::mermaid(root),
+#[derive(Clone, Copy)]
+enum GraphView {
+    Dot,
+    Table,
+    Tree,
+    Mermaid,
+}
+
+fn graph_render(root: &Path, view: GraphView) -> String {
+    match view {
+        GraphView::Dot => fed::dot(root),
+        GraphView::Table => fed::table(root),
+        GraphView::Tree => fed::tree(root),
+        GraphView::Mermaid => fed::mermaid(root),
     }
+}
+
+/// What `plan` is asked for; `--triage` wins over `--milestone`.
+enum PlanMode {
+    Triage,
+    Milestone(String),
+    Current,
 }
 
 /// `outcome <node> <kept|reverted|failed>`, in the selected repository's
@@ -384,22 +431,19 @@ fn outcome_in(store: &Path, node: &str, verdict: Verdict) -> ExitCode {
 }
 
 /// `plan`, its `--triage` and `--milestone` forms.
-fn plan_verb(
-    root: &Path,
-    json: bool,
-    triage: bool,
-    milestone: Option<String>,
-) -> ExitCode {
-    match milestone {
-        _ if triage && json => usage("plan --triage has no --format json yet"),
-        _ if triage => triage_cmd(root),
-        Some(m) if plan::milestone_declared(root, &m) => {
+fn plan_verb(root: &Path, json: bool, mode: PlanMode) -> ExitCode {
+    match mode {
+        PlanMode::Triage if json => {
+            usage("plan --triage has no --format json yet")
+        }
+        PlanMode::Triage => triage_cmd(root),
+        PlanMode::Milestone(m) if plan::milestone_declared(root, &m) => {
             plan_cmd(root, Some(&m), json)
         }
-        Some(m) => usage(&format!(
+        PlanMode::Milestone(m) => usage(&format!(
             "no node declares milestone `{m}` -- a `| {m} |` row in some node's \u{a7}T"
         )),
-        None => plan_cmd(root, None, json),
+        PlanMode::Current => plan_cmd(root, None, json),
     }
 }
 
