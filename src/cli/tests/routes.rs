@@ -204,3 +204,23 @@ fn a_selector_that_is_not_a_directory_is_usage() {
         );
     }
 }
+
+/// `outcome` writes its verdict to the store it is GIVEN and reports from
+/// that same store: a kept then a failed outcome leave 2 tried and 1 kept.
+/// The store is the test's own file, so the ambient state is never touched.
+#[test]
+fn an_outcome_is_recorded_in_the_store_it_is_given() -> Result<(), String> {
+    let r = TestRepo::new("route-outcome")?;
+    let store = r.path().join("store");
+    assert_eq!(
+        outcome_in(&store, "src/fed", Verdict::Kept),
+        ExitCode::SUCCESS
+    );
+    assert_eq!(
+        outcome_in(&store, "src/fed", Verdict::Failed),
+        ExitCode::SUCCESS
+    );
+    let st = crate::state::State::at(&store);
+    assert_eq!(crate::plan::record_in(&st, Path::new("src/fed")), (2, 1));
+    Ok(())
+}
