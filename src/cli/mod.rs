@@ -362,10 +362,17 @@ fn graph_render(root: &Path, tree: bool, table: bool, dot: bool) -> String {
 /// `outcome <node> <kept|reverted|failed>`, in the selected repository's
 /// store (`SHERD_STATE` first, as everywhere else).
 fn outcome_cmd(root: &Path, node: &str, verdict: Verdict) -> ExitCode {
-    let mut st = crate::state::State::at(crate::state::resolve(
+    let store = crate::state::resolve(
         std::env::var("SHERD_STATE").ok(),
         crate::state::git_common_dir(root),
-    ));
+    );
+    outcome_in(&store, node, verdict)
+}
+
+/// The store-taking core of `outcome_cmd`: a test brings its own store, as
+/// `plan::record_outcome_in` does, so no test mutates the ambient state.
+fn outcome_in(store: &Path, node: &str, verdict: Verdict) -> ExitCode {
+    let mut st = crate::state::State::at(store);
     plan::record_outcome_in(&mut st, Path::new(node), verdict.is_kept());
     st.save();
     let (tried, k) = plan::record_in(&st, Path::new(node));
