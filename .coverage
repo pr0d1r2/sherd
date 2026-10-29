@@ -18,8 +18,8 @@
 #   code 98.3 · lens 94.5 · spec 92.5 · tokens 88.9 · state 88.0 · fed 87.1
 #   ollama 70.9 · tdd 69.0 · plan 66.5 · slice 63.6 · review 63.0
 #   land 55.2 · assay 54.0 · cli 0.0
-lines 93.09
-lines-default 97.10
+lines 93.35
+lines-default 96.87
 #
 # MEASUREMENT VARIANCE, observed rather than assumed: two runs of the same
 # tree reported 71.27% and 71.17%. Three later runs all reported 71.17%. The
@@ -269,3 +269,23 @@ lines-default 97.10
 # all 8836 lines, 611 missed; default 6008 lines, 174 missed. Missed rose by
 # 2 in each build while 339 lines were added -- the rise is the new code
 # being covered, not the denominator.
+
+# RAISED lines 93.09 -> 93.36 and DROPPED lines-default 97.10 -> 96.87 on
+# 2026-10-27, #130 (clap). Recorded rather than covered. The hand-written
+# parser (`take_format`, `depth_arg`, `flag_value`, `init_dir`) was fully
+# covered and is gone, so covered lines left the numerator of the default
+# build; the grammar that replaces it is derive-generated and has no lines of
+# its own to miss. What the default build still misses in `src/cli/mod.rs` is
+# unchanged in kind: `outcome_cmd` (writes the shared state store, so no
+# hermetic test), the `man` write-error arm and `land`'s success arm.
+# Measured in the working checkout, not a clean clone: re-measure clean
+# before trusting the last digit.
+
+# DROPPED lines 93.36 -> 93.35 on 2026-10-27, #130 (clap). Recorded rather than
+# covered. The 93.36 above was measured in the working checkout, not a clean
+# clone (see that entry's last line); the gate's own run of the same tree
+# reports 93.35, so the floor was one digit high rather than a line losing
+# its test. No test was removed or weakened by this branch to produce it.
+# lines-default holds at 96.87. llvm-cov was unavailable in the repair
+# sandbox, so the uncovered line itself was not located: re-measure in a
+# clean clone before trusting the last digit.

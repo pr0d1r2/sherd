@@ -14,11 +14,15 @@ use super::*;
 /// discipline one verb over: a tree that still has rows to move was not
 /// clean when it was committed. A rerun over a migrated tree finds nothing
 /// to move and exits 0 (`src/adopt:V6`).
-pub(super) fn adopt_cmd(root: &Path, args: &[String]) -> ExitCode {
-    let dry = args.iter().any(|a| a == "--check");
+pub(super) fn adopt_cmd(
+    root: &Path,
+    dir: &str,
+    map: Option<&str>,
+    dry: bool,
+) -> ExitCode {
     // The NAMED node is the source (`src/adopt:V11`, `B6`): handing on the
     // root here is what made `adopt a/b` read the root spec.
-    let node = adopt_node(root, &arg_dir(args, root));
+    let node = adopt_node(root, &arg_dir(Some(dir), root));
     // BEFORE any count is printed (`src/adopt:V8`). A source this reader
     // cannot parse produces `0 rows read`, which in adopt's exit scheme means
     // "nothing to move" -- the opposite answer, in the same words, at the
@@ -30,7 +34,7 @@ pub(super) fn adopt_cmd(root: &Path, args: &[String]) -> ExitCode {
         Ok(_) => {}
         Err(e) => return adopt_unusable(&e),
     }
-    match flag_value(args, "--map") {
+    match map {
         None => adopt_propose_at(root, &node),
         Some(file) => adopt_with_map((root, &node), file, dry),
     }
@@ -78,16 +82,6 @@ pub(super) fn adopt_unreadable_at(
          pipe-delimited (FORMAT.md). convert the table and run this again."
     );
     ExitCode::from(2)
-}
-
-/// The argument after a flag, e.g. the `FILE` of `--map FILE`.
-pub(super) fn flag_value<'a>(
-    args: &'a [String],
-    flag: &str,
-) -> Option<&'a String> {
-    let at = args.iter().position(|a| a == flag)?;
-    args.get(at.saturating_add(1))
-        .filter(|v| !v.starts_with("--"))
 }
 
 /// PROPOSE, and print the proposal in the map's own format.

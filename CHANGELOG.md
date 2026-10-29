@@ -51,6 +51,36 @@ publish run surfaced two warnings that eleven gate steps had read past
 
 ## [Unreleased]
 
+The CLI's argv is now parsed by [clap](https://crates.io/crates/clap) (derive
+API, `default-features = false`) instead of by hand (`src/cli:V21`). Exit
+codes are unchanged: `0` clean, `1` violation, `2` usage; clap's own usage
+errors exit `2`, and `--help`/`--version` exit `0`.
+
+### Added
+
+- `sherd completions <shell>` prints a completion script for `bash`, `zsh`,
+  `fish`, `elvish` or `powershell`.
+- `sherd man` prints the man page (roff).
+- `sherd <verb> --help` documents each verb's flags; a mistyped flag or verb
+  gets a "did you mean" suggestion.
+
+### Changed
+
+- **Breaking, minor:** the parser is strict where the hand-rolled one was
+  lenient. An extra positional argument, an unknown flag, or a flag given a
+  value outside its set (`--format yaml`, `--depth deep`) is a usage error
+  (exit `2`) with clap's message, where some were ignored before. The
+  `sherd --help` text is unchanged apart from the two new verbs.
+- The error text for a missing argument (`sherd lens`) is clap's rather than
+  `lens needs a dir`; the exit code is the same.
+- `graph --tree`, `--table` and `--dot` are mutually exclusive; `debt`,
+  `coverage` and `slice` reject `--check` together with `--record`/`--list`.
+- Library: `sherd::cli::command()` returns the `clap::Command` tree.
+- Dependencies: direct `clap`, `clap_complete` and `clap_mangen`; the closure
+  grows by 14 packages (`clap_*`, `anstyle`, `strsim`, `heck`, `roff`, `syn`,
+  `quote`, `proc-macro2`, `unicode-ident`), all `MIT OR Apache-2.0` bar
+  `strsim` (`MIT`) and `unicode-ident` (`Unicode-3.0` in addition).
+
 ## [0.5.5] - 2026-10-25
 
 Still the `0.5` rung, and a patch. Its subject is a second language:

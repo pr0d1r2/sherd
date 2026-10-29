@@ -117,3 +117,111 @@ fn lens_on_a_dir_that_is_no_node_is_a_miss() -> Result<(), String> {
     assert_eq!(run_args(argv(&["lens", "nowhere"])), ExitCode::from(2));
     Ok(())
 }
+
+/// The verbs that read a fixture and write nothing, driven through the
+/// parsed route. Each flag spelling reaches its own arm: `--stdout` for
+/// `init`, the four `graph` renderings, both `validate` forms and each
+/// `slice` mode.
+#[test]
+fn parsed_verbs_reach_their_arms_on_a_fixture() {
+    let r = routing_fixture("route-parsed");
+    for flag in ["--dot", "--table", "--tree", "--mermaid"] {
+        assert_eq!(run_args(at(&["graph", flag], &r)), ExitCode::SUCCESS);
+    }
+    let preview = vec![
+        "init".into(),
+        r.path().join("alpha").display().to_string(),
+        "--stdout".into(),
+    ];
+    assert_ne!(run_args(preview), ExitCode::from(2));
+    for verb in [
+        &["check"][..],
+        &["validate"],
+        &["validate", "--format", "json"],
+        &["slice"],
+        &["slice", "--check"],
+        &["slice", "--list"],
+    ] {
+        let code = run_args(at(verb, &r));
+        assert_ne!(code, ExitCode::from(2), "`sherd {}`", verb.join(" "));
+    }
+}
+
+#[test]
+fn ratchet_prefers_check_and_defaults_to_none() {
+    assert_eq!(ratchet(true, false).map(Ratchet::flag), Some("--check"));
+    assert_eq!(ratchet(true, true).map(Ratchet::flag), Some("--check"));
+    assert_eq!(ratchet(false, true).map(Ratchet::flag), Some("--record"));
+    assert!(ratchet(false, false).is_none());
+}
+
+#[test]
+fn graph_flags_pick_four_different_renderings() {
+    let r = routing_fixture("route-graph-render");
+    let p = r.path();
+    let all = [
+        graph_render(p, GraphView::Dot),
+        graph_render(p, GraphView::Table),
+        graph_render(p, GraphView::Tree),
+        graph_render(p, GraphView::Mermaid),
+    ];
+    for (i, a) in all.iter().enumerate() {
+        for b in all.iter().skip(i + 1) {
+            assert_ne!(a, b);
+        }
+    }
+}
+
+#[test]
+fn only_kept_scores_as_kept() {
+    assert!(Verdict::Kept.is_kept());
+    assert!(!Verdict::Reverted.is_kept());
+    assert!(!Verdict::Failed.is_kept());
+}
+
+/// With no feature the model verbs each name themselves.
+#[cfg(not(feature = "ollama"))]
+#[test]
+fn each_model_verb_names_itself_when_not_compiled_in() {
+    for a in [
+        &["apply"][..],
+        &["ask", "d", "q"],
+        &["oneshot", "d", "V1", "t"],
+        &["tdd", "d", "V1", "t"],
+    ] {
+        assert_eq!(run_args(argv(a)), ExitCode::from(2), "{a:?}");
+    }
+}
+
+/// A missing or non-directory `At` selector is usage, not a silent fall
+/// back to the CWD's repository.
+#[test]
+fn a_selector_that_is_not_a_directory_is_usage() {
+    for verb in ["validate", "graph", "plan", "land", "slice", "debt"] {
+        assert_eq!(
+            run_args(argv(&[verb, "/nonexistent/sherd-at"])),
+            ExitCode::from(2),
+            "{verb}"
+        );
+    }
+}
+
+/// `outcome` writes its verdict to the store it is GIVEN and reports from
+/// that same store: a kept then a failed outcome leave 2 tried and 1 kept.
+/// The store is the test's own file, so the ambient state is never touched.
+#[test]
+fn an_outcome_is_recorded_in_the_store_it_is_given() -> Result<(), String> {
+    let r = TestRepo::new("route-outcome")?;
+    let store = r.path().join("store");
+    assert_eq!(
+        outcome_in(&store, "src/fed", Verdict::Kept),
+        ExitCode::SUCCESS
+    );
+    assert_eq!(
+        outcome_in(&store, "src/fed", Verdict::Failed),
+        ExitCode::SUCCESS
+    );
+    let st = crate::state::State::at(&store);
+    assert_eq!(crate::plan::record_in(&st, Path::new("src/fed")), (2, 1));
+    Ok(())
+}

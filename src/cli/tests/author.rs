@@ -10,7 +10,7 @@ fn init_refuses_to_overwrite_an_existing_spec() {
         unreachable!("a fixture repository is buildable")
     };
     // `TestRepo::new` writes a SPEC.md, so the root already has one.
-    assert_eq!(init_cmd(repo.path(), &argv(&["init"])), ExitCode::from(1));
+    assert_eq!(init_cmd(repo.path(), None, false), ExitCode::from(1));
 }
 
 /// A directory with children gets a row per child; one without gets no
@@ -34,11 +34,11 @@ fn init_fixture(tag: &str) -> (crate::testrepo::TestRepo, PathBuf) {
 fn init_run_twice_refuses_the_second_time() {
     let (repo, _node) = init_fixture("cli-init-twice");
     assert_eq!(
-        init_cmd(repo.path(), &argv(&["init", "node"])),
+        init_cmd(repo.path(), Some("node"), false),
         ExitCode::SUCCESS
     );
     assert_eq!(
-        init_cmd(repo.path(), &argv(&["init", "node"])),
+        init_cmd(repo.path(), Some("node"), false),
         ExitCode::from(1)
     );
 }
@@ -47,7 +47,7 @@ fn init_run_twice_refuses_the_second_time() {
 fn init_writes_a_scaffold_with_a_row_per_child() {
     let (repo, node) = init_fixture("cli-init-write");
     assert_eq!(
-        init_cmd(repo.path(), &argv(&["init", "node"])),
+        init_cmd(repo.path(), Some("node"), false),
         ExitCode::SUCCESS
     );
     let Ok(body) = std::fs::read_to_string(node.join("SPEC.md")) else {
@@ -71,7 +71,7 @@ fn init_stdout_writes_nothing() {
         unreachable!("a dir is creatable")
     };
     assert_eq!(
-        init_cmd(repo.path(), &argv(&["init", "preview", "--stdout"])),
+        init_cmd(repo.path(), Some("preview"), true),
         ExitCode::SUCCESS
     );
     assert!(!node.join("SPEC.md").exists(), "preview wrote a file");
@@ -97,7 +97,7 @@ fn init_on_a_path_that_is_not_a_directory_is_usage() {
         unreachable!("a fixture repository is buildable")
     };
     assert_eq!(
-        init_cmd(repo.path(), &argv(&["init", "no-such-dir"])),
+        init_cmd(repo.path(), Some("no-such-dir"), false),
         ExitCode::from(2)
     );
 }

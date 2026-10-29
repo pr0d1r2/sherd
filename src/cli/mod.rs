@@ -8,6 +8,10 @@ use crate::{code, fed, lens, plan, slice, spec, split, state, tokens, wave};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
+mod parse;
+use clap::Parser;
+use parse::{Cmd, Verdict};
+
 mod args;
 use args::*;
 
@@ -72,6 +76,8 @@ sherd -- federated SPEC.md for small-context local models
   sherd ask <dir> <q>    ask the endpoint from a node's lens pack
   sherd tdd <dir> <Vn> <task>   red -> judge -> green -> gate -> repair
   sherd oneshot <dir> <Vn> <task>   the monolith arm: one call, whole repo
+  sherd completions <shell>  shell completion script (bash zsh fish elvish powershell)
+  sherd man              the man page, roff, on stdout
 
   -v, --verbose        dump every prompt and stream every reply
   -V, --version        print `sherd <semver>` and exit 0
@@ -90,6 +96,12 @@ pub fn run() -> ExitCode {
     run_args(std::env::args().skip(1).collect())
 }
 
+/// The clap command tree, for completions and the man page.
+#[must_use]
+pub fn command() -> clap::Command {
+    parse::command()
+}
+
 /// As [`run`], from an explicit argv.
 ///
 /// `run` read `std::env::args` directly, so dispatch -- usage, exit codes,
@@ -97,153 +109,373 @@ pub fn run() -> ExitCode {
 /// 0.0% coverage over 445 lines with no test module (`.:R50`), and an
 /// untestable entry point is why. Exit codes and usage are real contracts
 /// per this module's own header; a contract nothing can call is a comment.
+///
+/// The grammar is `parse::Cli` (`src/cli:V21`); this function only routes a
+/// parsed value. A parse failure is clap's usage error -- exit 2 -- and
+/// `--help`/`--version` are its success paths, exit 0.
 #[must_use]
 pub fn run_args(args: Vec<String>) -> ExitCode {
-    // `mut` ONLY under `ollama`: the sole mutation is the `-v` removal below,
-    // so a `mut` on the parameter is an unused-mut warning in the DEFAULT
-    // build -- which is the build that ships (`.:B26`).
+    let cli = match parse::Cli::try_parse_from(
+        std::iter::once("sherd".to_string()).chain(args.iter().cloned()),
+    ) {
+        Ok(c) => c,
+        Err(e) => {
+            // Not `e.exit()`: that ends the process, and a test could never
+            // see the code it chose.
+            let code = if e.use_stderr() { 2 } else { 0 };
+            let _ = e.print();
+            return ExitCode::from(code);
+        }
+    };
     #[cfg(feature = "ollama")]
-    let mut args = args;
-    // -v / --verbose is positional-agnostic: it is a mode, not an argument.
-    #[cfg(feature = "ollama")]
-    if let Some(i) = args.iter().position(|a| a == "-v" || a == "--verbose") {
-        args.remove(i);
+    if cli.verbose {
         crate::ollama::set_verbose(true);
     }
-    let root = root_for(&args);
+    let Some(mut cmd) = cli.cmd else {
+        println!("{USAGE}");
+        return ExitCode::SUCCESS;
+    };
+    // A verb with an `At` selector takes its root from the PARSED selector.
+    // Scanning raw argv instead let any directory named like a flag value or
+    // a query win over the trailing path.
+    let root = match at_of(&cmd) {
+        Some(at) => match root_at(at.as_deref()) {
+            Ok(r) => r,
+            Err(e) => return usage(&e),
+        },
+        // The rest take a `dir` field, or nothing: the parsed field, never a
+        // raw argument, so `--format json` cannot be read as a directory.
+        None => {
+            let named: Vec<String> = std::iter::once("sherd".to_string())
+                .chain(dir_of(&cmd).map(String::from))
+                .collect();
+            let root = root_for(&named);
+            absolutize_dir(&mut cmd);
+            root
+        }
+    };
     #[cfg(feature = "ollama")]
     crate::ollama::load_pace();
-    match args.first().map(String::as_str) {
-        Some("budget") => match with_format(&args) {
-            Ok((json, a)) => budget_as(&root, &arg_dir(&a, &root), json),
-            Err(e) => usage(&e),
-        },
-        Some("debt") => debt_cmd(
-            &root,
-            args.get(1).map(String::as_str),
+    dispatch(&root, cmd)
+}
+
+/// The `At` selector of a verb that carries one; `None` for verbs that don't.
+fn at_of(cmd: &Cmd) -> Option<&Option<String>> {
+    match cmd {
+        Cmd::Debt { at, .. }
+        | Cmd::Coverage { at, .. }
+        | Cmd::Validate { at, .. }
+        | Cmd::Graph { at, .. }
+        | Cmd::Route { at, .. }
+        | Cmd::Outcome { at, .. }
+        | Cmd::Slice { at, .. }
+        | Cmd::Plan { at, .. }
+        | Cmd::Apply { at, .. }
+        | Cmd::Land { at, .. } => Some(&at.at),
+        _ => None,
+    }
+}
+
+/// Make a `dir` that names a directory from where the command was typed
+/// absolute. The root is chosen by walking up from that directory, so for a
+/// nested repository `arg_dir` would otherwise join the same relative path
+/// onto a root that already ends in it.
+fn absolutize_dir(cmd: &mut Cmd) {
+    let here = cwd();
+    let fix = |d: &mut String| {
+        let p = here.join(&*d);
+        if p.is_dir() {
+            *d = p.to_string_lossy().into_owned();
+        }
+    };
+    match cmd {
+        Cmd::Init { dir, .. }
+        | Cmd::Budget { dir, .. }
+        | Cmd::Fed { dir }
+        | Cmd::Check { dir, .. }
+        | Cmd::Split { dir, .. }
+        | Cmd::Seam { dir }
+        | Cmd::Wave { dir }
+        | Cmd::Sync { dir, .. } => {
+            if let Some(d) = dir {
+                fix(d);
+            }
+        }
+        Cmd::Lens { dir, .. }
+        | Cmd::Adopt { dir, .. }
+        | Cmd::Ask { dir, .. }
+        | Cmd::Tdd { dir, .. }
+        | Cmd::Oneshot { dir, .. } => fix(dir),
+        _ => {}
+    }
+}
+
+/// The `dir` a verb without an `At` selector was given, if any.
+fn dir_of(cmd: &Cmd) -> Option<&str> {
+    match cmd {
+        Cmd::Init { dir, .. }
+        | Cmd::Budget { dir, .. }
+        | Cmd::Fed { dir }
+        | Cmd::Check { dir, .. }
+        | Cmd::Split { dir, .. }
+        | Cmd::Seam { dir }
+        | Cmd::Wave { dir }
+        | Cmd::Sync { dir, .. } => dir.as_deref(),
+        Cmd::Lens { dir, .. }
+        | Cmd::Adopt { dir, .. }
+        | Cmd::Ask { dir, .. }
+        | Cmd::Tdd { dir, .. }
+        | Cmd::Oneshot { dir, .. } => Some(dir),
+        _ => None,
+    }
+}
+
+/// The repository root for an `At` selector: walk up from the named
+/// directory, or from the CWD when none was given.
+fn root_at(at: Option<&str>) -> Result<PathBuf, String> {
+    let here = cwd();
+    let Some(a) = at else {
+        return Ok(repo_root_from(&here));
+    };
+    let p = here.join(a);
+    if p.is_dir() {
+        Ok(repo_root_from(&p))
+    } else {
+        Err(format!("`{a}` is not a directory"))
+    }
+}
+
+/// Route one parsed verb. Split from [`run_args`] so the parse and the
+/// routing each fit a screen.
+fn dispatch(root: &Path, cmd: Cmd) -> ExitCode {
+    match cmd {
+        Cmd::Budget { dir, format } => budget_as(
+            root,
+            &arg_dir(dir.as_deref(), root),
+            format.format.is_json(),
+        ),
+        Cmd::Debt { check, record, .. } => debt_cmd(
+            root,
+            ratchet(check, record).map(Ratchet::flag),
             &crate::land::cargo_bin(),
         ),
-        Some("coverage") => coverage_in(
-            &root,
-            args.get(1).map(String::as_str),
+        Cmd::Coverage { check, record, .. } => coverage_in(
+            root,
+            ratchet(check, record).map(Ratchet::flag),
             &crate::land::cargo_bin(),
             &crate::debt::swift_bin(),
         ),
-        Some("lens") => match (args.get(1), depth_arg(&args)) {
-            // `.:B9` (the ROOT's, not this node's): this passed
-            // `PathBuf::from(d)` while `budget` and `fed`
-            // went through `arg_dir`, so it never got T10's root resolution
-            // and `lens .` reported a different chain than `budget` for the
-            // same node. Fixing a shared helper has to be followed by finding
-            // who does not use it.
-            (Some(_), Ok(dep)) => lens_cmd(&root, &arg_dir(&args, &root), dep),
-            (Some(_), Err(m)) => usage(&m),
-            (None, _) => usage("lens needs a dir"),
-        },
-        Some("fed") => fed_cmd(&arg_dir(&args, &root)),
-        Some("init") => init_cmd(&root, &args),
-        Some("graph") => {
-            match args.get(1).map(String::as_str) {
-                Some("--dot") => print!("{}", fed::dot(&root)),
-                Some("--table") => print!("{}", fed::table(&root)),
-                Some("--tree") => print!("{}", fed::tree(&root)),
-                _ => print!("{}", fed::mermaid(&root)),
-            }
+        // `.:B9` (the ROOT's, not this node's): this passed
+        // `PathBuf::from(d)` while `budget` and `fed` went through
+        // `arg_dir`, so it never got T10's root resolution and `lens .`
+        // reported a different chain than `budget` for the same node.
+        // Fixing a shared helper has to be followed by finding who does not
+        // use it.
+        Cmd::Lens { dir, depth } => {
+            lens_cmd(root, &arg_dir(Some(&dir), root), depth.into())
+        }
+        Cmd::Fed { dir } => fed_cmd(&arg_dir(dir.as_deref(), root)),
+        Cmd::Init { dir, stdout } => init_cmd(root, dir.as_deref(), stdout),
+        Cmd::Graph {
+            tree, table, dot, ..
+        } => {
+            let view = match (dot, table, tree) {
+                (true, _, _) => GraphView::Dot,
+                (_, true, _) => GraphView::Table,
+                (_, _, true) => GraphView::Tree,
+                _ => GraphView::Mermaid,
+            };
+            print!("{}", graph_render(root, view));
             ExitCode::SUCCESS
         }
-        Some("check") => match with_format(&args) {
-            Ok((json, _)) => check_as(&root, json),
-            Err(e) => usage(&e),
-        },
-        Some("validate") => match with_format(&args) {
-            Ok((true, _)) => validate_json_cmd(&root),
-            Ok((false, _)) => validate(&root),
-            Err(e) => usage(&e),
-        },
-        Some("split") => {
-            let apply = args.iter().any(|a| a == "--apply");
-            let dir = args.get(1).filter(|a| !a.starts_with("--"));
-            split_cmd(
-                &root,
-                &dir.map_or_else(|| root.clone(), |d| root.join(d)),
-                apply,
-            )
+        Cmd::Check { format, .. } => check_as(root, format.format.is_json()),
+        Cmd::Validate { format, .. } if format.format.is_json() => {
+            validate_json_cmd(root)
         }
-        Some("seam") => seam_cmd(&root, &arg_dir(&args, &root)),
-        Some("wave") => wave_cmd(&root, &arg_dir(&args, &root)),
-        Some("adopt") => match args.get(1).filter(|a| !a.starts_with("--")) {
-            Some(_) => adopt_cmd(&root, &args),
-            None => usage("adopt needs a dir"),
-        },
-        Some("sync") => {
-            let check = args.iter().any(|a| a == "--check");
-            // Any argument may be the dir (`src/cli:B7`), so `sync --check .`
-            // and `sync .` name the same subtree.
-            let dir = args.iter().skip(1).find(|a| !a.starts_with("--"));
-            sync_cmd(&root, dir.map(|d| root.join(d)).as_ref(), check)
+        Cmd::Validate { .. } => validate(root),
+        Cmd::Split { dir, apply } => split_cmd(
+            root,
+            &dir.map_or_else(|| root.to_path_buf(), |d| root.join(d)),
+            apply,
+        ),
+        Cmd::Seam { dir } => seam_cmd(root, &arg_dir(dir.as_deref(), root)),
+        Cmd::Wave { dir } => wave_cmd(root, &arg_dir(dir.as_deref(), root)),
+        Cmd::Adopt { dir, map, check } => {
+            adopt_cmd(root, &dir, map.as_deref(), check)
         }
-        Some("route") => match args.get(1) {
-            Some(q) => route_cmd(&root, q),
-            None => usage("route needs a query"),
-        },
-        Some("outcome") => match (args.get(1), args.get(2)) {
-            (Some(node), Some(verdict)) => {
-                let kept = match verdict.as_str() {
-                    "kept" => true,
-                    "reverted" | "failed" => false,
-                    _ => {
-                        return usage(
-                            "outcome verdict is `kept`, `reverted` or `failed`",
-                        );
-                    }
-                };
-                plan::record_outcome(Path::new(node), kept);
-                let (tried, k) = plan::record(Path::new(node));
-                eprintln!(
-                    "{node}: {k}/{tried} kept · believability {:.2}",
-                    plan::believability(Path::new(node))
-                );
-                ExitCode::SUCCESS
-            }
-            _ => usage("outcome needs <node> <kept|reverted|failed>"),
-        },
-        Some("slice") => {
-            slice_cmd(&root, args.get(1).map_or("", String::as_str))
+        Cmd::Sync { dir, check } => {
+            sync_cmd(root, dir.map(|d| root.join(d)).as_ref(), check)
         }
-        Some("review") => {
-            review_cmd(&root, args.get(1).map_or("HEAD", String::as_str))
-        }
-        Some("plan") => match take_format(args.get(1..).unwrap_or_default()) {
-            Err(e) => usage(&e),
-            Ok((json, rest)) => match rest.first().map(String::as_str) {
-                Some("--triage") if json => {
-                    usage("plan --triage has no --format json yet")
-                }
-                Some("--triage") => triage_cmd(&root),
-                Some("--milestone") => match rest.get(1) {
-                    Some(m) if plan::milestone_declared(&root, m) => {
-                        plan_cmd(&root, Some(m), json)
-                    }
-                    Some(m) => usage(&format!(
-                        "no node declares milestone `{m}` -- a `| {m} |` row in some node's \u{a7}T"
-                    )),
-                    None => {
-                        usage("plan --milestone needs a milestone id, e.g. M1")
-                    }
-                },
-                _ => plan_cmd(&root, None, json),
+        Cmd::Route { query, .. } => route_cmd(root, &query),
+        Cmd::Outcome { node, verdict, .. } => outcome_cmd(root, &node, verdict),
+        Cmd::Slice { check, list, .. } => slice_cmd(
+            root,
+            match (check, list) {
+                (true, _) => "--check",
+                (_, true) => "--list",
+                _ => "",
             },
+        ),
+        Cmd::Review { rev } => {
+            review_cmd(root, rev.as_deref().unwrap_or("HEAD"))
+        }
+        Cmd::Plan {
+            format,
+            triage,
+            milestone,
+            ..
+        } => {
+            let mode = match (triage, milestone) {
+                (true, _) => PlanMode::Triage,
+                (_, Some(m)) => PlanMode::Milestone(m),
+                _ => PlanMode::Current,
+            };
+            plan_verb(root, format.format.is_json(), mode)
+        }
+        Cmd::Land { push, .. } => land_verb(root, push),
+        Cmd::Completions { shell } => {
+            clap_complete::generate(
+                clap_complete::Shell::from(shell),
+                &mut command(),
+                "sherd",
+                &mut std::io::stdout(),
+            );
+            ExitCode::SUCCESS
+        }
+        Cmd::Man => match clap_mangen::Man::new(command())
+            .render(&mut std::io::stdout())
+        {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(e) => {
+                eprintln!("sherd: man: {e}");
+                ExitCode::from(1)
+            }
         },
-        #[cfg(feature = "ollama")]
-        Some("apply") => match plan::apply(&root, 3) {
+        model => model_verb(root, model),
+    }
+}
+
+/// The ratchet mode a `--check` / `--record` pair selects.
+#[derive(Clone, Copy)]
+enum Ratchet {
+    Check,
+    Record,
+}
+
+impl Ratchet {
+    /// The mode string the ratchet verbs read.
+    const fn flag(self) -> &'static str {
+        match self {
+            Self::Check => "--check",
+            Self::Record => "--record",
+        }
+    }
+}
+
+/// `--check` wins over `--record`; neither is no mode.
+fn ratchet(check: bool, record: bool) -> Option<Ratchet> {
+    match (check, record) {
+        (true, _) => Some(Ratchet::Check),
+        (_, true) => Some(Ratchet::Record),
+        _ => None,
+    }
+}
+
+/// The `graph` rendering a flag picks; mermaid when none does.
+#[derive(Clone, Copy)]
+enum GraphView {
+    Dot,
+    Table,
+    Tree,
+    Mermaid,
+}
+
+fn graph_render(root: &Path, view: GraphView) -> String {
+    match view {
+        GraphView::Dot => fed::dot(root),
+        GraphView::Table => fed::table(root),
+        GraphView::Tree => fed::tree(root),
+        GraphView::Mermaid => fed::mermaid(root),
+    }
+}
+
+/// What `plan` is asked for; `--triage` wins over `--milestone`.
+enum PlanMode {
+    Triage,
+    Milestone(String),
+    Current,
+}
+
+/// `outcome <node> <kept|reverted|failed>`, in the selected repository's
+/// store (`SHERD_STATE` first, as everywhere else).
+fn outcome_cmd(root: &Path, node: &str, verdict: Verdict) -> ExitCode {
+    let store = crate::state::resolve(
+        std::env::var("SHERD_STATE").ok(),
+        crate::state::git_common_dir(root),
+    );
+    outcome_in(&store, node, verdict)
+}
+
+/// The store-taking core of `outcome_cmd`: a test brings its own store, as
+/// `plan::record_outcome_in` does, so no test mutates the ambient state.
+fn outcome_in(store: &Path, node: &str, verdict: Verdict) -> ExitCode {
+    let mut st = crate::state::State::at(store);
+    plan::record_outcome_in(&mut st, Path::new(node), verdict.is_kept());
+    st.save();
+    let (tried, k) = plan::record_in(&st, Path::new(node));
+    eprintln!(
+        "{node}: {k}/{tried} kept · believability {:.2}",
+        plan::believability_in(&st, Path::new(node))
+    );
+    ExitCode::SUCCESS
+}
+
+/// `plan`, its `--triage` and `--milestone` forms.
+fn plan_verb(root: &Path, json: bool, mode: PlanMode) -> ExitCode {
+    match mode {
+        PlanMode::Triage if json => {
+            usage("plan --triage has no --format json yet")
+        }
+        PlanMode::Triage => triage_cmd(root),
+        PlanMode::Milestone(m) if plan::milestone_declared(root, &m) => {
+            plan_cmd(root, Some(&m), json)
+        }
+        PlanMode::Milestone(m) => usage(&format!(
+            "no node declares milestone `{m}` -- a `| {m} |` row in some node's \u{a7}T"
+        )),
+        PlanMode::Current => plan_cmd(root, None, json),
+    }
+}
+
+/// The verbs that need the `ollama` feature, or say so.
+///
+/// The model verbs exist in `USAGE` whatever this build carries, so a
+/// consumer reading `--help` sees the whole tool. Without the feature they
+/// are not "unknown" -- they are NOT COMPILED IN, and saying so is the
+/// difference between a typo and a build choice.
+#[cfg(not(feature = "ollama"))]
+fn model_verb(_root: &Path, cmd: Cmd) -> ExitCode {
+    let verb = match cmd {
+        Cmd::Apply { .. } => "apply",
+        Cmd::Ask { .. } => "ask",
+        Cmd::Oneshot { .. } => "oneshot",
+        _ => "tdd",
+    };
+    needs_ollama(verb)
+}
+
+#[cfg(feature = "ollama")]
+fn model_verb(root: &Path, cmd: Cmd) -> ExitCode {
+    match cmd {
+        Cmd::Apply { land, push, .. } => match plan::apply(root, 3) {
             Ok(sha) => {
                 eprintln!(
                     "\napplied as {sha}. Run `sherd plan` again before the next step -- \
                            this commit changed the specs that plan it."
                 );
                 // --land asks to land it now; the evidence still decides.
-                if args.iter().any(|a| a == "--land") {
-                    land_verb(&root, args.iter().any(|a| a == "--push"))
+                if land {
+                    land_verb(root, push)
                 } else {
                     ExitCode::SUCCESS
                 }
@@ -253,58 +485,30 @@ pub fn run_args(args: Vec<String>) -> ExitCode {
                 ExitCode::from(1)
             }
         },
-        Some("land") => land_verb(&root, args.iter().any(|a| a == "--push")),
-        // The model verbs exist in `USAGE` whatever this build carries, so a
-        // consumer reading `--help` sees the whole tool. Without the feature
-        // they are not "unknown" -- they are NOT COMPILED IN, and saying so
-        // is the difference between a typo and a build choice.
-        #[cfg(not(feature = "ollama"))]
-        Some(verb @ ("apply" | "ask" | "oneshot" | "tdd")) => {
-            needs_ollama(verb)
+        Cmd::Ask { dir, question } => {
+            ask(root, &arg_dir(Some(&dir), root), &question)
         }
-        #[cfg(feature = "ollama")]
-        Some("ask") => match (args.get(1), args.get(2)) {
-            (Some(_), Some(q)) => ask(&root, &arg_dir(&args, &root), q),
-            _ => usage("ask needs <dir> and a question"),
-        },
-        #[cfg(feature = "ollama")]
-        Some("oneshot") => match (args.get(1), args.get(2), args.get(3)) {
-            (Some(_), Some(v), Some(t)) => {
-                let dir = arg_dir(&args, &root);
-                let run = crate::tdd::Run::new(&root, &dir, v, t);
-                match crate::tdd::oneshot(&run) {
-                    Ok(_) => ExitCode::SUCCESS,
-                    Err(e) => {
-                        eprintln!("sherd: {e}");
-                        ExitCode::from(1)
-                    }
+        Cmd::Oneshot {
+            dir,
+            invariant,
+            task,
+        } => {
+            let dir = arg_dir(Some(&dir), root);
+            let run = crate::tdd::Run::new(root, &dir, &invariant, &task);
+            match crate::tdd::oneshot(&run) {
+                Ok(_) => ExitCode::SUCCESS,
+                Err(e) => {
+                    eprintln!("sherd: {e}");
+                    ExitCode::from(1)
                 }
             }
-            _ => usage("oneshot needs <dir> <invariant> <task>"),
-        },
-        #[cfg(feature = "ollama")]
-        Some("tdd") => match (args.get(1), args.get(2), args.get(3)) {
-            (Some(_), Some(v), Some(task)) => {
-                tdd_cmd(&root, &arg_dir(&args, &root), v, task)
-            }
-            _ => usage("tdd needs <dir> <invariant> <task>"),
-        },
-        Some("-h" | "--help" | "help") => {
-            println!("{USAGE}");
-            ExitCode::SUCCESS
         }
-        // STDOUT and exit 0, like every sibling in the toolchain. A version
-        // on stderr behind exit 2 is one a CI gate has to parse out of a
-        // usage banner, which is what `B10` records.
-        Some("-V" | "--version") => {
-            println!("sherd {VERSION}");
-            ExitCode::SUCCESS
-        }
-        Some(other) => usage(&format!("unknown command '{other}'")),
-        None => {
-            println!("{USAGE}");
-            ExitCode::SUCCESS
-        }
+        Cmd::Tdd {
+            dir,
+            invariant,
+            task,
+        } => tdd_cmd(root, &arg_dir(Some(&dir), root), &invariant, &task),
+        _ => ExitCode::from(2),
     }
 }
 
