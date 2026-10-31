@@ -77,7 +77,7 @@ local fast = new Mapping<String, Step> {
   // cannot disagree with itself.
   ["lint-debt"] {
     glob = List("**/*.rs", "clippy.toml", ".lint-debt")
-    depends = List("clippy", "fresh-binary")
+    depends = List("clippy", "fresh-binary", "test")
     check = "cargo run -q --bin sherd -- debt --check"
     // `fix` may only LOWER, and `sherd debt --record` refuses a raise for
     // the same reason: `pre-commit` runs the fast set in fix mode, so a fix
