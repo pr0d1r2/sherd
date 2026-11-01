@@ -206,6 +206,93 @@ fn a_selector_that_is_not_a_directory_is_usage() {
     }
 }
 
+/// `review` is a verb with no `[dir]` of its own, so it takes the trailing
+/// `At` dir every such verb does (`src/cli:V21`). The rev exists only in the
+/// fixture: read from the CWD's repository instead, it is a miss.
+#[test]
+fn review_reads_the_repository_it_is_pointed_at() -> Result<(), String> {
+    let r = TestRepo::new("route-review")?;
+    r.git(&["branch", "only-in-this-fixture"])?;
+    assert_eq!(
+        run_args(at(&["review", "only-in-this-fixture"], &r)),
+        ExitCode::SUCCESS
+    );
+    assert_eq!(
+        run_args(argv(&["review", "only-in-this-fixture"])),
+        ExitCode::from(2)
+    );
+    Ok(())
+}
+
+/// The `dir` of a seam run, as `absolutize_dir` leaves it.
+fn resolved(dir: &str, root: &Path, here: &Path) -> Option<String> {
+    let mut cmd = Cmd::Seam {
+        dir: Some(dir.into()),
+    };
+    absolutize_dir(&mut cmd, root, here);
+    dir_of(&cmd).map(String::from)
+}
+
+/// `src/cli:V17`: inside the repository it was typed in, `[dir]` stays
+/// ROOT-relative wherever the caller stands, even with a same-named directory
+/// right there.
+#[test]
+fn a_dir_in_the_typed_repository_stays_root_relative() -> Result<(), String> {
+    let r = TestRepo::new("route-root-relative")?;
+    r.write("src/code/SPEC.md", "# SPEC\n")?;
+    let here = r.path().join("src");
+    assert_eq!(resolved("code", r.path(), &here), Some("code".into()));
+    Ok(())
+}
+
+/// A relative `[dir]` that named ANOTHER repository is that root already, so
+/// it must not be joined onto it a second time (`src/cli:B9`'s doubling).
+#[test]
+fn a_dir_naming_another_repository_is_made_absolute() -> Result<(), String> {
+    let outer = TestRepo::new("route-outer")?;
+    let inner = outer.path().join("inner");
+    outer.write("inner/SPEC.md", "# SPEC\n")?;
+    outer.write("inner/.git/HEAD", "")?;
+    let want = inner.display().to_string();
+    assert_eq!(resolved("inner", &inner, outer.path()), Some(want.clone()));
+    // Every verb with a `dir` field, through the real grammar.
+    for verb in [
+        &["init", "inner"][..],
+        &["budget", "inner"],
+        &["fed", "inner"],
+        &["check", "inner"],
+        &["split", "inner"],
+        &["wave", "inner"],
+        &["sync", "inner"],
+        &["lens", "inner"],
+        &["adopt", "inner"],
+        &["ask", "inner", "q"],
+        &["tdd", "inner", "V1", "t"],
+        &["oneshot", "inner", "V1", "t"],
+    ] {
+        let parsed = parse::Cli::try_parse_from(
+            std::iter::once(&"sherd").chain(verb).copied(),
+        );
+        let Ok(parse::Cli {
+            cmd: Some(mut cmd), ..
+        }) = parsed
+        else {
+            return Err(format!("{verb:?} does not parse"));
+        };
+        absolutize_dir(&mut cmd, &inner, outer.path());
+        assert_eq!(dir_of(&cmd), Some(want.as_str()), "{verb:?}");
+    }
+    // A word that names no directory, and a verb with no `dir`, are left be.
+    assert_eq!(
+        resolved("no-such-dir", &inner, outer.path()),
+        Some("no-such-dir".into())
+    );
+    let mut man = Cmd::Man;
+    absolutize_dir(&mut man, &inner, outer.path());
+    assert_eq!(dir_of(&man), None);
+    Ok(())
+}
+
 /// `outcome` writes its verdict to the store it is GIVEN and reports from
 /// that same store: a kept then a failed outcome leave 2 tried and 1 kept.
 /// The store is the test's own file, so the ambient state is never touched.

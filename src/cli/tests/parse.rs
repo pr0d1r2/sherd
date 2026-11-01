@@ -153,6 +153,25 @@ fn completions_and_man_page_can_be_generated() {
     );
 }
 
+/// The man page opens with the headline `USAGE` opens with, not with the
+/// rustdoc of the struct the derive read.
+#[test]
+fn the_man_page_is_named_by_usage_not_by_rustdoc() {
+    let tree = command();
+    let about = tree.get_about().map(ToString::to_string);
+    let headline = super::super::USAGE.lines().next().unwrap_or_default();
+    assert_eq!(
+        about.as_deref(),
+        headline.strip_prefix("sherd -- "),
+        "{headline}"
+    );
+    let mut page = Vec::new();
+    assert!(clap_mangen::Man::new(command()).render(&mut page).is_ok());
+    let page = String::from_utf8_lossy(&page);
+    assert!(page.contains("federated SPEC.md for small"), "{page}");
+    assert!(!page.contains("override_help"), "{page}");
+}
+
 /// The root comes from the PARSED `dir`, so a flag VALUE that happens to
 /// name a directory (`--format json` beside a `json/` dir) is not it.
 #[test]
