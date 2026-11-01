@@ -150,7 +150,7 @@ pub fn run_args(args: Vec<String>) -> ExitCode {
                 .chain(dir_of(&cmd).map(String::from))
                 .collect();
             let root = root_for(&named);
-            absolutize_dir(&mut cmd);
+            absolutize_dir(&mut cmd, &root, &cwd());
             root
         }
     };
@@ -169,6 +169,7 @@ fn at_of(cmd: &Cmd) -> Option<&Option<String>> {
         | Cmd::Route { at, .. }
         | Cmd::Outcome { at, .. }
         | Cmd::Slice { at, .. }
+        | Cmd::Review { at, .. }
         | Cmd::Plan { at, .. }
         | Cmd::Apply { at, .. }
         | Cmd::Land { at, .. } => Some(&at.at),
@@ -176,12 +177,18 @@ fn at_of(cmd: &Cmd) -> Option<&Option<String>> {
     }
 }
 
-/// Make a `dir` that names a directory from where the command was typed
-/// absolute. The root is chosen by walking up from that directory, so for a
-/// nested repository `arg_dir` would otherwise join the same relative path
-/// onto a root that already ends in it.
-fn absolutize_dir(cmd: &mut Cmd) {
-    let here = cwd();
+/// Make a `dir` that named ANOTHER repository absolute. The root is chosen by
+/// walking up from that directory, so `arg_dir` would otherwise join the same
+/// relative path onto a root that already ends in it.
+///
+/// Only then: inside the repository it was typed in, `[dir]` stays
+/// ROOT-relative wherever the caller stands (`src/cli:V17`), so `seam code`
+/// typed in `src/` is a miss that teaches `src/code`, never a hit that means
+/// something else one directory over.
+fn absolutize_dir(cmd: &mut Cmd, root: &Path, here: &Path) {
+    if repo_root_from(here) == root {
+        return;
+    }
     let fix = |d: &mut String| {
         let p = here.join(&*d);
         if p.is_dir() {
@@ -316,7 +323,7 @@ fn dispatch(root: &Path, cmd: Cmd) -> ExitCode {
                 _ => "",
             },
         ),
-        Cmd::Review { rev } => {
+        Cmd::Review { rev, .. } => {
             review_cmd(root, rev.as_deref().unwrap_or("HEAD"))
         }
         Cmd::Plan {

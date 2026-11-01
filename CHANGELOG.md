@@ -75,6 +75,10 @@ errors exit `2`, and `--help`/`--version` exit `0`.
   `lens needs a dir`; the exit code is the same.
 - `graph --tree`, `--table` and `--dot` are mutually exclusive; `debt`,
   `coverage` and `slice` reject `--check` together with `--record`/`--list`.
+- A relative `[dir]` naming another repository now reads it; one naming a
+  directory inside the current repository stays root-relative, as before.
+- `sherd review <dir>` with no rev reads the directory as a rev and exits `2`
+  where it reported "no findings"; `sherd review <rev> <dir>` is the spelling.
 - Library: `sherd::cli::command()` returns the `clap::Command` tree.
 - Dependencies: direct `clap`, `clap_complete` and `clap_mangen`; the closure
   grows by 14 packages (`clap_*`, `anstyle`, `strsim`, `heck`, `roff`, `syn`,

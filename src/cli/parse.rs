@@ -103,13 +103,16 @@ impl From<Shell> for clap_complete::Shell {
 
 /// The whole command line. `override_help` keeps `--help` printing
 /// [`super::USAGE`], the text the README's Commands table is rendered from;
-/// each verb's own `--help` is generated from the fields below.
+/// each verb's own `--help` is generated from the fields below. `about` is
+/// spelled because the derive would otherwise publish this comment as the man
+/// page's NAME.
 #[derive(Parser, Debug)]
 #[command(
     name = "sherd",
     version,
+    about = "federated SPEC.md for small-context local models",
+    long_about = None,
     override_help = super::USAGE,
-    disable_help_subcommand = false,
 )]
 pub struct Cli {
     /// dump every prompt and stream every reply
@@ -208,7 +211,11 @@ pub enum Cmd {
         at: At,
     },
     /// mechanical checks on what a commit added (default HEAD)
-    Review { rev: Option<String> },
+    Review {
+        rev: Option<String>,
+        #[command(flatten)]
+        at: At,
+    },
     /// regenerate distilled slices from their sources
     Slice {
         #[command(flatten)]

@@ -7,7 +7,7 @@
 //! (`src/cli:V6`): a test that walks up into whichever tree the runner sits in
 //! passes in a checkout and fails anywhere else (`src/cli:B1`).
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 /// A scratch directory unique to this test, outside any repository.
@@ -23,13 +23,31 @@ fn scratch(tag: &str) -> PathBuf {
 
 fn sherd(tag: &str, args: &[&str]) -> Output {
     let dir = scratch(tag);
-    let out = Command::new(env!("CARGO_BIN_EXE_sherd"))
-        .args(args)
-        .current_dir(&dir)
-        .output()
-        .unwrap_or_else(|e| panic!("spawn sherd: {e}"));
+    let out = sherd_in(&dir, args);
     let _ = std::fs::remove_dir_all(&dir);
     out
+}
+
+fn sherd_in(dir: &Path, args: &[&str]) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_sherd"))
+        .args(args)
+        .current_dir(dir)
+        .output()
+        .unwrap_or_else(|e| panic!("spawn sherd: {e}"))
+}
+
+/// A repository as `repo_root_from` reads one, with a node at `src/code`.
+fn repo_with_a_node(root: &Path) {
+    for d in [".git", "src/code"] {
+        std::fs::create_dir_all(root.join(d)).unwrap_or_else(|e| {
+            panic!("fixture dir {d}: {e}");
+        });
+    }
+    for f in ["SPEC.md", "src/code/SPEC.md"] {
+        std::fs::write(root.join(f), "# SPEC\n").unwrap_or_else(|e| {
+            panic!("fixture file {f}: {e}");
+        });
+    }
 }
 
 /// `src/cli:V16`: the version on STDOUT, exit 0, naming the version the
@@ -56,4 +74,35 @@ fn an_unknown_verb_exits_2_from_the_process() {
         String::from_utf8_lossy(&out.stderr).contains("no-such-verb"),
         "{out:?}"
     );
+}
+
+/// `src/cli:V17`, where a caller meets it: `[dir]` is ROOT-relative, so `lens
+/// code` typed in `src/` is a miss that teaches the spelling that works, not a
+/// hit that depends on where the caller stands.
+#[test]
+fn a_dir_typed_below_the_root_is_a_miss_that_teaches() {
+    let root = scratch("v17");
+    repo_with_a_node(&root);
+    let miss = sherd_in(&root.join("src"), &["lens", "code"]);
+    let hit = sherd_in(&root.join("src"), &["lens", "src/code"]);
+    let _ = std::fs::remove_dir_all(&root);
+    assert_eq!(miss.status.code(), Some(2), "{miss:?}");
+    assert!(
+        String::from_utf8_lossy(&miss.stderr)
+            .contains("did you mean `src/code`?"),
+        "{miss:?}"
+    );
+    assert_eq!(hit.status.code(), Some(0), "{hit:?}");
+}
+
+/// `src/cli:B5`+`B9`: a relative `[dir]` naming another repository reads that
+/// repository, with the name joined on once.
+#[test]
+fn a_relative_dir_naming_another_repository_reads_it() {
+    let parent = scratch("foreign");
+    let theirs = parent.join("theirs");
+    repo_with_a_node(&theirs);
+    let out = sherd_in(&parent, &["lens", "theirs"]);
+    let _ = std::fs::remove_dir_all(&parent);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
 }
