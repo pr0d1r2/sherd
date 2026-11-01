@@ -91,7 +91,10 @@ local fast = new Mapping<String, Step> {
     // written in -- else a spec-only commit skips the tests whose whole subject
     // is the spec.
     glob = List("**/*.rs", "**/SPEC.md", "Cargo.toml", ".context-limits")
-    depends = List("clippy")
+    // After `lint-debt`, not beside it: both are cargo and both depend on
+    // `clippy`, so hk launched them together and `sherd debt`'s nested clippy
+    // raced the test build over the target directory (`.:B35`).
+    depends = List("clippy", "lint-debt")
     check = "cargo test --workspace --all-features"
   }
   // THE DOGFOOD. sherd checks its own federated spec with the binary being
