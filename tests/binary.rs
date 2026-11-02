@@ -95,6 +95,72 @@ fn a_dir_typed_below_the_root_is_a_miss_that_teaches() {
     assert_eq!(hit.status.code(), Some(0), "{hit:?}");
 }
 
+/// `src/cli:B17`: `..` that climbs back to this repository's own root is still
+/// this repository, so `[dir]` stays ROOT-relative. The walk from it returns
+/// the root spelled `src/..`, and that spelling is not another repository.
+#[test]
+fn a_dir_climbing_to_its_own_root_stays_root_relative() {
+    let root = scratch("b17");
+    repo_with_a_node(&root);
+    let miss = sherd_in(&root.join("src"), &["lens", "../src/code"]);
+    let _ = std::fs::remove_dir_all(&root);
+    assert_eq!(miss.status.code(), Some(2), "{miss:?}");
+}
+
+/// `src/cli:V21`: `--help`, its spellings and a bare invocation print `USAGE`
+/// verbatim on stdout. It is the README's Commands source, so what the derive
+/// would generate instead is not what is published. A verb's own `--help` IS
+/// generated, and that is the one place its flags are listed.
+#[test]
+fn help_is_usage_verbatim_and_a_verb_documents_its_own_flags() {
+    for (tag, argv) in [
+        ("long", &["--help"][..]),
+        ("short", &["-h"]),
+        ("verb", &["help"]),
+        ("bare", &[]),
+        ("verbose", &["-v"]),
+    ] {
+        let out = sherd(&format!("help-{tag}"), argv);
+        assert_eq!(out.status.code(), Some(0), "{out:?}");
+        assert_eq!(
+            String::from_utf8_lossy(&out.stdout).trim_end(),
+            sherd::cli::USAGE,
+            "{argv:?}"
+        );
+    }
+    let out = sherd("help-lens", &["lens", "--help"]);
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    assert!(String::from_utf8_lossy(&out.stdout).contains("--depth"));
+}
+
+/// `src/cli:V21`: completions and the man page reach STDOUT, where a package
+/// script redirects them from, and both come from the one grammar, so each
+/// names every verb `USAGE` names.
+#[test]
+fn completions_and_the_man_page_name_every_verb_on_stdout() {
+    let verbs: Vec<&str> = sherd::cli::USAGE
+        .lines()
+        .filter_map(|l| l.strip_prefix("  sherd "))
+        .filter_map(|l| l.split_whitespace().next())
+        .collect();
+    assert!(verbs.contains(&"completions"), "{verbs:?}");
+    for argv in [
+        &["completions", "bash"][..],
+        &["completions", "zsh"],
+        &["completions", "fish"],
+        &["completions", "elvish"],
+        &["completions", "powershell"],
+        &["man"],
+    ] {
+        let out = sherd(&argv.join("-"), argv);
+        assert_eq!(out.status.code(), Some(0), "{out:?}");
+        let text = String::from_utf8_lossy(&out.stdout);
+        for v in &verbs {
+            assert!(text.contains(v), "{argv:?} does not name `{v}`");
+        }
+    }
+}
+
 /// `src/cli:B5`+`B9`: a relative `[dir]` naming another repository reads that
 /// repository, with the name joined on once.
 #[test]

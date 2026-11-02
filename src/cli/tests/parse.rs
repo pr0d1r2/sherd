@@ -85,12 +85,27 @@ fn mistakes_are_parse_errors_not_silent_fallbacks() {
         &["outcome", "src/fed"],
         &["outcome", "src/fed", "probably"],
         &["graph", "--dot", "--tree"],
+        &["graph", "--mermaid", "--table"],
         &["debt", "--check", "--record"],
+        &["coverage", "--check", "--record"],
+        &["slice", "--check", "--list"],
         &["plan", "--triage", "--milestone", "M1"],
         &["budget", "--formta", "json"],
+        &["check", "--format", "yaml"],
+        &["check", "a", "b"],
+        &["route", "query", "a", "b"],
+        &["lens", ".", "--depth", "deep"],
+        &["lens", ".", "--facet", "set"],
+        &["graph", "--json"],
+        &["help", "nope"],
         &["nope"],
     ] {
-        assert!(parse(bad).is_err(), "{bad:?} must not parse");
+        // `--help` is an `Err` too, so "does not parse" alone cannot tell a
+        // usage error from clap answering the question.
+        assert!(
+            parse(bad).is_err_and(|e| e.use_stderr()),
+            "{bad:?} must be a usage error"
+        );
     }
 }
 

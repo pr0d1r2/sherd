@@ -96,12 +96,6 @@ pub fn run() -> ExitCode {
     run_args(std::env::args().skip(1).collect())
 }
 
-/// The clap command tree, for completions and the man page.
-#[must_use]
-pub fn command() -> clap::Command {
-    parse::command()
-}
-
 /// As [`run`], from an explicit argv.
 ///
 /// `run` read `std::env::args` directly, so dispatch -- usage, exit codes,
@@ -186,7 +180,7 @@ fn at_of(cmd: &Cmd) -> Option<&Option<String>> {
 /// typed in `src/` is a miss that teaches `src/code`, never a hit that means
 /// something else one directory over.
 fn absolutize_dir(cmd: &mut Cmd, root: &Path, here: &Path) {
-    if repo_root_from(here) == root {
+    if same_dir(&repo_root_from(here), root) {
         return;
     }
     let fix = |d: &mut String| {
@@ -214,6 +208,16 @@ fn absolutize_dir(cmd: &mut Cmd, root: &Path, here: &Path) {
         | Cmd::Tdd { dir, .. }
         | Cmd::Oneshot { dir, .. } => fix(dir),
         _ => {}
+    }
+}
+
+/// Whether two spellings name one directory (`src/cli:B17`): a root walked up
+/// from `../src/code` is spelled `src/..`. Canonical only to COMPARE, since
+/// `canonicalize` rewrites symlinks and neither path may travel on (`B9`).
+fn same_dir(a: &Path, b: &Path) -> bool {
+    match (a.canonicalize(), b.canonicalize()) {
+        (Ok(x), Ok(y)) => x == y,
+        _ => a == b,
     }
 }
 
@@ -343,13 +347,13 @@ fn dispatch(root: &Path, cmd: Cmd) -> ExitCode {
         Cmd::Completions { shell } => {
             clap_complete::generate(
                 clap_complete::Shell::from(shell),
-                &mut command(),
+                &mut parse::command(),
                 "sherd",
                 &mut std::io::stdout(),
             );
             ExitCode::SUCCESS
         }
-        Cmd::Man => match clap_mangen::Man::new(command())
+        Cmd::Man => match clap_mangen::Man::new(parse::command())
             .render(&mut std::io::stdout())
         {
             Ok(()) => ExitCode::SUCCESS,
@@ -379,7 +383,7 @@ impl Ratchet {
     }
 }
 
-/// `--check` wins over `--record`; neither is no mode.
+/// The grammar refuses `--check` with `--record`; neither is no mode.
 fn ratchet(check: bool, record: bool) -> Option<Ratchet> {
     match (check, record) {
         (true, _) => Some(Ratchet::Check),
@@ -406,7 +410,7 @@ fn graph_render(root: &Path, view: GraphView) -> String {
     }
 }
 
-/// What `plan` is asked for; `--triage` wins over `--milestone`.
+/// What `plan` is asked for; the grammar refuses `--triage` with `--milestone`.
 enum PlanMode {
     Triage,
     Milestone(String),
