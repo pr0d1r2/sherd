@@ -211,8 +211,13 @@ jobs:
             ~/.cargo/registry/cache
             ~/.cargo/git/db
             target
-          key: cargo-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock', 'flake.lock') }}
-          restore-keys: cargo-${{ runner.os }}-${{ runner.arch }}-
+          key: cargo-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('flake.lock') }}-${{ hashFiles('Cargo.lock') }}
+          # Fall back only to an entry built by the SAME toolchain. A bare
+          # `cargo-<os>-<arch>-` prefix restored a `target/` whose build
+          # scripts were linked against a nix store path the pinned shell no
+          # longer has: executing them failed ENOENT ("never executed"),
+          # which lint-debt then reported as a clippy that did not COMPILE.
+          restore-keys: cargo-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('flake.lock') }}-
 
       # --check, because `hk check` defaults to running FIX commands and two
       # of this repo's ops write files: `slice` regenerates distilled slices
