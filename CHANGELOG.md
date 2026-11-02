@@ -70,16 +70,20 @@ errors exit `2`, and `--help`/`--version` exit `0`.
   lenient. An extra positional argument, an unknown flag, or a flag given a
   value outside its set (`--format yaml`, `--depth deep`) is a usage error
   (exit `2`) with clap's message, where some were ignored before. The
-  `sherd --help` text is unchanged apart from the two new verbs.
+  `sherd --help` text is unchanged apart from the two new verbs. `lens
+  --facet` and `graph --json`, which were accepted and did nothing, are among
+  the flags now refused, and `sherd help <unknown>` exits `2`.
+- `sherd -v` with no verb prints the usage and exits `0`, as bare `sherd`
+  does, where it exited `2`.
 - The error text for a missing argument (`sherd lens`) is clap's rather than
   `lens needs a dir`; the exit code is the same.
 - `graph --tree`, `--table` and `--dot` are mutually exclusive; `debt`,
   `coverage` and `slice` reject `--check` together with `--record`/`--list`.
 - A relative `[dir]` naming another repository now reads it; one naming a
   directory inside the current repository stays root-relative, as before.
-- `sherd review <dir>` with no rev reads the directory as a rev and exits `2`
-  where it reported "no findings"; `sherd review <rev> <dir>` is the spelling.
-- Library: `sherd::cli::command()` returns the `clap::Command` tree.
+- `sherd review <dir>` with no rev hands the directory to `git show` as a rev,
+  so a path outside the repository exits `2` where it reported "no findings";
+  `sherd review <rev> <dir>` is the spelling.
 - Dependencies: direct `clap`, `clap_complete` and `clap_mangen`; the closure
   grows by 14 packages (`clap_*`, `anstyle`, `strsim`, `heck`, `roff`, `syn`,
   `quote`, `proc-macro2`, `unicode-ident`), all `MIT OR Apache-2.0` bar

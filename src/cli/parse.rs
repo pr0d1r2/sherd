@@ -301,7 +301,7 @@ pub enum Cmd {
 
 /// The command tree, for completions and the man page.
 #[must_use]
-pub fn command() -> clap::Command {
+pub(super) fn command() -> clap::Command {
     Cli::command()
 }
 

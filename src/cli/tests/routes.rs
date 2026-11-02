@@ -148,9 +148,8 @@ fn parsed_verbs_reach_their_arms_on_a_fixture() {
 }
 
 #[test]
-fn ratchet_prefers_check_and_defaults_to_none() {
+fn ratchet_reads_the_flag_and_defaults_to_none() {
     assert_eq!(ratchet(true, false).map(Ratchet::flag), Some("--check"));
-    assert_eq!(ratchet(true, true).map(Ratchet::flag), Some("--check"));
     assert_eq!(ratchet(false, true).map(Ratchet::flag), Some("--record"));
     assert!(ratchet(false, false).is_none());
 }
