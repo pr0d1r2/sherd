@@ -137,13 +137,27 @@ pub fn excess_lines(line: &str) -> Option<usize> {
 /// that did not compile is not a measurement (`V3`).
 #[must_use]
 pub fn measure(root: &Path, cargo: &str) -> Option<Measured> {
-    let o = Command::new(cargo)
+    let o = match Command::new(cargo)
         .args(GATE_ARGS)
         .current_dir(root)
         .output()
-        .ok()?;
+    {
+        Ok(o) => o,
+        Err(e) => {
+            eprintln!("sherd/debt: could not launch `{cargo}`: {e}");
+            return None;
+        }
+    };
     let out = String::from_utf8_lossy(&o.stderr);
-    if out.lines().any(build_failed) {
+    // The STATUS, not only the text (`V3`): a clippy killed by a signal or
+    // refused by cargo may print no `error[`, and the gate used to say only
+    // "did not COMPILE" with nothing to read. Name what it said.
+    if !o.status.success() || out.lines().any(build_failed) {
+        eprintln!("sherd/debt: `{cargo} clippy` exited {}:", o.status);
+        out.lines()
+            .filter(|l| build_failed(l))
+            .chain(out.lines().rev().take(5))
+            .for_each(|l| eprintln!("  {l}"));
         return None;
     }
     // No denominator is NOTHING MEASURED, never "zero debt": a ratio over
@@ -152,6 +166,7 @@ pub fn measure(root: &Path, cargo: &str) -> Option<Measured> {
     // no Rust, after `Measured` replaced a fn that returned `None` here.
     let loc = measured_lines(root);
     if loc == 0 {
+        eprintln!("sherd/debt: no Rust found under {}", root.display());
         return None;
     }
     let hits: Vec<&str> = out.lines().filter(|l| gate_counts(l)).collect();
