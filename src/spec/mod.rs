@@ -100,6 +100,25 @@ pub fn rule_depth(spec: &str) -> String {
     out
 }
 
+/// A spec with its `§T` section left out: what an ANCESTOR contributes to a
+/// node's pack. A worker delivers one row of one node, so the rows of the
+/// nodes above it are never picked yet are billed on every chain.
+#[must_use]
+pub fn without_tasks(spec: &str) -> String {
+    let mut out = String::new();
+    let mut tasks = false;
+    for line in spec.lines() {
+        if line.starts_with("## \u{a7}") {
+            tasks = line.contains("\u{a7}T");
+        }
+        if !tasks {
+            out.push_str(line);
+            out.push('\n');
+        }
+    }
+    out
+}
+
 /// A `§T` row whose status cell is `x`: `T12|x|...`, suffixed ids included.
 fn finished_row(line: &str) -> bool {
     let mut cells = line.split('|');

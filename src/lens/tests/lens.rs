@@ -161,3 +161,30 @@ fn own_is_the_node_spec_alone_not_its_chain() -> Result<(), String> {
     );
     Ok(())
 }
+
+/// V18: a task row in the root and in `a` is in neither's descendant's pack;
+/// the target's own row is. `All` keeps the whole picture.
+#[test]
+fn ancestors_task_rows_stay_out_of_the_pack() -> Result<(), String> {
+    let r = crate::testrepo::TestRepo::new("lens-own-tasks")?;
+    let spec = |t: &str| {
+        format!(
+            "# SPEC\n\n## \u{a7}G GOAL\n\ng\n\n## \u{a7}V INVARIANTS\n\nV1: rule\n\n## \u{a7}T TASKS\n\nid|status|task|cites\n{t}|.|work|V1\n"
+        )
+    };
+    r.write("SPEC.md", &spec("T1"))?;
+    r.write("a/SPEC.md", &spec("T2"))?;
+    r.write("a/b/SPEC.md", &spec("T3"))?;
+    let b = r.path().join("a/b");
+    let p = pack(r.path(), &b, Depth::Rule).map_err(|e| e.to_string())?;
+    assert!(
+        !p.text.contains("T1|") && !p.text.contains("T2|"),
+        "{}",
+        p.text
+    );
+    assert!(p.text.contains("T3|"), "the target keeps its own rows");
+    assert!(p.text.contains("V1: rule"), "ancestors keep their rules");
+    let all = pack(r.path(), &b, Depth::All).map_err(|e| e.to_string())?;
+    assert!(all.text.contains("T1|") && all.text.contains("T2|"));
+    Ok(())
+}
