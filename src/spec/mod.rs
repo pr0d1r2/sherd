@@ -109,7 +109,10 @@ pub fn without_tasks(spec: &str) -> String {
     let mut tasks = false;
     for line in spec.lines() {
         if line.starts_with("## \u{a7}") {
-            tasks = line.contains("\u{a7}T");
+            tasks = line
+                .strip_prefix("## \u{a7}")
+                .and_then(|rest| rest.chars().next())
+                == Some('T');
         }
         if !tasks {
             out.push_str(line);
