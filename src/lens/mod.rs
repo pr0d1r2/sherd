@@ -47,7 +47,7 @@ pub fn pack(root: &Path, dir: &Path, depth: Depth) -> std::io::Result<Pack> {
     }
     let chain = fed::chain(root, dir);
     let mut text = String::new();
-    for spec in &chain {
+    for (i, spec) in chain.iter().enumerate() {
         let raw = std::fs::read_to_string(spec)?;
         // `Depth` used to be consulted ONLY for `Why`, so `Rule` -- the
         // default §I documents -- selected nothing and every pack, every
@@ -57,7 +57,13 @@ pub fn pack(root: &Path, dir: &Path, depth: Depth) -> std::io::Result<Pack> {
         // §F leaves the TEXT here and stays reachable: `Pack::children` is
         // parsed from the node's own spec below and rendered separately, so
         // navigation survives without the table riding in every prompt.
-        text.push_str(&render(raw, depth));
+        let mut part = render(raw, depth);
+        // V18: ancestors bring everything but their task rows; `All` is the
+        // whole picture and keeps them.
+        if depth != Depth::All && i + 1 < chain.len() {
+            part = crate::spec::without_tasks(&part);
+        }
+        text.push_str(&part);
         text.push('\n');
     }
     if depth == Depth::Why {

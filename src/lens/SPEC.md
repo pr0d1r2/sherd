@@ -49,6 +49,8 @@ V15: profile DECLARED per task, ⊥ inferred. an inferred profile silently loads
 V16: pack layout = canonical facet ORDER, volatile last. widening mid-run re-prefills everything AFTER the insertion point ∴ declare the profile up front (V15) & build the pack once
 V17: MEASURED widening cost — append 4.12s (only new tok, prefix cached) vs prepend 8.60s (everything) on the same 11.6k pack = 2.1x, & the gap grows w/ prefix size
 
+V18: pack carries `§T` of the TARGET node only. ancestors give §G §C §I §V — a worker delivers one row of one node, ancestors' rows are never picked yet billed on every chain (`budget` follows, it calls `pack`). `Depth::All` keeps them
+
 ## §T TASKS
 
 id|status|task|cites
