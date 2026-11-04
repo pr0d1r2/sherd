@@ -74,9 +74,9 @@ errors exit `2`, and `--help`/`--version` exit `0`.
   --facet` and `graph --json`, which were accepted and did nothing, are among
   the flags now refused, and `sherd help <unknown>` exits `2`.
 - `sherd lens <dir>` leaves the `§T` rows of `<dir>`'s ancestors out of the
-  pack; the node's own rows and its ancestors' rules stay. `sherd budget`
-  reports the smaller cost. `--depth all` still carries every row
-  (`src/lens:V18`).
+  pack; the node's remaining `§T` rows and its ancestors' rules stay, where
+  finished rows drop at the default depth. `sherd budget` reports the smaller
+  cost. `--depth all` still carries every row (`src/lens:V18`).
 - `sherd -v` with no verb prints the usage and exits `0`, as bare `sherd`
   does, where it exited `2`.
 - The error text for a missing argument (`sherd lens`) is clap's rather than
