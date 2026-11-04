@@ -128,6 +128,23 @@ fn rule_depth_keeps_only_remaining_work() {
     }
 }
 
+/// `src/lens:V18`: an ancestor loses its `§T` section and nothing else. The
+/// section is the one whose LETTER is `T` -- a heading that merely mentions
+/// `§T` keeps its rows, or an ancestor's rules vanish from the pack.
+#[test]
+fn without_tasks_drops_the_task_section_only() {
+    let s = "## \u{a7}V INVARIANTS (see \u{a7}T)\nV1: a rule\n\n\
+             ## \u{a7}T TASKS\nid|status|task|cites\nT1|.|work|V1\n\n\
+             ## \u{a7}B BUGS\nB1|d|it broke|V1\n";
+    let r = crate::spec::without_tasks(s);
+    for kept in ["V1: a rule", "B1|d|"] {
+        assert!(r.contains(kept), "`{kept}` must survive: {r}");
+    }
+    for gone in ["## \u{a7}T TASKS", "T1|.|"] {
+        assert!(!r.contains(gone), "`{gone}` is a task row: {r}");
+    }
+}
+
 use std::path::Path;
 
 /// The defect `B2` names, on the tree that measured it: every citation in
