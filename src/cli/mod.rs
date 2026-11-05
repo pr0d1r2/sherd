@@ -30,6 +30,8 @@ use steps::*;
 mod measure;
 use measure::*;
 
+mod base;
+
 mod swift;
 use swift::*;
 
@@ -51,7 +53,7 @@ pub const USAGE: &str = "\
 sherd -- federated SPEC.md for small-context local models
 
   sherd init [dir] [--stdout]  scaffold a SPEC.md, §F rows from child dirs
-  sherd budget [dir] [--format text|json]  token cost of every node, against the working budget
+  sherd budget [dir] [--base REV] [--check] [--format text|json]  token cost of every node, against the working budget
   sherd lens <dir> [--depth rule|why|all]  the context pack for one node
   sherd fed [dir]        the federation edges declared by a node
   sherd check [dir] [--format text|json]  microlith structural check of every node
@@ -260,11 +262,18 @@ fn root_at(at: Option<&str>) -> Result<PathBuf, String> {
 /// routing each fit a screen.
 fn dispatch(root: &Path, cmd: Cmd) -> ExitCode {
     match cmd {
-        Cmd::Budget { dir, format } => budget_as(
-            root,
-            &arg_dir(dir.as_deref(), root),
-            format.format.is_json(),
-        ),
+        Cmd::Budget {
+            dir,
+            base,
+            check,
+            format,
+        } => {
+            let dir = arg_dir(dir.as_deref(), root);
+            match base {
+                Some(rev) => base::budget_base(root, &dir, &rev, check),
+                None => budget_as(root, &dir, format.format.is_json()),
+            }
+        }
         Cmd::Debt { check, record, .. } => debt_cmd(
             root,
             ratchet(check, record).map(Ratchet::flag),
