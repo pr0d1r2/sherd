@@ -106,7 +106,20 @@ fn measure_rev(root: &Path, rev: &str) -> Result<Side, String> {
     let dir = std::env::temp_dir()
         .join(format!("sherd-base-{}-{stamp}", std::process::id()));
     std::fs::create_dir_all(&dir).map_err(|e| format!("mkdir: {e}"))?;
-    let result = export(root, rev, &dir).and_then(|()| measure_side(&dir));
+    let result = export(root, rev, &dir)
+        .and_then(|()| measure_side(&dir))
+        .and_then(|side| {
+            // A base with no node measured nothing: judging against it would
+            // report every head node as "exceeds the largest ceiling (0)".
+            if side.chains.is_empty() {
+                Err(format!(
+                    "`{rev}` has no SPEC.md node under {}: nothing to compare against",
+                    root.display()
+                ))
+            } else {
+                Ok(side)
+            }
+        });
     let _ = std::fs::remove_dir_all(&dir);
     result
 }

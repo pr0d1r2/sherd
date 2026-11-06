@@ -96,6 +96,26 @@ fn the_cli_passes_a_split_and_refuses_a_plain_raise() -> Result<(), String> {
     Ok(())
 }
 
+/// A base revision predating the first SPEC.md measured nothing: it is an
+/// error naming the revision, never a base every head node is judged against.
+#[test]
+fn a_base_with_no_node_is_an_error_not_a_vacuous_judgement()
+-> Result<(), String> {
+    let r = crate::testrepo::TestRepo::new("cli-budget-base-empty")?;
+    // `new` commits a root SPEC.md; the base revision is one with none at all.
+    r.git(&["rm", "-q", "SPEC.md"])?;
+    r.commit("no spec yet")?;
+    let root = r.path().to_path_buf();
+    r.write("SPEC.md", "# SPEC\n\n## \u{a7}G GOAL\n\nroot goal\n")?;
+    r.write(".context-limits", "SPEC.md 5000\n")?;
+    assert_eq!(
+        budget_base(&root, &root, "HEAD", true),
+        ExitCode::from(2),
+        "a base with no node is refused, not judged against a ceiling of 0"
+    );
+    Ok(())
+}
+
 /// Without `--check` the table prints and the verb never judges.
 #[test]
 fn without_check_it_reports_both_sides_and_exits_zero() -> Result<(), String> {
