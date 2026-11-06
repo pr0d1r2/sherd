@@ -145,3 +145,24 @@ fn the_flags_parse_on_the_budget_verb() {
         })
     ));
 }
+
+/// `[dir]` is one target set for the base check too (`.:V20`): a breach in a
+/// sibling outside the subtree is not what `budget a --base HEAD --check` judges.
+#[test]
+fn the_base_check_judges_only_the_named_subtree() -> Result<(), String> {
+    let r = fixture("cli-budget-base-scope")?;
+    let root = r.path().to_path_buf();
+    write_spec(&root, "b", "beta goal");
+    r.write(".context-limits", "SPEC.md 5000\na 5000\nb 1\n")?;
+    assert_eq!(
+        budget_base(&root, &root.join("a"), "HEAD", true),
+        ExitCode::SUCCESS,
+        "the sibling `b` is over its ceiling, but `a` is what was named"
+    );
+    assert_eq!(
+        budget_base(&root, &root, "HEAD", true),
+        ExitCode::from(1),
+        "the whole tree still fails on `b`"
+    );
+    Ok(())
+}

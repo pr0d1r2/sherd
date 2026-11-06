@@ -26,10 +26,10 @@ fn node_name(root: &Path, node: &Path) -> String {
     }
 }
 
-/// Measure a tree. `Err` names what could not be read: a side that measured
-/// nothing is not a side that passes.
-pub(super) fn measure_side(root: &Path) -> Result<Side, String> {
-    let b = measure_budget(root, root);
+/// Measure the `scope` subtree of a tree. `Err` names what could not be read:
+/// a side that measured nothing is not a side that passes.
+pub(super) fn measure_side(root: &Path, scope: &Path) -> Result<Side, String> {
+    let b = measure_budget(root, scope);
     if let Some(e) = b.stderr {
         return Err(e);
     }
@@ -99,15 +99,18 @@ fn print_side(label: &str, s: &Side) {
 }
 
 /// Export `rev`'s tree into a fresh directory and measure it there.
-fn measure_rev(root: &Path, rev: &str) -> Result<Side, String> {
+fn measure_rev(root: &Path, rev: &str, scope: &Path) -> Result<Side, String> {
     let stamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| d.as_nanos());
     let dir = std::env::temp_dir()
         .join(format!("sherd-base-{}-{stamp}", std::process::id()));
     std::fs::create_dir_all(&dir).map_err(|e| format!("mkdir: {e}"))?;
+    // The same subtree, re-rooted under the export: `[dir]` is one target set
+    // on both sides, or the check certifies nodes the change never touched.
+    let rel = scope.strip_prefix(root).unwrap_or(Path::new(""));
     let result = export(root, rev, &dir)
-        .and_then(|()| measure_side(&dir))
+        .and_then(|()| measure_side(&dir, &dir.join(rel)))
         .and_then(|side| {
             // A base with no node measured nothing: judging against it would
             // report every head node as "exceeds the largest ceiling (0)".
@@ -157,17 +160,18 @@ fn export(root: &Path, rev: &str, dir: &Path) -> Result<(), String> {
 
 pub(super) fn budget_base(
     root: &Path,
-    _dir: &Path,
+    dir: &Path,
     rev: &str,
     check: bool,
 ) -> ExitCode {
-    let (base, head) = match (measure_rev(root, rev), measure_side(root)) {
-        (Ok(b), Ok(h)) => (b, h),
-        (Err(e), _) | (_, Err(e)) => {
-            eprintln!("sherd: {e}");
-            return ExitCode::from(2);
-        }
-    };
+    let (base, head) =
+        match (measure_rev(root, rev, dir), measure_side(root, dir)) {
+            (Ok(b), Ok(h)) => (b, h),
+            (Err(e), _) | (_, Err(e)) => {
+                eprintln!("sherd: {e}");
+                return ExitCode::from(2);
+            }
+        };
     print_side(&format!("base {rev}"), &base);
     print_side("head", &head);
     println!(
