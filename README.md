@@ -20,7 +20,7 @@
 [![federated nodes 22](https://img.shields.io/badge/federated_nodes-22-6E4AFF)](SPEC.md)
 
 [![nix flake](https://img.shields.io/badge/nix-flake-5277C3?logo=nixos&logoColor=white)](flake.nix)
-[![nixpkgs 26.05 (2026-11-02 - 7dcdd87)](https://img.shields.io/badge/nixpkgs-26.05_(2026--11--02_--_7dcdd87)-5277C3?logo=nixos&logoColor=white)](flake.lock)
+[![nixpkgs 26.05 (2026-11-05 - c56a87d)](https://img.shields.io/badge/nixpkgs-26.05_(2026--11--05_--_c56a87d)-5277C3?logo=nixos&logoColor=white)](flake.lock)
 [![amd linux](https://img.shields.io/badge/linux-5277C3?logo=amd&logoColor=white)](.github/workflows/ci.yml)
 [![arm linux](https://img.shields.io/badge/linux-5277C3?logo=arm&logoColor=white)](.github/workflows/ci.yml)
 [![arm macos](https://img.shields.io/badge/macos-5277C3?logo=arm&logoColor=white)](.github/workflows/ci.yml)
