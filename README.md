@@ -397,7 +397,7 @@ line fails the gate (`src/cli:V7`, after `src/cli:B2`).
 | command | what it does |
 |---|---|
 | `sherd init [dir] [--stdout]` | scaffold a SPEC.md, §F rows from child dirs |
-| `sherd budget [dir] [--format text\|json]` | token cost of every node, against the working budget |
+| `sherd budget [dir] [--base REV] [--check] [--format text\|json]` | token cost of every node, against the working budget |
 | `sherd lens <dir> [--depth rule\|why\|all]` | the context pack for one node |
 | `sherd fed [dir]` | the federation edges declared by a node |
 | `sherd check [dir] [--format text\|json]` | microlith structural check of every node |
