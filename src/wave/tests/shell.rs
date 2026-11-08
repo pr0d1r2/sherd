@@ -5,11 +5,14 @@
 use super::*;
 use crate::testrepo::TestRepo;
 
-const DIR: &str = "DIR=\"$(cd \"$(dirname \"$0\")\" && pwd)\"\n";
+pub(super) const DIR: &str = "DIR=\"$(cd \"$(dirname \"$0\")\" && pwd)\"\n";
 
 /// Nodes `a`, `b` and `c` under the root, each with a SPEC.md, and the
 /// scripts given as `(path, body)`.
-fn tree(tag: &str, scripts: &[(&str, &str)]) -> Result<TestRepo, String> {
+pub(super) fn tree(
+    tag: &str,
+    scripts: &[(&str, &str)],
+) -> Result<TestRepo, String> {
     let r = TestRepo::new(tag)?;
     for n in ["a", "b", "c"] {
         r.write(&format!("{n}/SPEC.md"), "# SPEC\n")?;
@@ -23,7 +26,7 @@ fn tree(tag: &str, scripts: &[(&str, &str)]) -> Result<TestRepo, String> {
     Ok(r)
 }
 
-fn needs(root: &Path, node: &str) -> Vec<String> {
+pub(super) fn needs(root: &Path, node: &str) -> Vec<String> {
     code_deps(root)
         .into_iter()
         .find(|d| d.node == node)

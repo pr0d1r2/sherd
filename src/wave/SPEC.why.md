@@ -7,3 +7,4 @@ V6|a FALSE edge is the safe direction (V5): a schedule waits longer & a consumer
 V7|a reader must tell a lexical edge from an inferred 1 ∵ only the 2nd can be false
 V8|"who breaks if N changes" needs EVERY caller, & a call to a parent, child or cousin node is a caller. the rounds still order siblings only (V1), so they are unchanged by the rest
 V9|`blocked` keeps its meaning — every node no round reaches — so the text & JSON agree; the grouping is a separate key. Tarjan, 1 pass over the blocked subgraph
+V10|a script held in a variable & RUN was invisible: ⊥ edge, ⊥ unresolved, so a dependent selector under-selected (#175). an override from outside is unknown; the default is what runs w/o it. MEASURED on a 27-node shell repo: a CLI node 0 callers → 7

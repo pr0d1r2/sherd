@@ -75,6 +75,10 @@ errors exit `2`, and `--help`/`--version` exit `0`.
   script never binds `VAR` (an argument or the environment), to `<path>.sh`
   from the repository root when that is a tracked script. Such an edge is
   marked `inferred`; a false edge only makes a schedule wait longer (#172).
+- `wave` follows a script held in a variable: after `X=<path>.sh` or
+  `X=${ENV:-<path>.sh}` (or `${ENV:-bash <path>.sh}`), running `"$X"` is a
+  call of `<path>.sh`, resolved as any other call. Before, such a call was
+  neither an edge nor reported as unresolved (#175).
 - **Breaking, minor:** the parser is strict where the hand-rolled one was
   lenient. An extra positional argument, an unknown flag, or a flag given a
   value outside its set (`--format yaml`, `--depth deep`) is a usage error
