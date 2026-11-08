@@ -80,15 +80,19 @@ fn assign(
             break;
         }
         let value = unquote(value);
-        match eval(&value, cx, vars) {
-            Some(dir) => vars.insert(name.to_string(), dir),
-            None => vars.remove(name),
-        };
-        match held_call(&value, vars, held) {
-            Some(call) => held.insert(name.to_string(), call),
-            None => held.remove(name),
-        };
+        let dir = eval(&value, cx, vars);
+        set(vars, name, dir);
+        let call = held_call(&value, vars, held);
+        set(held, name, call);
     }
+}
+
+/// Bind `name`, or forget it when the new value says nothing this can use.
+fn set<V>(map: &mut BTreeMap<String, V>, name: &str, value: Option<V>) {
+    match value {
+        Some(v) => map.insert(name.to_string(), v),
+        None => map.remove(name),
+    };
 }
 
 /// The call a value makes when run, if it names a script: itself when it
@@ -101,12 +105,15 @@ fn held_call(value: &str, vars: &Vars, held: &Held) -> Option<String> {
     }
     let (inner, tail) = balanced(value.strip_prefix("${")?, '{', '}')?;
     let (name, default) = inner.split_once(":-").filter(|_| tail.is_empty())?;
-    if let Some(call) = held.get(name) {
-        return Some(call.clone());
+    match held.get(name) {
+        Some(call) => Some(call.clone()),
+        None if vars.contains_key(name) => None,
+        None => default_call(default),
     }
-    if vars.contains_key(name) {
-        return None;
-    }
+}
+
+/// A `${NAME:-default}` default that runs a script: `X.sh`, or `bash X.sh`.
+fn default_call(default: &str) -> Option<String> {
     let words = words(default);
     let call = match words.as_slice() {
         [runner, x] if is_runner(&unquote(runner)) => unquote(x),
