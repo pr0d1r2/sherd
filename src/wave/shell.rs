@@ -320,8 +320,15 @@ fn resolve(call: &str, cx: &Context<'_>, vars: &Vars) -> Target {
         let here = cx.script.parent().unwrap_or(cx.root);
         vec![normalize(&here.join(call)), normalize(&cx.root.join(call))]
     };
+    // Inference is for a variable the file left UNBOUND (`src/wave:V6`). One
+    // it bound has a lexical answer, and a miss there stays a miss: a
+    // `$(dirname "$0")` root does not get to borrow the repository root's.
+    let bound = !candidates.is_empty();
     if let Some(p) = candidates.into_iter().find(|c| cx.all.contains(c)) {
         return Target::Script(p);
+    }
+    if bound {
+        return Target::Unresolved(call.to_string());
     }
     unbound_tail(call)
         .map(|tail| normalize(&cx.root.join(tail)))

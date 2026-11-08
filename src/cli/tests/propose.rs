@@ -183,11 +183,21 @@ fn wave_json_carries_rounds_edges_and_unresolved() -> Result<(), String> {
          \"call\":\"$NOWHERE/x.sh\"}],\"depth\":2,\"width\":2}"
     );
     assert_eq!(wave_json_cmd(root, root), ExitCode::SUCCESS);
+    Ok(())
+}
+
+/// `wave --format json` through the grammar: a dir holding a node routes to
+/// the JSON report and exits 0, one matching no node exits 2 like the text.
+#[test]
+fn wave_format_json_dispatches_through_the_grammar() {
+    assert_eq!(
+        run_args(argv(&["wave", "src/wave", "--format", "json"])),
+        ExitCode::SUCCESS
+    );
     assert_eq!(
         run_args(argv(&["wave", "no-such-dir", "--format", "json"])),
         ExitCode::from(2)
     );
-    Ok(())
 }
 
 /// A node with no `SPEC.md` is a usage error, not an empty proposal.

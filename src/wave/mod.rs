@@ -10,7 +10,10 @@
 use crate::{code, fed};
 use std::path::{Path, PathBuf};
 
+mod cycle;
 mod shell;
+
+pub use cycle::cycles;
 
 /// A script invocation that resolves to no tracked script (V5): reported,
 /// never guessed, because a missed edge schedules a node before the one it
@@ -231,7 +234,7 @@ impl EdgeKind {
     }
 }
 
-/// One edge between two DIFFERENT nodes: `from` calls `to` (V6).
+/// One edge between two DIFFERENT nodes: `from` calls `to` (V8).
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Edge {
     /// The caller's label.
@@ -245,11 +248,11 @@ pub struct Edge {
     /// needs.
     pub sibling: bool,
     /// Whether every call behind it was INFERRED from a root-relative tail
-    /// after an unbound variable (V6), rather than resolved lexically.
+    /// after an unbound variable (V6, V7), rather than resolved lexically.
     pub inferred: bool,
 }
 
-/// Every edge between two different nodes in scope, sorted (V3, V6).
+/// Every edge between two different nodes in scope, sorted (V3, V8).
 ///
 /// Rust edges are the sibling ones `code_deps` reads. Shell edges go to the
 /// node that OWNS the called script (`src/fed:V15`) -- sibling, parent,
@@ -263,41 +266,11 @@ pub fn edges(root: &Path, dir: &Path) -> Vec<Edge> {
     let all = fed::script_files(root);
     let mut out: Vec<Edge> = Vec::new();
     for node in nodes.iter().filter(|n| n.starts_with(dir)) {
-        let from = fed::node_label(root, node);
-        let (needs, seam) = edges_of(root, node, &nodes);
-        for (to, kind) in needs
+        for e in rust_edges(root, node, &nodes)
             .into_iter()
-            .map(|t| (t, EdgeKind::Blocking))
-            .chain(seam.into_iter().map(|t| (t, EdgeKind::TypeOnly)))
+            .chain(shell_edges(root, dir, node, &nodes, &all))
         {
-            merge(&mut out, from.clone(), to, kind, true, false);
-        }
-        for (_, target) in script_calls(root, node, &nodes, &all) {
-            let (p, inferred) = match target {
-                shell::Target::Script(p) => (p, false),
-                shell::Target::Inferred(p) => (p, true),
-                shell::Target::Unresolved(_) => continue,
-            };
-            let Some(owner) = owner_of(&p, &nodes) else {
-                continue;
-            };
-            if owner == node.as_path() || !owner.starts_with(dir) {
-                continue;
-            }
-            // What `script_edges` counts: the call lands under a sibling,
-            // even when a node deeper down owns it.
-            let sibling = nodes.iter().any(|s| {
-                s != node && s.parent() == node.parent() && owner.starts_with(s)
-            });
-            let to = fed::node_label(root, owner);
-            merge(
-                &mut out,
-                from.clone(),
-                to,
-                EdgeKind::Blocking,
-                sibling,
-                inferred,
-            );
+            merge(&mut out, e);
         }
     }
     let scope: Vec<String> = nodes
@@ -310,28 +283,79 @@ pub fn edges(root: &Path, dir: &Path) -> Vec<Edge> {
     out
 }
 
-/// Fold one edge into the list: blocking beats type-only, and a lexical
-/// call clears `inferred`.
-fn merge(
-    out: &mut Vec<Edge>,
-    from: String,
-    to: String,
-    kind: EdgeKind,
-    sibling: bool,
-    inferred: bool,
-) {
-    if let Some(e) = out.iter_mut().find(|e| e.from == from && e.to == to) {
-        e.kind = e.kind.min(kind);
-        e.inferred &= inferred;
-        return;
-    }
-    out.push(Edge {
-        from,
+/// One node's `use crate::` edges: siblings only, never inferred (V4).
+fn rust_edges(root: &Path, node: &Path, nodes: &[PathBuf]) -> Vec<Edge> {
+    let from = fed::node_label(root, node);
+    let (needs, seam) = edges_of(root, node, nodes);
+    let edge = |to: String, kind| Edge {
+        from: from.clone(),
         to,
         kind,
-        sibling,
-        inferred,
-    });
+        sibling: true,
+        inferred: false,
+    };
+    needs
+        .into_iter()
+        .map(|t| edge(t, EdgeKind::Blocking))
+        .chain(seam.into_iter().map(|t| edge(t, EdgeKind::TypeOnly)))
+        .collect()
+}
+
+/// One node's script calls into OTHER nodes under `dir`, each to the node
+/// owning the called script (V8).
+fn shell_edges(
+    root: &Path,
+    dir: &Path,
+    node: &Path,
+    nodes: &[PathBuf],
+    all: &[PathBuf],
+) -> Vec<Edge> {
+    let from = fed::node_label(root, node);
+    let mut out = Vec::new();
+    for (_, target) in script_calls(root, node, nodes, all) {
+        let (p, inferred) = match target {
+            shell::Target::Script(p) => (p, false),
+            shell::Target::Inferred(p) => (p, true),
+            shell::Target::Unresolved(_) => continue,
+        };
+        let Some(owner) = owner_of(&p, nodes) else {
+            continue;
+        };
+        if owner == node || !owner.starts_with(dir) {
+            continue;
+        }
+        out.push(Edge {
+            from: from.clone(),
+            to: fed::node_label(root, owner),
+            kind: EdgeKind::Blocking,
+            sibling: under_sibling(node, owner, nodes),
+            inferred,
+        });
+    }
+    out
+}
+
+/// What `script_edges` counts: the owner is, or lies under, a sibling of
+/// `node` -- a call that orders the rounds (V1).
+fn under_sibling(node: &Path, owner: &Path, nodes: &[PathBuf]) -> bool {
+    nodes.iter().any(|s| {
+        s.as_path() != node
+            && s.parent() == node.parent()
+            && owner.starts_with(s)
+    })
+}
+
+/// Fold one edge into the list: blocking beats type-only, and a lexical
+/// call clears `inferred` (V7).
+fn merge(out: &mut Vec<Edge>, e: Edge) {
+    if let Some(have) =
+        out.iter_mut().find(|h| h.from == e.from && h.to == e.to)
+    {
+        have.kind = have.kind.min(e.kind);
+        have.inferred &= e.inferred;
+        return;
+    }
+    out.push(e);
 }
 
 /// The deepest node whose directory holds a path (`src/fed:V15`).
@@ -341,50 +365,6 @@ fn owner_of<'a>(p: &Path, nodes: &'a [PathBuf]) -> Option<&'a Path> {
         .filter(|n| p.starts_with(n))
         .max_by_key(|n| n.components().count())
         .map(PathBuf::as_path)
-}
-
-/// The CYCLES among a schedule's blocked nodes, one group per cycle (V7).
-///
-/// `blocked` also holds nodes that only wait BEHIND a cycle; those are in no
-/// group. A group is a strongly connected set of blocking edges: every
-/// member reaches every other, so none can be built first.
-#[must_use]
-pub fn cycles(deps: &[CodeDep], blocked: &[String]) -> Vec<Vec<String>> {
-    let next = |n: &str| -> Vec<String> {
-        deps.iter()
-            .find(|d| d.node == n)
-            .map(|d| within(&d.needs, blocked))
-            .unwrap_or_default()
-    };
-    let reach = |a: &str| -> Vec<String> {
-        let mut seen: Vec<String> = Vec::new();
-        let mut todo = next(a);
-        while let Some(n) = todo.pop() {
-            if !seen.contains(&n) {
-                todo.extend(next(&n));
-                seen.push(n);
-            }
-        }
-        seen
-    };
-    let mut groups: Vec<Vec<String>> = Vec::new();
-    for a in blocked {
-        if groups.iter().any(|g| g.contains(a)) {
-            continue;
-        }
-        let from_a = reach(a);
-        if !from_a.contains(a) {
-            continue;
-        }
-        let mut g: Vec<String> = from_a
-            .into_iter()
-            .filter(|b| reach(b).contains(a))
-            .collect();
-        dedup(&mut g);
-        groups.push(g);
-    }
-    groups.sort();
-    groups
 }
 
 /// The schedule and its cycles, over the same scoped DAG `wave` uses.

@@ -43,8 +43,8 @@ sib|src/git|-
 - lib: `CodeDep.needs` (BLOCKING) · `CodeDep.seam` (type-only) · `Schedule.edges`/`.blocking` — both numbers, ⊥ one (V4)
 - lib: `wave(&Path, &Path) -> Schedule` — the schedule a wave over one dir would follow
 - lib: `Schedule::depth()` · `Schedule::width()` — rounds, & the most workers ever busy at once
-- lib: `edges(&Path, &Path) -> Vec<Edge>` — every edge between 2 DIFFERENT nodes in scope: `from` · `to` · `kind` (blocking | type-only) · `sibling` · `inferred` (V6)
-- lib: `cycles(&[CodeDep], &[String]) -> Vec<Vec<String>>` · `wave_with_cycles(&Path, &Path)` — the cycles among the blocked, 1 group each (V7)
+- lib: `edges(&Path, &Path) -> Vec<Edge>` — every edge between 2 DIFFERENT nodes in scope: `from` · `to` · `kind` (blocking | type-only) · `sibling` · `inferred` (V6-V8)
+- lib: `cycles(&[CodeDep], &[String]) -> Vec<Vec<String>>` · `wave_with_cycles(&Path, &Path)` — the cycles among the blocked, 1 group each (V9)
 - cli: `sherd wave [dir] --format json` → `{rounds, blocked, cycles, edges, unresolved:[{node,file,call}], depth, width}`
 
 ## §V INVARIANTS
@@ -53,15 +53,16 @@ V1: the CODE dag is ⊥ the FEDERATION dag. code edge = `use crate::` between SI
 V2: a dependency LEAVING the scope is DROPPED, ⊥ left unsatisfiable. keeping it reports every scoped node blocked — a cycle report for a tree w/ no cycle
 V3: a schedule is STABLE between runs ∴ labels sort. a report whose rounds reorder cannot be diffed, & the 2 numbers are what a reader compares
 V4: a TYPE-ONLY import is an EDGE & ⊥ a WAIT. `use crate::lint::Level` names a type a SEAM commit already declared ∴ the importer waits for ⊥ lint's LOGIC, & counting it as blocking UNDERSTATES width exactly when the seam has done its job (B1). an import of the MODULE (`use crate::lint;`) names no item ∴ never type-only, & 1 behavioural reach makes the whole edge blocking — a sibling you ! wait for is ⊥ made safe by also naming its type. BOTH numbers are reported (edges · blocking): 1 of them decided the rounds & a reader cannot see which from `depth` alone
-V5: for SHELL code a code edge = a script a node OWNS (`src/fed:V15`) INVOKING a script that lies under a SIBLING node: `source X` · `. X` · `bash X` · `sh X` · `exec X` · `X` @ command position. ⊥ a mention — `echo "run b/x.sh"` names a file & runs nothing. X resolves LEXICALLY: a literal path against the script's dir, then the repo root; `$(dirname "$0")`/`BASH_SOURCE` = the script's dir; `$(git rev-parse --show-toplevel)` = the root; `$VAR/…` = what VAR was ASSIGNED in the same file, when that is 1 of those. what does ⊥ resolve to a tracked script — lexically, or by V6 — is REPORTED as unresolved, ⊥ dropped silently — a missed edge is a schedule that runs a node before the one it calls, the unsafe direction. a shell edge is always BLOCKING: shell has no type-only reach (V4). a node w/ ⊥ scripts gets the schedule it got before, byte for byte
-V6: `$VAR/tail` where the file NEVER binds VAR to a path it can resolve (an argument, the environment, `${VAR:-x}` w/ an unresolvable default) & `tail` holds ⊥ `$` → INFERRED as `root/tail` when that is a tracked script. a FALSE edge is the safe direction (V5): it makes a schedule wait & a consumer select more, ⊥ less. MEASURED on a 27-node shell repo (sherd#172): 57 unresolved → 19, every one left a name built at run time. an edge is marked `inferred` when ⊥ call behind it resolved lexically ∴ a reader can tell the 2 apart. `edges()` lists EVERY call between 2 different nodes — the callee = the node that OWNS the called script (`src/fed:V15`): parent, child or cousin, ⊥ only siblings — ∵ "who breaks if N changes" needs every caller. `sibling` marks the ones that shape rounds (V1); the rounds are unchanged by the rest
-V7: `cycles` = the strongly connected groups of BLOCKING edges among `blocked`, sorted. `blocked` also holds nodes that only wait BEHIND a cycle; those sit in no group. a self-loop is a group of 1
+V5: for SHELL code a code edge = a script a node OWNS (`src/fed:V15`) INVOKING a script that lies under a SIBLING node: `source X` · `. X` · `bash X` · `sh X` · `exec X` · `X` @ command position. ⊥ a mention — `echo "run b/x.sh"` names a file & runs nothing. X resolves LEXICALLY: a literal path against the script's dir, then the repo root; `$(dirname "$0")`/`BASH_SOURCE` = the script's dir; `$(git rev-parse --show-toplevel)` = the root; `$VAR/…` = what VAR was ASSIGNED in the same file, when that is 1 of those. what does ⊥ resolve to a tracked script, lexically or by V6, is REPORTED as unresolved, ⊥ dropped silently — a missed edge is a schedule that runs a node before the one it calls, the unsafe direction. a shell edge is always BLOCKING: shell has no type-only reach (V4). a node w/ ⊥ scripts gets the schedule it got before, byte for byte
+V6: `$VAR/tail`, VAR NEVER bound by the file & `tail` w/o `$` → INFERRED `root/tail` iff that is a tracked script. a bound VAR that misses stays unresolved
+V7: edge `inferred` iff ⊥ call behind it resolved lexically. a lexical call clears it
+V8: `edges()` = every call between 2 different nodes; callee = the node OWNING the script (`src/fed:V15`). `sibling` marks the ones that shape rounds (V1)
+V9: `cycles` = strongly connected groups of BLOCKING edges among `blocked`, sorted. a node waiting only BEHIND a cycle is in ⊥ group; a self-loop is a group of 1
 
 ## §T TASKS
 
 id|status|task|cites
 T1|.|the EXECUTOR half — frozen til rung 0.7 (`.:V117`). it lands HERE, ⊥ in the planner|`.:V123`
-T2|x|`wave --format json` — rounds, blocked, cycles, edges & unresolved as data, for a runner that is ⊥ a human (sherd#172)|`.:V83`,V6,V7
 T3|.|test file(s) over the 2,000 ceiling since `.:T108` gave `src/wave` its tree: `tests/wave.rs` 2,124. split by subject|`.:V50`,`.:V124`
 
 ## §B BUGS

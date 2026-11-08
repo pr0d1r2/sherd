@@ -134,7 +134,7 @@ pub(super) fn wave_cmd(root: &Path, dir: &Path) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-/// `wave --format json` (`src/wave:V6`, `src/wave:V7`): the same rounds and
+/// `wave --format json` (`src/wave:V6`-`src/wave:V9`): the same rounds and
 /// blocked nodes as the text, plus the cycles, every edge and every
 /// unresolved call, for a runner that is not a human. Exit codes match the
 /// text form: 2 for a dir matching no node, else 0.
