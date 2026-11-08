@@ -188,7 +188,11 @@ pub enum Cmd {
     /// the public types each node declares. writes nothing
     Seam { dir: Option<String> },
     /// the rounds a parallel build would run. writes nothing
-    Wave { dir: Option<String> },
+    Wave {
+        dir: Option<String>,
+        #[command(flatten)]
+        format: FormatArg,
+    },
     /// migrate a single-file SPEC.md onto a federation
     Adopt {
         dir: String,

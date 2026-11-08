@@ -196,7 +196,7 @@ fn absolutize_dir(cmd: &mut Cmd, root: &Path, here: &Path) {
         | Cmd::Check { dir, .. }
         | Cmd::Split { dir, .. }
         | Cmd::Seam { dir }
-        | Cmd::Wave { dir }
+        | Cmd::Wave { dir, .. }
         | Cmd::Sync { dir, .. } => {
             if let Some(d) = dir {
                 fix(d);
@@ -230,7 +230,7 @@ fn dir_of(cmd: &Cmd) -> Option<&str> {
         | Cmd::Check { dir, .. }
         | Cmd::Split { dir, .. }
         | Cmd::Seam { dir }
-        | Cmd::Wave { dir }
+        | Cmd::Wave { dir, .. }
         | Cmd::Sync { dir, .. } => dir.as_deref(),
         Cmd::Lens { dir, .. }
         | Cmd::Adopt { dir, .. }
@@ -310,7 +310,10 @@ fn dispatch(root: &Path, cmd: Cmd) -> ExitCode {
             apply,
         ),
         Cmd::Seam { dir } => seam_cmd(root, &arg_dir(dir.as_deref(), root)),
-        Cmd::Wave { dir } => wave_cmd(root, &arg_dir(dir.as_deref(), root)),
+        Cmd::Wave { dir, format } if format.format.is_json() => {
+            wave_json_cmd(root, &arg_dir(dir.as_deref(), root))
+        }
+        Cmd::Wave { dir, .. } => wave_cmd(root, &arg_dir(dir.as_deref(), root)),
         Cmd::Adopt { dir, map, check } => {
             adopt_cmd(root, &dir, map.as_deref(), check)
         }

@@ -155,6 +155,41 @@ fn wave_waits_for_a_called_script_and_lists_what_it_cannot_resolve()
     Ok(())
 }
 
+/// `wave --format json` (`src/wave:V6`): the same rounds as the text, the
+/// edge with its kind, and the unresolved call -- every key a consumer reads.
+#[test]
+fn wave_json_carries_rounds_edges_and_unresolved() -> Result<(), String> {
+    let repo = crate::testrepo::TestRepo::new("cli-wave-json")?;
+    for n in ["a", "b"] {
+        repo.write(&format!("{n}/SPEC.md"), "# SPEC\n")?;
+    }
+    repo.write("b/lib.sh", "#!/bin/sh\n")?;
+    repo.write("a/run.sh", "bash b/lib.sh\nbash \"$NOWHERE/x.sh\"\n")?;
+    repo.commit("shell")?;
+    let root = repo.path();
+    let (s, cycles) = wave::wave_with_cycles(root, root);
+    let json = wave_json(
+        &s,
+        &cycles,
+        &wave::edges(root, root),
+        &wave::unresolved_calls(root, root),
+    );
+    assert_eq!(
+        json,
+        "{\"rounds\":[[\".\",\"b\"],[\"a\"]],\"blocked\":[],\"cycles\":[],\
+         \"edges\":[{\"from\":\"a\",\"to\":\"b\",\"kind\":\"blocking\",\
+         \"sibling\":true,\"inferred\":false}],\
+         \"unresolved\":[{\"node\":\"a\",\"file\":\"a/run.sh\",\
+         \"call\":\"$NOWHERE/x.sh\"}],\"depth\":2,\"width\":2}"
+    );
+    assert_eq!(wave_json_cmd(root, root), ExitCode::SUCCESS);
+    assert_eq!(
+        run_args(argv(&["wave", "no-such-dir", "--format", "json"])),
+        ExitCode::from(2)
+    );
+    Ok(())
+}
+
 /// A node with no `SPEC.md` is a usage error, not an empty proposal.
 #[test]
 fn split_on_a_directory_with_no_spec_is_usage() {
