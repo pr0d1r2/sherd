@@ -60,7 +60,7 @@ self|.|-
 - cmd: `sherd lens <dir> [--depth rule|why|all]` → default `rule`
 - cmd: `sherd budget [dir] [--format text|json]` → node/chain/lens/file token table. exit 1 over
 - cmd: `sherd seam [dir]` → PROPOSE the SEAM a parallel build needs: per node, the public types its siblings ! name before any node is written. report-only, writes ⊥ — WHICH types are shared is a JUDGEMENT (R57)
-- cmd: `sherd wave [dir]` → the SCHEDULE a parallel build follows: ready set per round over the CODE dag (`use crate::`, ⊥ `§F`), DEPTH & WIDTH. EDGES & BLOCKING counted apart (`src/wave:V4`). report-only; a cycle is NAMED, exit 0
+- cmd: `sherd wave [dir] [--format json]` → the SCHEDULE a parallel build follows: ready set per round over the CODE dag (`use crate::`, ⊥ `§F`), DEPTH & WIDTH. EDGES & BLOCKING counted apart (`src/wave:V4`). report-only; a cycle is NAMED, exit 0. `--format json` → `rounds` · `blocked` · `cycles` · `edges` · `unresolved` · `depth` · `width` (`src/wave:V6`, `src/wave:V7`)
 - cmd: `sherd validate [--format text|json]` → structural + edges + ceilings + slice drift, & REPORTS what it examined. exit 1 fail
 - cmd: `sherd fed [dir]` → the federation edges a node DECLARES, ⊥ the ones it has
 - cmd: `sherd review [rev]` → mechanical checks on what a commit ADDED (default `HEAD`). ADVISORY: a finding ⊥ fail the cmd, ∵ intent is the reader's call

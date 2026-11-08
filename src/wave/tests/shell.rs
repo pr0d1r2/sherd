@@ -138,22 +138,20 @@ fn the_ways_a_script_finds_its_root_all_resolve() -> Result<(), String> {
     Ok(())
 }
 
-/// An assignment whose value ends in `.sh` runs nothing; a name built at
-/// run time and a script's own argument are not guessed.
+/// An assignment whose value ends in `.sh` runs nothing, and a name built at
+/// run time is not guessed. A script's own argument used as the root is
+/// INFERRED from the tail it is joined to (V6): `$ROOT/b/lib.sh` is `b`.
 #[test]
 fn an_assignment_runs_nothing_and_a_runtime_name_is_unresolved()
 -> Result<(), String> {
-    let body = "ROOT=\"$1\"\nTOOL=\"$ROOT/b/lib.sh\"\nbash \"$ROOT/b/lib.sh\"\n\
+    let body = "ROOT=\"$1\"\nTOOL=\"$ROOT/c/x.sh\"\nbash \"$ROOT/b/lib.sh\"\n\
         bash \"$(dirname \"$0\")/../b/lib-${X}.sh\"\n";
     let r = tree("wave-sh-assign", &[("a/run.sh", body)])?;
-    assert!(needs(r.path(), "a").is_empty());
+    assert_eq!(needs(r.path(), "a"), vec!["b"]);
     let calls: Vec<String> = unresolved_calls(r.path(), r.path())
         .into_iter()
         .map(|u| u.call)
         .collect();
-    assert_eq!(
-        calls,
-        vec!["$(dirname $0)/../b/lib-${X}.sh", "$ROOT/b/lib.sh"]
-    );
+    assert_eq!(calls, vec!["$(dirname $0)/../b/lib-${X}.sh"]);
     Ok(())
 }

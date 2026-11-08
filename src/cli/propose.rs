@@ -134,6 +134,78 @@ pub(super) fn wave_cmd(root: &Path, dir: &Path) -> ExitCode {
     ExitCode::SUCCESS
 }
 
+/// `wave --format json` (`src/wave:V6`, `src/wave:V7`): the same rounds and
+/// blocked nodes as the text, plus the cycles, every edge and every
+/// unresolved call, for a runner that is not a human. Exit codes match the
+/// text form: 2 for a dir matching no node, else 0.
+pub(super) fn wave_json_cmd(root: &Path, dir: &Path) -> ExitCode {
+    let (s, cycles) = wave::wave_with_cycles(root, dir);
+    let examined = s
+        .rounds
+        .iter()
+        .map(Vec::len)
+        .sum::<usize>()
+        .saturating_add(s.blocked.len());
+    if examined == 0 {
+        eprintln!("{}", no_node(root, dir));
+        return ExitCode::from(2);
+    }
+    let edges = wave::edges(root, dir);
+    let unresolved = wave::unresolved_calls(root, dir);
+    println!("{}", wave_json(&s, &cycles, &edges, &unresolved));
+    ExitCode::SUCCESS
+}
+
+/// The JSON document `wave_json_cmd` prints, built without a serializer.
+pub(super) fn wave_json(
+    s: &wave::Schedule,
+    cycles: &[Vec<String>],
+    edges: &[wave::Edge],
+    unresolved: &[wave::Unresolved],
+) -> String {
+    use crate::plan::json_str;
+    let list = |v: &[String]| {
+        format!(
+            "[{}]",
+            v.iter().map(|x| json_str(x)).collect::<Vec<_>>().join(",")
+        )
+    };
+    let nested = |v: &[Vec<String>]| {
+        format!(
+            "[{}]",
+            v.iter().map(|r| list(r)).collect::<Vec<_>>().join(",")
+        )
+    };
+    let edge = |e: &wave::Edge| {
+        format!(
+            "{{\"from\":{},\"to\":{},\"kind\":{},\"sibling\":{},\"inferred\":{}}}",
+            json_str(&e.from),
+            json_str(&e.to),
+            json_str(e.kind.as_str()),
+            e.sibling,
+            e.inferred
+        )
+    };
+    let call = |u: &wave::Unresolved| {
+        format!(
+            "{{\"node\":{},\"file\":{},\"call\":{}}}",
+            json_str(&u.node),
+            json_str(&u.script),
+            json_str(&u.call)
+        )
+    };
+    format!(
+        "{{\"rounds\":{},\"blocked\":{},\"cycles\":{},\"edges\":[{}],\"unresolved\":[{}],\"depth\":{},\"width\":{}}}",
+        nested(&s.rounds),
+        list(&s.blocked),
+        nested(cycles),
+        edges.iter().map(edge).collect::<Vec<_>>().join(","),
+        unresolved.iter().map(call).collect::<Vec<_>>().join(","),
+        s.depth(),
+        s.width()
+    )
+}
+
 /// One round: how many nodes may be built at once, and which.
 pub(super) fn print_round(n: usize, nodes: &[String]) {
     println!("  round {n:<3} {:>2} node(s)", nodes.len());

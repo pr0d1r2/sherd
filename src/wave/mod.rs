@@ -153,7 +153,7 @@ fn script_edges(
         .collect();
     let mut out = Vec::new();
     for (_, target) in script_calls(root, node, nodes, all) {
-        if let shell::Target::Script(p) = target
+        if let shell::Target::Script(p) | shell::Target::Inferred(p) = target
             && let Some(s) = sibs.iter().find(|s| p.starts_with(s))
         {
             out.push(fed::node_label(root, s));
@@ -209,6 +209,194 @@ pub fn unresolved_calls(root: &Path, dir: &Path) -> Vec<Unresolved> {
     });
     out.dedup();
     out
+}
+
+/// How one node reaches another (V4).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum EdgeKind {
+    /// The caller waits for the callee's behaviour.
+    Blocking,
+    /// The caller names only the callee's public types.
+    TypeOnly,
+}
+
+impl EdgeKind {
+    /// The word a report spells it with.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Blocking => "blocking",
+            Self::TypeOnly => "type-only",
+        }
+    }
+}
+
+/// One edge between two DIFFERENT nodes: `from` calls `to` (V6).
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Edge {
+    /// The caller's label.
+    pub from: String,
+    /// The callee's label: the node that OWNS the called code.
+    pub to: String,
+    /// Blocking, or type-only (V4).
+    pub kind: EdgeKind,
+    /// Whether `to` is, or lies under, a co-child of `from`'s parent: the
+    /// edges that shape the rounds (V1). The rest are calls a consumer still
+    /// needs.
+    pub sibling: bool,
+    /// Whether every call behind it was INFERRED from a root-relative tail
+    /// after an unbound variable (V6), rather than resolved lexically.
+    pub inferred: bool,
+}
+
+/// Every edge between two different nodes in scope, sorted (V3, V6).
+///
+/// Rust edges are the sibling ones `code_deps` reads. Shell edges go to the
+/// node that OWNS the called script (`src/fed:V15`) -- sibling, parent,
+/// cousin or child alike -- because a consumer asking "who can break if
+/// this node changes" needs every caller, not only the ones that order a
+/// wave. A pair reached both ways is one BLOCKING edge, and it is inferred
+/// only when no call behind it resolved lexically.
+#[must_use]
+pub fn edges(root: &Path, dir: &Path) -> Vec<Edge> {
+    let nodes = fed::discover(root);
+    let all = fed::script_files(root);
+    let mut out: Vec<Edge> = Vec::new();
+    for node in nodes.iter().filter(|n| n.starts_with(dir)) {
+        let from = fed::node_label(root, node);
+        let (needs, seam) = edges_of(root, node, &nodes);
+        for (to, kind) in needs
+            .into_iter()
+            .map(|t| (t, EdgeKind::Blocking))
+            .chain(seam.into_iter().map(|t| (t, EdgeKind::TypeOnly)))
+        {
+            merge(&mut out, from.clone(), to, kind, true, false);
+        }
+        for (_, target) in script_calls(root, node, &nodes, &all) {
+            let (p, inferred) = match target {
+                shell::Target::Script(p) => (p, false),
+                shell::Target::Inferred(p) => (p, true),
+                shell::Target::Unresolved(_) => continue,
+            };
+            let Some(owner) = owner_of(&p, &nodes) else {
+                continue;
+            };
+            if owner == node.as_path() || !owner.starts_with(dir) {
+                continue;
+            }
+            // What `script_edges` counts: the call lands under a sibling,
+            // even when a node deeper down owns it.
+            let sibling = nodes.iter().any(|s| {
+                s != node && s.parent() == node.parent() && owner.starts_with(s)
+            });
+            let to = fed::node_label(root, owner);
+            merge(
+                &mut out,
+                from.clone(),
+                to,
+                EdgeKind::Blocking,
+                sibling,
+                inferred,
+            );
+        }
+    }
+    let scope: Vec<String> = nodes
+        .iter()
+        .filter(|n| n.starts_with(dir))
+        .map(|n| fed::node_label(root, n))
+        .collect();
+    out.retain(|e| scope.contains(&e.to));
+    out.sort();
+    out
+}
+
+/// Fold one edge into the list: blocking beats type-only, and a lexical
+/// call clears `inferred`.
+fn merge(
+    out: &mut Vec<Edge>,
+    from: String,
+    to: String,
+    kind: EdgeKind,
+    sibling: bool,
+    inferred: bool,
+) {
+    if let Some(e) = out.iter_mut().find(|e| e.from == from && e.to == to) {
+        e.kind = e.kind.min(kind);
+        e.inferred &= inferred;
+        return;
+    }
+    out.push(Edge {
+        from,
+        to,
+        kind,
+        sibling,
+        inferred,
+    });
+}
+
+/// The deepest node whose directory holds a path (`src/fed:V15`).
+fn owner_of<'a>(p: &Path, nodes: &'a [PathBuf]) -> Option<&'a Path> {
+    nodes
+        .iter()
+        .filter(|n| p.starts_with(n))
+        .max_by_key(|n| n.components().count())
+        .map(PathBuf::as_path)
+}
+
+/// The CYCLES among a schedule's blocked nodes, one group per cycle (V7).
+///
+/// `blocked` also holds nodes that only wait BEHIND a cycle; those are in no
+/// group. A group is a strongly connected set of blocking edges: every
+/// member reaches every other, so none can be built first.
+#[must_use]
+pub fn cycles(deps: &[CodeDep], blocked: &[String]) -> Vec<Vec<String>> {
+    let next = |n: &str| -> Vec<String> {
+        deps.iter()
+            .find(|d| d.node == n)
+            .map(|d| within(&d.needs, blocked))
+            .unwrap_or_default()
+    };
+    let reach = |a: &str| -> Vec<String> {
+        let mut seen: Vec<String> = Vec::new();
+        let mut todo = next(a);
+        while let Some(n) = todo.pop() {
+            if !seen.contains(&n) {
+                todo.extend(next(&n));
+                seen.push(n);
+            }
+        }
+        seen
+    };
+    let mut groups: Vec<Vec<String>> = Vec::new();
+    for a in blocked {
+        if groups.iter().any(|g| g.contains(a)) {
+            continue;
+        }
+        let from_a = reach(a);
+        if !from_a.contains(a) {
+            continue;
+        }
+        let mut g: Vec<String> = from_a
+            .into_iter()
+            .filter(|b| reach(b).contains(a))
+            .collect();
+        dedup(&mut g);
+        groups.push(g);
+    }
+    groups.sort();
+    groups
+}
+
+/// The schedule and its cycles, over the same scoped DAG `wave` uses.
+#[must_use]
+pub fn wave_with_cycles(
+    root: &Path,
+    dir: &Path,
+) -> (Schedule, Vec<Vec<String>>) {
+    let deps = scoped_deps(root, dir);
+    let s = schedule(&deps);
+    let c = cycles(&deps, &s.blocked);
+    (s, c)
 }
 
 /// Does this import name ONLY types the target declares?
@@ -324,13 +512,18 @@ fn labels(ds: &[&CodeDep]) -> Vec<String> {
 /// executor and is not built here (`.:V117`).
 #[must_use]
 pub fn wave(root: &Path, dir: &Path) -> Schedule {
+    schedule(&scoped_deps(root, dir))
+}
+
+/// The code DAG restricted to the nodes under `dir` (V2).
+fn scoped_deps(root: &Path, dir: &Path) -> Vec<CodeDep> {
     let deps = code_deps(root);
     let keep: Vec<String> = deps
         .iter()
         .map(|d| d.node.clone())
         .filter(|l| node_path(root, l).starts_with(dir))
         .collect();
-    schedule(&scoped(&deps, &keep))
+    scoped(&deps, &keep)
 }
 
 /// The directory a node label names.
@@ -375,3 +568,7 @@ mod wave_tests;
 #[cfg(test)]
 #[path = "tests/shell.rs"]
 mod shell_tests;
+
+#[cfg(test)]
+#[path = "tests/edges.rs"]
+mod edges_tests;

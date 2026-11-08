@@ -61,11 +61,20 @@ errors exit `2`, and `--help`/`--version` exit `0`.
 - `sherd completions <shell>` prints a completion script for `bash`, `zsh`,
   `fish`, `elvish` or `powershell`.
 - `sherd man` prints the man page (roff).
+- `sherd wave [dir] --format json` prints the rounds, the blocked nodes, the
+  cycles grouped one per cycle, every edge between two nodes (`from`, `to`,
+  `kind`, `sibling`, `inferred`) and the unresolved calls. Edges include
+  calls to a parent, child or cousin node, not only the siblings that shape
+  the rounds (#172).
 - `sherd <verb> --help` documents each verb's flags; a mistyped flag or verb
   gets a "did you mean" suggestion.
 
 ### Changed
 
+- `wave` resolves a script call written as `$VAR/<path>.sh`, where the
+  script never binds `VAR` (an argument or the environment), to `<path>.sh`
+  from the repository root when that is a tracked script. Such an edge is
+  marked `inferred`; a false edge only makes a schedule wait longer (#172).
 - **Breaking, minor:** the parser is strict where the hand-rolled one was
   lenient. An extra positional argument, an unknown flag, or a flag given a
   value outside its set (`--format yaml`, `--depth deep`) is a usage error

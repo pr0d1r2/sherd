@@ -7,9 +7,13 @@
 //! `$(dirname "$0")` and `BASH_SOURCE` (the script's own dir),
 //! `$(git rev-parse --show-toplevel)` (the root), `$(cd X && pwd)` (X), a
 //! variable the same file assigned one of those, and `${VAR:-default}` (VAR
-//! if known, else the default the file wrote). Anything else -- an argument,
-//! the environment, a name built at run time -- is UNRESOLVED and handed back
-//! as written, never guessed.
+//! if known, else the default the file wrote). A variable the file does NOT
+//! bind -- an argument, the environment -- is INFERRED when the literal tail
+//! after it names a tracked script from the root: `$REPO_ROOT/b/x.sh` with
+//! `REPO_ROOT="$1"` is `b/x.sh`. That edge may be false, and a false edge is
+//! the safe direction (`src/wave:V6`). Anything else -- a name built at run
+//! time, a tail naming no tracked script -- is UNRESOLVED and handed back as
+//! written.
 
 use std::collections::BTreeMap;
 use std::path::{Component, Path, PathBuf};
@@ -19,6 +23,9 @@ use std::path::{Component, Path, PathBuf};
 pub(super) enum Target {
     /// A tracked script.
     Script(PathBuf),
+    /// A tracked script named by its root-relative tail after a variable the
+    /// file never bound (`src/wave:V6`).
+    Inferred(PathBuf),
     /// The call as written, which names no tracked script.
     Unresolved(String),
 }
@@ -313,8 +320,28 @@ fn resolve(call: &str, cx: &Context<'_>, vars: &Vars) -> Target {
         let here = cx.script.parent().unwrap_or(cx.root);
         vec![normalize(&here.join(call)), normalize(&cx.root.join(call))]
     };
-    candidates
-        .into_iter()
-        .find(|c| cx.all.contains(c))
-        .map_or_else(|| Target::Unresolved(call.to_string()), Target::Script)
+    if let Some(p) = candidates.into_iter().find(|c| cx.all.contains(c)) {
+        return Target::Script(p);
+    }
+    unbound_tail(call)
+        .map(|tail| normalize(&cx.root.join(tail)))
+        .filter(|p| cx.all.contains(p))
+        .map_or_else(|| Target::Unresolved(call.to_string()), Target::Inferred)
+}
+
+/// The literal path after a leading `$NAME`, `${NAME}` or `${NAME:-x}`, when
+/// the rest holds no `$` -- `$REPO_ROOT/b/x.sh` is `b/x.sh`. `None` for
+/// anything built at run time past the first word.
+fn unbound_tail(call: &str) -> Option<&str> {
+    let rest = call.strip_prefix('$')?;
+    let tail = if let Some(braced) = rest.strip_prefix('{') {
+        balanced(braced, '{', '}')?.1
+    } else {
+        let end = rest
+            .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+            .unwrap_or(rest.len());
+        rest.get(end..)?
+    };
+    let tail = tail.strip_prefix('/')?;
+    (!tail.is_empty() && !tail.contains('$')).then_some(tail)
 }
