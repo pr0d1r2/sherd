@@ -11,7 +11,9 @@
 //! bind -- an argument, the environment -- is INFERRED when the literal tail
 //! after it names a tracked script from the root: `$REPO_ROOT/b/x.sh` with
 //! `REPO_ROOT="$1"` is `b/x.sh`. That edge may be false, and a false edge is
-//! the safe direction (`src/wave:V6`). Anything else -- a name built at run
+//! the safe direction (`src/wave:V6`). A variable the file assigned a script
+//! (`X=…/y.sh`, `X=${ENV:-…/y.sh}`) and then RUNS -- `"$X" verb` -- is a
+//! call of that value, resolved the same ways (`src/wave:V10`). Anything else -- a name built at run
 //! time, a tail naming no tracked script -- is UNRESOLVED and handed back as
 //! written.
 
@@ -38,10 +40,13 @@ pub(super) struct Context<'a> {
 }
 
 type Vars = BTreeMap<String, PathBuf>;
+/// Variables holding a script, by the value the file wrote (`src/wave:V10`).
+type Held = BTreeMap<String, String>;
 
 /// Every invocation in a script's text, in order.
 pub(super) fn calls(text: &str, cx: &Context<'_>) -> Vec<Target> {
     let mut vars = Vars::new();
+    let mut held = Held::new();
     let mut out = Vec::new();
     for line in text.lines() {
         let line = line.trim();
@@ -49,8 +54,8 @@ pub(super) fn calls(text: &str, cx: &Context<'_>) -> Vec<Target> {
             continue;
         }
         let words = words(line);
-        assign(&words, cx, &mut vars);
-        for call in invoked(&words) {
+        assign(&words, cx, &mut vars, &mut held);
+        for call in invoked(&words, &held) {
             out.push(resolve(&call, cx, &vars));
         }
     }
@@ -58,8 +63,14 @@ pub(super) fn calls(text: &str, cx: &Context<'_>) -> Vec<Target> {
 }
 
 /// Record each leading `NAME=value` whose value names a path this can
-/// resolve. Later assignments win, as they do when the script runs.
-fn assign(words: &[String], cx: &Context<'_>, vars: &mut Vars) {
+/// resolve, and each whose value names a script. Later assignments win, as
+/// they do when the script runs.
+fn assign(
+    words: &[String],
+    cx: &Context<'_>,
+    vars: &mut Vars,
+    held: &mut Held,
+) {
     let prefix = ["export", "readonly", "local"];
     for w in words.iter().filter(|w| !prefix.contains(&w.as_str())) {
         let Some((name, value)) = w.split_once('=') else {
@@ -68,11 +79,54 @@ fn assign(words: &[String], cx: &Context<'_>, vars: &mut Vars) {
         if !is_name(name) {
             break;
         }
-        match eval(&unquote(value), cx, vars) {
+        let value = unquote(value);
+        match eval(&value, cx, vars) {
             Some(dir) => vars.insert(name.to_string(), dir),
             None => vars.remove(name),
         };
+        match held_call(&value, vars, held) {
+            Some(call) => held.insert(name.to_string(), call),
+            None => held.remove(name),
+        };
     }
+}
+
+/// The call a value makes when run, if it names a script: itself when it
+/// ends in `.sh`; for `${NAME:-default}` what NAME holds when this file
+/// bound it, else the default -- an override from outside is not known, and
+/// the default is what runs without one. A default `bash X` / `sh X` is `X`.
+fn held_call(value: &str, vars: &Vars, held: &Held) -> Option<String> {
+    if value.ends_with(".sh") {
+        return Some(value.to_string());
+    }
+    let (inner, tail) = balanced(value.strip_prefix("${")?, '{', '}')?;
+    let (name, default) = inner.split_once(":-").filter(|_| tail.is_empty())?;
+    if let Some(call) = held.get(name) {
+        return Some(call.clone());
+    }
+    if vars.contains_key(name) {
+        return None;
+    }
+    let words = words(default);
+    let call = match words.as_slice() {
+        [runner, x] if is_runner(&unquote(runner)) => unquote(x),
+        _ => default.to_string(),
+    };
+    call.ends_with(".sh").then_some(call)
+}
+
+/// The call a word makes if it is run: itself when it ends in `.sh`, the
+/// value of a variable holding a script when it is `$X` or `${X}`.
+fn script_word(bare: &str, held: &Held) -> Option<String> {
+    if bare.ends_with(".sh") {
+        return Some(bare.to_string());
+    }
+    let rest = bare.strip_prefix('$')?;
+    let name = rest
+        .strip_prefix('{')
+        .and_then(|r| r.strip_suffix('}'))
+        .unwrap_or(rest);
+    held.get(name).cloned()
 }
 
 fn is_name(s: &str) -> bool {
@@ -86,8 +140,8 @@ fn is_assignment(w: &str) -> bool {
     w.split_once('=').is_some_and(|(n, _)| is_name(n))
 }
 
-/// The `.sh` words a line invokes, including inside `$( … )`.
-fn invoked(words: &[String]) -> Vec<String> {
+/// The scripts a line invokes, including inside `$( … )`.
+fn invoked(words: &[String], held: &Held) -> Vec<String> {
     let mut out = Vec::new();
     let mut at_command = true;
     let mut runner = false;
@@ -96,7 +150,7 @@ fn invoked(words: &[String]) -> Vec<String> {
     let mut shell_in_command = false;
     for w in words {
         for inner in substitutions(w) {
-            out.extend(invoked(&self::words(&inner)));
+            out.extend(invoked(&self::words(&inner), held));
         }
         let bare = unquote(w);
         shell_in_command |= matches!(bare.as_str(), "sh" | "bash");
@@ -106,7 +160,8 @@ fn invoked(words: &[String]) -> Vec<String> {
             shell_in_command = false;
             continue;
         }
-        let script = bare.ends_with(".sh");
+        let call = script_word(&bare, held);
+        let script = call.is_some();
         if shell_in_command && script && bare.starts_with('<') {
             out.push(bare);
             continue;
@@ -117,8 +172,8 @@ fn invoked(words: &[String]) -> Vec<String> {
             continue;
         }
         let next_runner = at_command && !script && is_runner(&bare);
-        if (at_command || runner) && script {
-            out.push(bare);
+        if let Some(call) = call.filter(|_| at_command || runner) {
+            out.push(call);
         }
         runner = next_runner;
         at_command = false;

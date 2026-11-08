@@ -58,6 +58,7 @@ V6: `$VAR/tail`, VAR NEVER bound by the file & `tail` w/o `$` → INFERRED `root
 V7: edge `inferred` iff ⊥ call behind it resolved lexically. a lexical call clears it
 V8: `edges()` = every call between 2 different nodes; callee = the node OWNING the script (`src/fed:V15`). `sibling` marks the ones that shape rounds (V1)
 V9: `cycles` = strongly connected groups of BLOCKING edges among `blocked`, sorted. a node waiting only BEHIND a cycle is in ⊥ group; a self-loop is a group of 1
+V10: `X=<…>.sh` | `X=${E:-<…>.sh}` (runner ok) then `"$X"` run → call of that value, resolved per V5/V6. E = env ∴ default runs
 
 ## §T TASKS
 

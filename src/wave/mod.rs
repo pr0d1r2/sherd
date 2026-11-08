@@ -550,5 +550,9 @@ mod wave_tests;
 mod shell_tests;
 
 #[cfg(test)]
+#[path = "tests/shell_var.rs"]
+mod shell_var_tests;
+
+#[cfg(test)]
 #[path = "tests/edges.rs"]
 mod edges_tests;
