@@ -49,7 +49,43 @@ fn an_unbound_root_variable_resolves_by_its_tail() -> Result<(), String> {
 }
 
 /// `${VAR:-.}` whose default resolves to nothing falls back to the tail
-/// too, and a lexical call to the same node clears `inferred`.
+/// too: alone, it is an inferred edge and no unresolved call.
+#[test]
+fn a_braced_default_that_resolves_nothing_is_inferred() -> Result<(), String> {
+    let r = tree(
+        "wave-edge-braced",
+        &[
+            ("a/x.sh", "bash \"${ROOT:-.}/b/y.sh\"\n"),
+            ("b/y.sh", "#!/bin/sh\n"),
+        ],
+    )?;
+    let es = edges(r.path(), r.path());
+    assert_eq!(pairs(&es), vec![("a", "b")]);
+    assert!(es.iter().all(|e| e.inferred), "{es:?}");
+    assert!(unresolved_calls(r.path(), r.path()).is_empty());
+    Ok(())
+}
+
+/// A variable the file DID bind is never inferred: `$(dirname "$0")/b/y.sh`
+/// from `a/` names `a/b/y.sh`, which is missing, and stays unresolved rather
+/// than borrowing the root's `b/y.sh`.
+#[test]
+fn a_bound_variable_that_misses_stays_unresolved() -> Result<(), String> {
+    let body = "HERE=\"$(dirname \"$0\")\"\nbash \"$HERE/b/y.sh\"\n";
+    let r = tree(
+        "wave-edge-bound",
+        &[("a/x.sh", body), ("b/y.sh", "#!/bin/sh\n")],
+    )?;
+    assert!(edges(r.path(), r.path()).is_empty());
+    let u: Vec<String> = unresolved_calls(r.path(), r.path())
+        .into_iter()
+        .map(|x| x.call)
+        .collect();
+    assert_eq!(u, vec!["$HERE/b/y.sh"]);
+    Ok(())
+}
+
+/// A lexical call to the same node as an inferred one clears `inferred`.
 #[test]
 fn a_lexical_call_beats_an_inferred_one() -> Result<(), String> {
     let body = "bash \"${ROOT:-.}/b/y.sh\"\nbash b/y.sh\n";

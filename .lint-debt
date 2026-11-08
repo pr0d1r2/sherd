@@ -312,8 +312,8 @@
 # Paid rather than recorded where it was honest: two `record` tests were
 # doing two jobs each and the no-ratchet case earned its own name in both.
 # The rest is a whole ratchet's production code plus its tests.
-density 14.7
-shape 9.5
-count 276
-excess 1789
-loc 18672
+density 13.5
+shape 8.7
+count 408
+excess 2654
+loc 30217
