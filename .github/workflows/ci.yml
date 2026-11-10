@@ -95,16 +95,20 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest]
-    # PROVISIONAL, and said so rather than presented as measured. GitHub
-    # serves no logs for an in-progress job and defaults to 360 minutes, so an
-    # unbounded hang is six hours of silence followed by nothing to read --
-    # which is how itok's B21 stayed invisible. Nothing here has been timed in
-    # CI yet; locally the suite is 283 tests in ~10s and the instrumented
-    # coverage build dominates. 20 is a bound loose enough not to flap and
-    # tight enough to produce a log, and it gets TIGHTENED to ~2x the worst
-    # measured job once a green run exists. A bound nobody revisits drifts
-    # back toward the default that hid the problem.
-    timeout-minutes: 20
+    # A bound, because GitHub serves no logs for an in-progress job and
+    # defaults to 360 minutes, so an unbounded hang is six hours of silence
+    # followed by nothing to read -- which is how itok's B21 stayed
+    # invisible.
+    #
+    # MEASURED, and the first number was wrong. 20 was provisional and FLAPPED
+    # on macos-latest: the last 21 macOS gate jobs (2026-11-06..10) took 10-19
+    # minutes when green, and 5 were cancelled at exactly 20 -- every step
+    # green, killed in the cache SAVE after `hk check` passed (#182, #185).
+    # On macOS the store-cache restore alone is 9-10 minutes and the gate
+    # 4-6. Linux takes ~6-7. 30 is the owner's choice (2026-11-10): ~1.5x
+    # the worst green job, short of the ~2x this comment used to promise.
+    # Revisit when the macOS restore gets faster or a green job nears 30.
+    timeout-minutes: 30
     steps:
       # Pinned to commit SHAs, not tags. A tag is mutable: whoever controls
       # the action can move `v4` to different code, and every workflow that
