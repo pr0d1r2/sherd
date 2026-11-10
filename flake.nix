@@ -24,7 +24,8 @@
     ];
   };
 
-  # FOUR declared inputs, ONE nixpkgs. `nix-hk` and `pklith` follow the same
+  # FIVE declared inputs, ONE nixpkgs. `nix-hk`, `pklith` and
+  # `nix-cargo-release` follow the same
   # lock rather than their own copy: a second nixpkgs edge would fork the
   # rev, the cached hk would be built against a nixpkgs this shell does not
   # have, and every substitution would miss while looking exactly like
@@ -48,6 +49,14 @@
     pklith.url = "git+https://github.com/pr0d1r2/pklith?ref=main&shallow=1";
     pklith.inputs.nixpkgs-lock.follows = "nixpkgs-lock";
     pklith.inputs.nix-hk.follows = "nix-hk";
+    # The FIFTH, a HOLD (B40): cargo-release 1.1.6. nixos-26.05 moved its
+    # cargo-release to 1.1.7, which needs rustc 1.97 while the channel ships
+    # 1.95, so `pkgs.cargo-release` stopped building and was dropped from
+    # this shell rather than replaced. Its overlay makes `pkgs.cargo-release`
+    # the held build, cached on the substituter above. Drop the input once
+    # the channel's own cargo-release builds (`nix-cargo-release/T2`).
+    nix-cargo-release.url = "git+https://github.com/pr0d1r2/nix-cargo-release?ref=main&shallow=1";
+    nix-cargo-release.inputs.nixpkgs-lock.follows = "nixpkgs-lock";
   };
 
   outputs =
@@ -55,6 +64,7 @@
       self,
       nixpkgs,
       nix-hk,
+      nix-cargo-release,
       pklith,
       ...
     }:
@@ -69,8 +79,16 @@
       # an OVERLAY rather than referenced as `nix-hk.packages.${s}.hk` so there
       # is exactly one `pkgs` in this file: a second lookup path is a second
       # place to forget, and the package list stays a list of names.
+      # nix-cargo-release's overlay does the same for `pkgs.cargo-release`.
       forAll =
-        f: nixpkgs.lib.genAttrs systems (s: f (nixpkgs.legacyPackages.${s}.extend nix-hk.overlays.default));
+        f:
+        nixpkgs.lib.genAttrs systems (
+          s:
+          f (
+            (nixpkgs.legacyPackages.${s}.extend nix-hk.overlays.default).extend
+              nix-cargo-release.overlays.default
+          )
+        );
       # pklith's catalog checks for this system (V126).
       catalog = pkgs: pklith.legacyPackages.${pkgs.stdenv.hostPlatform.system}.catalog;
 
@@ -216,6 +234,11 @@
             # Vacuous until the first `v*` tag, and it says so rather than
             # reporting a green it did not earn.
             pkgs.cargo-semver-checks
+            # THE RELEASE, which is a tool and not a script. Everything the
+            # prose described -- clean tree, allowed branch, tag scheme,
+            # dry-run first, verify, publish, push -- this already does, and
+            # `release.toml` configures it. Held at 1.1.6 by the overlay (B40).
+            pkgs.cargo-release
             # paradigm V28's macOS floor, judged at commit (V126): parses
             # `.cargo/config.toml` and refuses unless `[env]` FORCES
             # MACOSX_DEPLOYMENT_TARGET to pklith's floor. taplo and jq only.
