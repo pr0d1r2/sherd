@@ -71,6 +71,11 @@ errors exit `2`, and `--help`/`--version` exit `0`.
 
 ### Changed
 
+- Depends on microlith 0.7.6 (was 0.7.4). `sherd check` runs
+  `microlith::check_spec`, so it now reads a suffixed invariant citation
+  such as `V2a` as a citation and resolves it like `V2`. microlith 0.7.6
+  depends on clap, which sherd already builds, so the lock gains no new
+  crate.
 - `wave` resolves a script call written as `$VAR/<path>.sh`, where the
   script never binds `VAR` (an argument or the environment), to `<path>.sh`
   from the repository root when that is a tracked script. Such an edge is
