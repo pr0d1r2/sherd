@@ -33,7 +33,7 @@ self|.|-
 - intra-file spec ops = `microlith` lib dep (crates.io 0.6, zero-dep, pure fn over `&str`). ⊥ reimpl parse/fmt/check/anchors.
 - token counting = `itok` lib dep (crates.io 0.3). ⊥ own tokenizer, ⊥ own bytes/4.
 - fs walk + ignore globs = `itok::walk`/`itok::glob`. ⊥ reimpl.
-- SPEC syntax = FORMAT **4.1.0**, sections `G C I R V T B` fixed & ordered + `§F`/`§N`. `§F`/`§N` ! land in FORMAT/microlith upstream, ⊥ invented locally (V47).
+- SPEC syntax = FORMAT **4.1.0**, sections `G C I R V T B` fixed & ordered + `§F`/`§N`. `§F`/`§N` are microlith's, ⊥ invented locally (V47).
 - layout: **one crate**. module = **dir + `mod.rs`** (the `default.nix` shape — dir is the unit, entry is conventional). ⊥ 2018 `foo.rs`+`foo/`: that puts the facade OUTSIDE the dir it fronts ∴ module entry & its `SPEC.md` land in different federation nodes.
 - node = dir = Rust module. all three aligned or a flat `.rs` owns spec it cannot hold.
 - repo partitions **set** \| **setting** \| **human** (`set-and-setting` vocabulary). default pack = set.
@@ -189,7 +189,7 @@ V44: vertical split lossless **by reference ⊥ by deletion**. ∀ id ∈ `SPEC.
 V45: `lens --depth rule` default. `why` pulled on demand, ⊥ resident.
 V46: budget sized against MEASURED entry cost, ⊥ raw window. measured: harness overhead ~28,543 tok before any file ∴ `budget.lens` + entry ≤ 40% of 131,072
 — guards learned from `itok`/`microlith` §B —
-V47: `§F`/`§N` are FORMAT extensions. microlith `check` fixes section set `G C I R V T B` ∴ unknown section ! be negotiated upstream. ⊥ ship a dialect microlith cannot read
+V47: `§F`/`§N` are FORMAT extensions, canonical in microlith ≥ 0.7.0 (`microlith/V39`). a further section letter ! be negotiated upstream first. ⊥ ship a dialect microlith cannot read
 V48: ∀ report ! state what was EXAMINED, ⊥ only what failed. node discovered & ⊥ parsed = FAIL, ⊥ skip.
 V49: split (either axis) ! PROVE item-set preserved before write — ids(parent) ⊆ ⋃ ids(children ∪ parent′), asserted pre-write.
 V50: `.rs` file **code** > `ceiling.file` (default 4000 tok) → `check` violation, kind `judgment`. tests counted separately vs `ceiling.test` (2000). ⊥ one ceiling over both
@@ -275,7 +275,7 @@ T42|.|cross-file losslessness proof, asserted pre-write|V49,V44
 T46|.|coupling report after proposed split|V53
 T47|.|violation renderer `file:line: sherd/Vn:` + why + mechanical\|judgment + json `kind`|V55,V54
 T48|.|sibling-divergence detector for V13|V62
-T49|.|`§F`/`§N` upstream to FORMAT/microlith before shipping a dialect|V47
+T49|x|`§F`/`§N` upstream to FORMAT/microlith before shipping a dialect. done = microlith claims both as canonical letters (`microlith/V39`) & publishes them in `FORMAT-EXTENSIONS.md`, rendered from the constants its checker reads (`microlith/V40`), since microlith 0.7.0 (`7c2c92c`). routing them on to cavekit FORMAT.md is microlith's task, ⊥ ours|V47
 T50|.|corpus run over 54-spec fleet, FP rate reported|V58
 T52|.|planted-violation test ∀ guard + accepts-real-shapes companion|V61
 T58|.|`cap.row` gate — inline `§V`/`§R`/`§B` text over 200B|V69,V70
