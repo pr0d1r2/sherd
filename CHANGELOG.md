@@ -23,8 +23,8 @@ rendering, because a consumer arriving from crates.io never opens our spec.
 | `0.3` | odd | the DAG answers questions — `route` resolves a query to a node, `validate` gives one verdict over the federation | reached |
 | `0.4` | even | the federation is maintainable rather than only readable — `split` proposes a split, `sync` regenerates `§N`, `adopt` migrates a single-file spec onto one | reached |
 | `0.5` | odd | **first public artifact.** Every verb that never calls a model is correct and reusable as a library, exercised on a repository that is neither `itok` nor this one | reached |
-| `0.6` | even | that surface settles: what the first users found, and `§F`/`§N` upstreamed rather than forked | next |
-| `0.7` | odd | the model half resumes — `ask`, `tdd`, `oneshot`, and the loop's verdict meaning what the gate's verdict means, measured over more than one attempt | planned |
+| `0.6` | even | that surface settles: what the first users found, and `§F`/`§N` upstreamed rather than forked | reached |
+| `0.7` | odd | the model half resumes — `ask`, `tdd`, `oneshot`, and the loop's verdict meaning what the gate's verdict means, measured over more than one attempt | next |
 | `1.0` | — | the contract freezes; every minor after is stable by definition, and the parity retires | planned |
 
 `0.1` through `0.4` are rungs **reached but not published**. They are listed
@@ -50,6 +50,29 @@ publish run surfaced two warnings that eleven gate steps had read past
 (`.:B26`). `0.5.0` is that rung as a release.
 
 ## [Unreleased]
+
+## [0.6.0] - 2026-11-10
+
+The `0.6` rung: the surface settles. Its two conditions (`SPEC.md` §V114,
+`.:T103`) are met. What use of `0.5` found is fixed or refused outright
+below, and `§F`/`§N` are upstream rather than forked: microlith claims both
+as canonical letters and documents them in its `FORMAT-EXTENSIONS.md`
+(microlith 0.7.0, its V39/V40), which closed `.:T49`. A minor rather than
+a patch because the CLI breaks: a command line `0.5.5` accepted and partly
+ignored can now be a usage error, so check scripts that pass extra
+arguments. The library is additive. What a caller can observe changing:
+
+- An extra positional argument, an unknown flag, or a flag value outside
+  its set exits `2` with clap's message, where some were ignored.
+- `sherd completions <shell>` and `sherd man` are new; every verb has
+  `--help`, and a mistyped flag or verb gets a suggestion.
+- `sherd wave --format json` is new, and `wave` finds calls it missed:
+  `$VAR/<path>.sh` with `VAR` unbound, and a script held in a variable.
+- `sherd lens` drops the ancestors' `§T` rows, so `lens` and `budget`
+  report a smaller pack.
+- `sherd sync <dir>` and `sherd sync --check <dir>` both walk `<dir>`'s
+  subtree, and a `[dir]` is no longer lost to a flag value that names a
+  directory.
 
 The CLI's argv is now parsed by [clap](https://crates.io/crates/clap) (derive
 API, `default-features = false`) instead of by hand (`src/cli:V21`). Exit
@@ -89,7 +112,7 @@ errors exit `2`, and `--help`/`--version` exit `0`.
   `X=${ENV:-<path>.sh}` (or `${ENV:-bash <path>.sh}`), running `"$X"` is a
   call of `<path>.sh`, resolved as any other call. Before, such a call was
   neither an edge nor reported as unresolved (#175).
-- **Breaking, minor:** the parser is strict where the hand-rolled one was
+- **Breaking (CLI only):** the parser is strict where the hand-rolled one was
   lenient. An extra positional argument, an unknown flag, or a flag given a
   value outside its set (`--format yaml`, `--depth deep`) is a usage error
   (exit `2`) with clap's message, where some were ignored before. The
@@ -115,6 +138,19 @@ errors exit `2`, and `--help`/`--version` exit `0`.
   grows by 14 packages (`clap_*`, `anstyle`, `strsim`, `heck`, `roff`, `syn`,
   `quote`, `proc-macro2`, `unicode-ident`), all `MIT OR Apache-2.0` bar
   `strsim` (`MIT`) and `unicode-ident` (`Unicode-3.0` in addition).
+
+### Fixed
+
+- `sherd sync <dir>` rewrites every node in `<dir>`'s subtree, as
+  `sync --check <dir>` already examined it; it rewrote only the named node.
+- The repository a verb runs against comes from its parsed `[dir]`, not
+  from the first argument that happens to be a directory: `sherd check
+  --format json /other` with a `json/` directory in the CWD checked the
+  wrong tree.
+- `sherd debt` (and the `lint-debt` gate step) names why a measurement
+  failed -- the launch error, clippy's exit status and its error lines --
+  and treats a non-zero clippy exit as no measurement, where it printed
+  only "did not COMPILE" or read the output of a failed run.
 
 ## [0.5.5] - 2026-10-25
 
