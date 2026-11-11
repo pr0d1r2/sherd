@@ -146,6 +146,32 @@ fn the_flags_parse_on_the_budget_verb() {
     ));
 }
 
+/// Both combinations once parsed and did the wrong thing: `--check` alone ran
+/// the plain budget and exited 0, and `--base` under `--format json` printed
+/// text to a plumbing consumer (`src/cli:V19`). Each is a usage error
+/// (`src/cli:V21`); a DEFAULTED format is no conflict, so bare `--base` parses.
+#[test]
+fn check_needs_base_and_base_refuses_json() {
+    use clap::Parser;
+    use clap::error::ErrorKind;
+    let kind = |a: &[&str]| {
+        parse::Cli::try_parse_from(
+            std::iter::once("sherd").chain(a.iter().copied()),
+        )
+        .err()
+        .map(|e| e.kind())
+    };
+    assert_eq!(
+        kind(&["budget", "--check"]),
+        Some(ErrorKind::MissingRequiredArgument)
+    );
+    assert_eq!(
+        kind(&["budget", "--base", "main", "--format", "json"]),
+        Some(ErrorKind::ArgumentConflict)
+    );
+    assert_eq!(kind(&["budget", "--base", "main"]), None);
+}
+
 /// `[dir]` is one target set for the base check too (`.:V20`): a breach in a
 /// sibling outside the subtree is not what `budget a --base HEAD --check` judges.
 #[test]
