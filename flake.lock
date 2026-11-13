@@ -246,10 +246,10 @@
         "sherd": "sherd"
       },
       "locked": {
-        "lastModified": 1794384033,
-        "narHash": "sha256-m77B+ghWAwE+53CsS8KidRox1nY5jRRLsTL+gnRMM1Y=",
+        "lastModified": 1794548080,
+        "narHash": "sha256-PKtYc0jry2E8gWr9a7kULA6nkcaYeKwkFoNMzn+p2mY=",
         "ref": "main",
-        "rev": "5c46f67a0d054ed9156d52eb006bfad3d75f8425",
+        "rev": "a1861a162a888a9ea6a3b6dbecec3f6104acdeaf",
         "shallow": true,
         "type": "git",
         "url": "https://github.com/pr0d1r2/pklith"
