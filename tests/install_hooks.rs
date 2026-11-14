@@ -18,14 +18,7 @@ fn scratch(tag: &str) -> PathBuf {
 }
 
 fn git(dir: &Path, args: &[&str]) -> String {
-    let o = Command::new("git")
-        .env_remove("GIT_DIR")
-        .env_remove("GIT_WORK_TREE")
-        .env_remove("GIT_INDEX_FILE")
-        .env_remove("GIT_COMMON_DIR")
-        .env_remove("GIT_OBJECT_DIRECTORY")
-        .current_dir(dir)
-        .args(args)
+    let o = sherd::git::at(dir, args)
         .output()
         .unwrap_or_else(|e| panic!("git: {e}"));
     String::from_utf8_lossy(&o.stdout).trim().to_string()
@@ -56,17 +49,13 @@ fn run(dir: &Path, with_hk: bool) -> Output {
             .unwrap_or_else(|e| panic!("{e}"));
         path = format!("{}:{path}", bin.display());
     }
-    Command::new("bash")
-        .env_remove("GIT_DIR")
-        .env_remove("GIT_WORK_TREE")
-        .env_remove("GIT_INDEX_FILE")
-        .env_remove("GIT_COMMON_DIR")
-        .env_remove("GIT_OBJECT_DIRECTORY")
-        .arg(script())
-        .current_dir(dir)
-        .env("PATH", path)
-        .output()
-        .unwrap_or_else(|e| panic!("run: {e}"))
+    let mut c = Command::new("bash");
+    c.arg(script()).current_dir(dir).env("PATH", path);
+    // The installer's own `git` calls inherit whatever this child is given.
+    for k in sherd::git::INHERITED {
+        c.env_remove(k);
+    }
+    c.output().unwrap_or_else(|e| panic!("run: {e}"))
 }
 
 fn stderr(o: &Output) -> String {
