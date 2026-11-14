@@ -18,9 +18,7 @@ fn scratch(tag: &str) -> PathBuf {
 }
 
 fn git(dir: &Path, args: &[&str]) -> String {
-    let o = Command::new("git")
-        .current_dir(dir)
-        .args(args)
+    let o = sherd::git::at(dir, args)
         .output()
         .unwrap_or_else(|e| panic!("git: {e}"));
     String::from_utf8_lossy(&o.stdout).trim().to_string()
@@ -51,12 +49,13 @@ fn run(dir: &Path, with_hk: bool) -> Output {
             .unwrap_or_else(|e| panic!("{e}"));
         path = format!("{}:{path}", bin.display());
     }
-    Command::new("bash")
-        .arg(script())
-        .current_dir(dir)
-        .env("PATH", path)
-        .output()
-        .unwrap_or_else(|e| panic!("run: {e}"))
+    let mut c = Command::new("bash");
+    c.arg(script()).current_dir(dir).env("PATH", path);
+    // The installer's own `git` calls inherit whatever this child is given.
+    for k in sherd::git::INHERITED {
+        c.env_remove(k);
+    }
+    c.output().unwrap_or_else(|e| panic!("run: {e}"))
 }
 
 fn stderr(o: &Output) -> String {
@@ -138,4 +137,27 @@ fn tool_dir(tool: &str) -> String {
         .parent()
         .map(|d| d.display().to_string())
         .unwrap_or_default()
+}
+
+/// Probe for `ignores_a_callers_git_dir`: one installer case, run in a child
+/// that inherits the caller's `GIT_DIR`. Not a test on its own.
+#[test]
+#[ignore = "run by ignores_a_callers_git_dir"]
+fn leak_probe() {
+    let d = repo("leak", true);
+    assert!(run(&d, true).status.success());
+}
+
+#[test]
+fn ignores_a_callers_git_dir() {
+    let sentinel = repo("sentinel", false);
+    let before = git(&sentinel, &["config", "--local", "--list"]);
+    let o =
+        Command::new(std::env::current_exe().unwrap_or_else(|e| panic!("{e}")))
+            .args(["--exact", "leak_probe", "--ignored"])
+            .env("GIT_DIR", sentinel.join(".git"))
+            .output()
+            .unwrap_or_else(|e| panic!("probe: {e}"));
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stdout));
+    assert_eq!(git(&sentinel, &["config", "--local", "--list"]), before);
 }
