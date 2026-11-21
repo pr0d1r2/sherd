@@ -137,6 +137,12 @@ pub enum Cmd {
     /// token cost of every node, against the working budget
     Budget {
         dir: Option<String>,
+        /// compare ceilings against this revision
+        #[arg(long, conflicts_with = "format")]
+        base: Option<String>,
+        /// exit 1 when a ceiling change is not a split
+        #[arg(long, requires = "base")]
+        check: bool,
         #[command(flatten)]
         format: FormatArg,
     },

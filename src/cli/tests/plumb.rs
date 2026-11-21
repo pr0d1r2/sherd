@@ -146,7 +146,13 @@ fn validate_json_is_pinned_whole() {
 fn format_is_positional_agnostic_and_strict() {
     let json = |a: &[&str]| match parse::Cli::try_parse_from(a) {
         Ok(parse::Cli {
-            cmd: Some(Cmd::Budget { format, dir }),
+            cmd:
+                Some(Cmd::Budget {
+                    format,
+                    dir,
+                    base: None,
+                    check: false,
+                }),
             ..
         }) => Some((format.format.is_json(), dir)),
         _ => None,

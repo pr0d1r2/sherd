@@ -143,6 +143,12 @@ impl Ceilings {
         }
     }
 
+    /// The declared rows, in file order.
+    #[must_use]
+    pub fn rows(&self) -> &[(String, u64)] {
+        &self.rows
+    }
+
     /// The ceiling for a path: longest matching prefix wins, else the default.
     #[must_use]
     pub fn for_path(&self, path: &str) -> u64 {
